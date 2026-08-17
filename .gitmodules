@@ -1,0 +1,3 @@
+[submodule "SimpleVideoPlayer"]
+	path = SimpleVideoPlayer
+	url = https://github.com/alberthsu-cl/d3d-qt-player.git

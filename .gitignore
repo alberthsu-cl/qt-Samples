@@ -1,0 +1,27 @@
+# Visual Studio and CMake build output
+.vs/
+**/.vs/
+out/
+**/out/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+
+# Compiled artifacts and deployed Qt runtime files
+*.exe
+*.pdb
+*.ilk
+*.obj
+*.dll
+*.lib
+*.exp
+*.tlog
+*.vcxproj.user
+
+# Local media and image files used while experimenting
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.webm
