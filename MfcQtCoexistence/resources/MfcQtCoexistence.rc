@@ -1,8 +1,12 @@
 #include "resource.h"
-#include <afxres.h>
+#include "afxres.h"
 
 IDR_MAINFRAME MENU
 BEGIN
+    POPUP "&File"
+    BEGIN
+        MENUITEM "&Open Image...", ID_FILE_OPEN_IMAGE
+    END
     POPUP "&Effects"
     BEGIN
         MENUITEM "&Settings...", ID_EFFECT_SETTINGS

@@ -24,7 +24,10 @@ BOOL MfcQtCoexistenceApp::InitInstance()
     if (!mainFrame->Create(nullptr,
                            _T("MFC / Qt Coexistence - Phase 1"),
                            WS_OVERLAPPEDWINDOW,
-                           CFrameWnd::rectDefault,
+                           // A predictable learning-sample size avoids the
+                           // tiny default frame shown by CFrameWnd::rectDefault
+                           // on some systems.
+                           CRect(120, 120, 1120, 780),
                            nullptr,
                            MAKEINTRESOURCE(IDR_MAINFRAME))) {
         delete mainFrame;

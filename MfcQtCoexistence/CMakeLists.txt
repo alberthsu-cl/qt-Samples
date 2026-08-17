@@ -15,6 +15,12 @@ add_executable(MfcQtCoexistence WIN32
     src/EffectSettings.h
     src/EffectSettingsDialog.h
     src/EffectSettingsDialog.cpp
+    src/ImageDisplayWindow.h
+    src/ImageDisplayWindow.cpp
+    src/ImageProcessor.h
+    src/ImageProcessor.cpp
+    src/ImageToggleButton.h
+    src/ImageToggleButton.cpp
     src/MainFrame.h
     src/MainFrame.cpp
     src/MfcQtCoexistenceApp.cpp
@@ -26,3 +32,13 @@ target_include_directories(MfcQtCoexistence PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
     "${CMAKE_CURRENT_SOURCE_DIR}/resources"
 )
+
+# Keep Windows' legacy min/max macros from colliding with std::min/std::max.
+target_compile_definitions(MfcQtCoexistence PRIVATE
+    NOMINMAX
+    UNICODE
+    _UNICODE
+)
+
+# CImage uses Windows GDI+ to read common image formats such as PNG and JPEG.
+target_link_libraries(MfcQtCoexistence PRIVATE gdiplus)

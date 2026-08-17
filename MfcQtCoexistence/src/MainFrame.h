@@ -1,6 +1,8 @@
 #pragma once
 
 #include "EffectSettings.h"
+#include "ImageDisplayWindow.h"
+#include "ImageToggleButton.h"
 
 #include <afxwin.h>
 #include <afxext.h>
@@ -12,13 +14,25 @@ class MainFrame final : public CFrameWnd
 
 protected:
     int OnCreate(LPCREATESTRUCT createStructure);
+    afx_msg void OnSize(UINT type, int width, int height);
+    afx_msg void OnGetMinMaxInfo(MINMAXINFO *minMaxInfo);
+    afx_msg void OnFileOpenImage();
     afx_msg void OnEffectSettings();
+    afx_msg void OnToggleImageComparison();
 
     DECLARE_MESSAGE_MAP()
 
 private:
     void updateEffectStatus();
+    void applySelectedEffect();
+    void updateComparisonButton();
+    void layoutChildren(int clientWidth, int clientHeight);
 
     CStatusBar statusBar_;
+    ImageToggleButton comparisonButton_;
+    ImageDisplayWindow imageDisplay_;
     EffectSettings effectSettings_;
+    CImage originalImage_;
+    CImage processedImage_;
+    bool showProcessedImage_ = true;
 };
