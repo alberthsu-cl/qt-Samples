@@ -3,6 +3,8 @@
 **/.vs/
 out/
 **/out/
+test-results/
+**/test-results/
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
