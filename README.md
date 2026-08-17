@@ -6,5 +6,6 @@ Small Qt/Visual Studio 2022 learning projects.
 
 - `SimpleVideoPlayer` — Qt Widgets video player using `QMediaPlayer`, `QVideoSink`, Direct3D 11 texture rendering, and HLSL effects.
 - `ThreadedEffectPreview` — Qt Widgets project demonstrating a `QObject` worker moved to a `QThread`, queued signals/slots, copied `QImage` work items, and cooperative cancellation.
+- `MfcQtCoexistence` — incremental MFC-to-Qt migration exercise. Phase 1 is a pure MFC settings dialog and shared UI-neutral settings model.
 
 Each project contains its own `README.md`, `CMakeLists.txt`, and Visual Studio 2022 CMake preset.

@@ -1,0 +1,6 @@
+#pragma once
+
+#define IDR_MAINFRAME 101
+#define IDD_EFFECT_SETTINGS 102
+#define IDC_EFFECT_COMBO 1001
+#define ID_EFFECT_SETTINGS 32771
