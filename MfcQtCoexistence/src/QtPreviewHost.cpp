@@ -63,20 +63,38 @@ void QtPreviewHost::resize(const CRect &bounds)
                    SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
-void QtPreviewHost::setImages(const CImage &originalImage,
-                              const CImage &processedImage)
+void QtPreviewHost::setOriginalImage(const CImage &originalImage)
 {
     if (!previewPanel_)
         return;
 
-    previewPanel_->setImages(convertToQImage(originalImage),
-                             convertToQImage(processedImage));
+    originalImage_ = convertToQImage(originalImage);
+    previewPanel_->setImages(originalImage_, originalImage_);
+}
+
+QImage QtPreviewHost::originalImage() const
+{
+    return originalImage_;
+}
+
+void QtPreviewHost::setProcessedImage(const QImage &processedImage)
+{
+    if (!previewPanel_)
+        return;
+
+    previewPanel_->setImages(originalImage_, processedImage);
 }
 
 void QtPreviewHost::setShowingProcessedImage(bool showingProcessedImage)
 {
     if (previewPanel_)
         previewPanel_->setShowingProcessedImage(showingProcessedImage);
+}
+
+void QtPreviewHost::setAppliedEffectAvailable(bool isAvailable)
+{
+    if (previewPanel_)
+        previewPanel_->setAppliedEffectAvailable(isAvailable);
 }
 
 void QtPreviewHost::setDisplayModeChangedHandler(DisplayModeChangedHandler handler)

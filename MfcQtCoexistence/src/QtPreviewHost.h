@@ -3,11 +3,12 @@
 #include <afxwin.h>
 #include <atlimage.h>
 
+#include <QImage>
+
 #include <memory>
 #include <functional>
 
 class QtEffectPreviewPanel;
-class QImage;
 
 // The explicit native-window boundary between the MFC frame and the persistent
 // Qt panel. Qt owns its panel; MFC owns the surrounding main frame.
@@ -24,13 +25,17 @@ public:
 
     bool create(void *mfcParentWindowHandle);
     void resize(const CRect &bounds);
-    void setImages(const CImage &originalImage, const CImage &processedImage);
+    void setOriginalImage(const CImage &originalImage);
+    QImage originalImage() const;
+    void setProcessedImage(const QImage &processedImage);
     void setShowingProcessedImage(bool showingProcessedImage);
+    void setAppliedEffectAvailable(bool isAvailable);
     void setDisplayModeChangedHandler(DisplayModeChangedHandler handler);
 
 private:
     static QImage convertToQImage(const CImage &image);
 
     std::unique_ptr<QtEffectPreviewPanel> previewPanel_;
+    QImage originalImage_;
     DisplayModeChangedHandler displayModeChangedHandler_;
 };

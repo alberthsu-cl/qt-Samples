@@ -59,6 +59,8 @@ if(MFCQT_USE_QT)
         src/QtEffectSettingsDialog.cpp
         src/QtEffectPreviewPanel.h
         src/QtEffectPreviewPanel.cpp
+        src/QtAsyncEffectProcessor.h
+        src/QtAsyncEffectProcessor.cpp
         src/QtPreviewHost.h
         src/QtPreviewHost.cpp
         src/QtRuntime.h

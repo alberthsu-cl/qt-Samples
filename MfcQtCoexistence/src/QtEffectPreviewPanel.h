@@ -21,6 +21,7 @@ public:
 
     void setImages(const QImage &originalImage, const QImage &processedImage);
     void setShowingProcessedImage(bool showingProcessedImage);
+    void setAppliedEffectAvailable(bool isAvailable);
 
 signals:
     // Emitted only for a user click. Programmatic synchronization from MFC
@@ -41,4 +42,5 @@ private:
     QImage originalImage_;
     QImage processedImage_;
     bool showingProcessedImage_ = true;
+    bool appliedEffectAvailable_ = false;
 };

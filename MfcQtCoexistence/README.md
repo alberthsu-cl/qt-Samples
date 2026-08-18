@@ -1,4 +1,4 @@
-# MFC / Qt Coexistence — Phases 1–3
+# MFC / Qt Coexistence — Phases 1–4
 
 This is a gradual MFC-to-Qt UI migration exercise.
 
@@ -7,6 +7,8 @@ This is a gradual MFC-to-Qt UI migration exercise.
   replaces the settings dialog and the image-preview rectangle with Qt Widgets.
 - **Phase 3** makes the Qt preview's comparison-button change explicit: a Qt
   signal reaches MFC, which keeps the shared comparison-mode state.
+- **Phase 4** processes effects in a Qt worker thread, then delivers the
+  completed `QImage` back to the UI thread through a queued Qt connection.
 
 ## Behavior
 
@@ -15,9 +17,13 @@ This is a gradual MFC-to-Qt UI migration exercise.
 3. Select **Effects > Settings...**, choose `No effect`, `Grayscale`,
    `Invert`, or `Blur`, and click **OK**.
 4. The status bar shows the selected effect and the display updates.
+   In the Qt-enabled build, it briefly shows `processing...` while the worker
+   thread calculates the image effect.
 5. Click the image-only comparison button to compare both images in the same
    display area. A checked icon means the applied effect is displayed; an
    unchecked icon means the original is displayed.
+   When `No effect` is selected, the button is unchecked and disabled because
+   the original and applied images are identical.
 6. Closing **Effects > Settings...** always returns to the applied-result view.
 
 ## Why this shape?
@@ -46,6 +52,19 @@ pump Qt events from MFC's idle handler.
 signal implementation. `QtPreviewHost` owns the Qt connection and forwards it
 to a callback installed by `MainFrame`; this gives the connection a Qt-owned
 lifetime while MFC remains the single owner of the shared display-mode state.
+
+`QtAsyncEffectProcessor.*` is the Phase 4 worker-thread sample. It creates a
+`QtImageEffectWorker`, moves it to a `QThread`, and queues a request with
+`QMetaObject::invokeMethod`. The worker emits a `QImage` result. Its completion
+signal is explicitly a `Qt::QueuedConnection`, so the callback that updates
+the preview runs on the UI thread. The worker never receives an MFC window,
+`CImage`, or Qt Widget pointer.
+
+Each request carries an incrementing request ID. If a user changes effects
+again before a slow blur is complete, the older result is discarded rather
+than overwriting the newest preview. At shutdown the controller calls
+`QThread::quit()` and `QThread::wait()`; `QThread::finished` is connected to
+the worker's `deleteLater()` slot for safe worker cleanup.
 
 `ImageProcessor.*` applies the CPU effects and `ImageDisplayWindow.*` owns the
 aspect-ratio-preserving display. `MainFrame` reserves space for its standard

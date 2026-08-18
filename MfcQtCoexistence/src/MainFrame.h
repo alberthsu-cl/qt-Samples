@@ -4,6 +4,7 @@
 #include "ImageDisplayWindow.h"
 #include "ImageToggleButton.h"
 #if MFCQT_USE_QT
+#include "QtAsyncEffectProcessor.h"
 #include "QtPreviewHost.h"
 #endif
 
@@ -39,6 +40,9 @@ private:
     ImageDisplayWindow imageDisplay_;
 #if MFCQT_USE_QT
     QtPreviewHost qtPreviewHost_;
+    QtAsyncEffectProcessor effectProcessor_;
+    quint64 activeEffectRequestId_ = 0;
+    bool effectProcessingInProgress_ = false;
 #endif
     EffectSettings effectSettings_;
     CImage originalImage_;

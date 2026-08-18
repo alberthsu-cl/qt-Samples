@@ -46,6 +46,18 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     qtPreviewHost_.setDisplayModeChangedHandler([this](bool showingProcessedImage) {
         showProcessedImage_ = showingProcessedImage;
     });
+    effectProcessor_.setCompletionHandler(
+        [this](QImage processedImage, quint64 requestId) {
+            // Earlier requests are allowed to finish, but they must never
+            // overwrite the most recent image/effect selection.
+            if (requestId != activeEffectRequestId_)
+                return;
+
+            qtPreviewHost_.setProcessedImage(processedImage);
+            effectProcessingInProgress_ = false;
+            qtPreviewHost_.setShowingProcessedImage(showProcessedImage_);
+            updateEffectStatus();
+        });
 #else
     if (!imageDisplay_.Create(this, CRect(0, 0, 1, 1)))
         return -1;
@@ -124,18 +136,17 @@ void MainFrame::OnEffectSettings()
     const bool accepted = dialog.DoModal() == IDOK;
 #endif
 
-    // Returning to the main window always restores the processed view. This
-    // makes the selected effect the normal/default display after Settings is
-    // closed, even if the user had been comparing the original image.
-    showProcessedImage_ = true;
-
     if (accepted) {
         effectSettings_ = dialog.selectedSettings();
+        // An applied effect is the normal display after Settings closes. With
+        // No effect, there is no second image to compare, so keep it unchecked.
+        showProcessedImage_ = effectSettings_.selectedEffect != EffectType::None;
         applySelectedEffect();
         updateEffectStatus();
     } else {
+        showProcessedImage_ = effectSettings_.selectedEffect != EffectType::None;
 #if MFCQT_USE_QT
-        qtPreviewHost_.setShowingProcessedImage(true);
+        qtPreviewHost_.setShowingProcessedImage(showProcessedImage_);
 #else
         imageDisplay_.setShowProcessed(true);
 #endif
@@ -159,13 +170,43 @@ void MainFrame::updateEffectStatus()
 {
     CString statusText;
     // Keep the message compact enough to remain useful in a narrow window.
+#if MFCQT_USE_QT
+    if (effectProcessingInProgress_) {
+        statusText.Format(_T("Effect: %s (processing...)"),
+                          effectTypeDisplayName(effectSettings_.selectedEffect));
+    } else {
+        statusText.Format(_T("Effect: %s"),
+                          effectTypeDisplayName(effectSettings_.selectedEffect));
+    }
+#else
     statusText.Format(_T("Effect: %s"),
                       effectTypeDisplayName(effectSettings_.selectedEffect));
+#endif
     statusBar_.SetPaneText(0, statusText);
 }
 
 void MainFrame::applySelectedEffect()
 {
+#if MFCQT_USE_QT
+    qtPreviewHost_.setOriginalImage(originalImage_);
+
+    if (effectSettings_.selectedEffect == EffectType::None) {
+        // Invalidate an older worker result before displaying the unchanged
+        // original image. A late blur result must not reappear here.
+        ++activeEffectRequestId_;
+        effectProcessingInProgress_ = false;
+        qtPreviewHost_.setProcessedImage(qtPreviewHost_.originalImage());
+        updateComparisonButton();
+        return;
+    }
+
+    effectProcessingInProgress_ = true;
+    ++activeEffectRequestId_;
+    effectProcessor_.requestProcessing(qtPreviewHost_.originalImage(),
+                                       effectSettings_.selectedEffect,
+                                       activeEffectRequestId_);
+    qtPreviewHost_.setShowingProcessedImage(showProcessedImage_);
+#else
     if (!ImageProcessor::applyEffect(originalImage_,
                                      effectSettings_.selectedEffect,
                                      processedImage_)) {
@@ -173,20 +214,24 @@ void MainFrame::applySelectedEffect()
         return;
     }
 
-#if MFCQT_USE_QT
-    qtPreviewHost_.setImages(originalImage_, processedImage_);
-    qtPreviewHost_.setShowingProcessedImage(showProcessedImage_);
-#else
     imageDisplay_.setImages(&originalImage_, &processedImage_);
     imageDisplay_.setShowProcessed(showProcessedImage_);
+    updateComparisonButton();
 #endif
 }
 
 void MainFrame::updateComparisonButton()
 {
+    const bool appliedEffectAvailable =
+        effectSettings_.selectedEffect != EffectType::None;
+    if (!appliedEffectAvailable)
+        showProcessedImage_ = false;
+
 #if MFCQT_USE_QT
+    qtPreviewHost_.setAppliedEffectAvailable(appliedEffectAvailable);
     qtPreviewHost_.setShowingProcessedImage(showProcessedImage_);
 #else
+    comparisonButton_.EnableWindow(appliedEffectAvailable);
     comparisonButton_.setShowingProcessedImage(showProcessedImage_);
 #endif
 }

@@ -68,7 +68,7 @@ void QtEffectPreviewPanel::setImages(const QImage &originalImage,
 
 void QtEffectPreviewPanel::setShowingProcessedImage(bool showingProcessedImage)
 {
-    showingProcessedImage_ = showingProcessedImage;
+    showingProcessedImage_ = appliedEffectAvailable_ && showingProcessedImage;
 
     // The MFC frame is synchronizing the view. Block toggled() so this change
     // does not look like a second, user-initiated state change.
@@ -76,6 +76,17 @@ void QtEffectPreviewPanel::setShowingProcessedImage(bool showingProcessedImage)
     toggleButton_->setChecked(showingProcessedImage_);
     updateToggleAppearance();
     updateDisplayedImage();
+}
+
+void QtEffectPreviewPanel::setAppliedEffectAvailable(bool isAvailable)
+{
+    appliedEffectAvailable_ = isAvailable;
+    toggleButton_->setEnabled(appliedEffectAvailable_);
+
+    if (!appliedEffectAvailable_)
+        setShowingProcessedImage(false);
+    else
+        updateToggleAppearance();
 }
 
 void QtEffectPreviewPanel::resizeEvent(QResizeEvent *event)
@@ -102,9 +113,13 @@ void QtEffectPreviewPanel::updateToggleAppearance()
 {
     const bool isChecked = showingProcessedImage_;
     toggleButton_->setIcon(createToggleIcon(isChecked));
-    toggleButton_->setToolTip(isChecked
-                                  ? QStringLiteral("Applied effect is displayed")
-                                  : QStringLiteral("Original image is displayed"));
+    if (!appliedEffectAvailable_) {
+        toggleButton_->setToolTip(QStringLiteral("No applied effect to compare"));
+    } else {
+        toggleButton_->setToolTip(isChecked
+                                      ? QStringLiteral("Applied effect is displayed")
+                                      : QStringLiteral("Original image is displayed"));
+    }
 }
 
 QIcon QtEffectPreviewPanel::createToggleIcon(bool isChecked)
