@@ -1,7 +1,10 @@
 # MFC / Qt Coexistence — Phase 1
 
-This is the **pure MFC baseline** for a gradual UI migration exercise. It has
-no Qt headers, libraries, widgets, or Qt event loop.
+This is a gradual MFC-to-Qt UI migration exercise.
+
+- **Phase 1** created the original MFC-only baseline.
+- **Phase 2 (current)** keeps the MFC main frame, image display, and image
+  processing, but replaces only the settings dialog with a Qt `QDialog`.
 
 ## Behavior
 
@@ -26,7 +29,8 @@ Phase 2: MFC menu → Qt dialog  → EffectSettings
 ```
 
 Only the dialog/presentation layer changes in Phase 2. The MFC main window and
-the shared settings model remain stable.
+the shared settings model remain stable. `QtRuntime.*` creates the single
+`QApplication` required for Qt Widgets in the MFC process.
 
 `ImageProcessor.*` applies the CPU effects and `ImageDisplayWindow.*` owns the
 aspect-ratio-preserving display. `MainFrame` reserves space for its standard
@@ -44,3 +48,16 @@ The Visual Studio **Desktop development with C++** workload must include the
 The project is intentionally compiled in Unicode mode (`UNICODE` and
 `_UNICODE`). This keeps Windows/MFC text handling consistent with the UTF-16
 strings used by the sample.
+
+## Compare the two dialog implementations
+
+By default, CMake uses the Qt dialog:
+
+```text
+MFCQT_USE_QT_SETTINGS_DIALOG = ON
+```
+
+Set it to `OFF` in Visual Studio's CMake cache variables (then reconfigure) to
+run the original `EffectSettingsDialog` MFC version again. Both dialogs edit
+the same `EffectSettings` data model and therefore produce identical image
+effects.

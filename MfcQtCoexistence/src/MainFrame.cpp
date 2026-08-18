@@ -1,8 +1,13 @@
 #include "MainFrame.h"
 
-#include "EffectSettingsDialog.h"
 #include "ImageProcessor.h"
 #include "resource.h"
+
+#if MFCQT_USE_QT_SETTINGS_DIALOG
+#include "QtEffectSettingsDialog.h"
+#else
+#include "EffectSettingsDialog.h"
+#endif
 
 #include <afxdlgs.h>
 
@@ -94,15 +99,25 @@ void MainFrame::OnFileOpenImage()
 
 void MainFrame::OnEffectSettings()
 {
+#if MFCQT_USE_QT_SETTINGS_DIALOG
+    // Qt does not know that this MFC frame is its parent window. Disable the
+    // frame while the modal Qt dialog runs, then re-enable it afterward.
+    EnableWindow(FALSE);
+    QtEffectSettingsDialog dialog(effectSettings_);
+    const bool accepted = dialog.exec() == QDialog::Accepted;
+    EnableWindow(TRUE);
+    SetActiveWindow();
+#else
     EffectSettingsDialog dialog(effectSettings_, this);
-    const INT_PTR dialogResult = dialog.DoModal();
+    const bool accepted = dialog.DoModal() == IDOK;
+#endif
 
     // Returning to the main window always restores the processed view. This
     // makes the selected effect the normal/default display after Settings is
     // closed, even if the user had been comparing the original image.
     showProcessedImage_ = true;
 
-    if (dialogResult == IDOK) {
+    if (accepted) {
         effectSettings_ = dialog.selectedSettings();
         applySelectedEffect();
         updateEffectStatus();
