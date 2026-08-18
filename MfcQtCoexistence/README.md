@@ -37,6 +37,10 @@ aspect-ratio-preserving display. `MainFrame` reserves space for its standard
 MFC status bar before arranging the image display and comparison button. These
 are also useful seams for later Qt replacement work.
 
+`ImageDisplayWindow` requests GDI's `HALFTONE` stretch mode before scaling an
+image to its display area. This improves viewing quality when the loaded image
+is enlarged or reduced; it does not change the original decoded pixels.
+
 ## Build with Visual Studio 2022
 
 Open `D:\Qt\Samples\MfcQtCoexistence` with **File > Open > Folder**. Select

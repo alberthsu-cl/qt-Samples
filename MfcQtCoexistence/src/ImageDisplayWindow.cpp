@@ -56,7 +56,15 @@ void ImageDisplayWindow::OnPaint()
     const int left = clientRect.left + (clientRect.Width() - drawnWidth) / 2;
     const int top = clientRect.top + (clientRect.Height() - drawnHeight) / 2;
 
+    // CImage::Draw ultimately uses the destination DC for scaling. HALFTONE
+    // gives much better downscaling/upscaling quality than GDI's default
+    // COLORONCOLOR stretch mode. Resetting the brush origin is the standard
+    // companion call required for correct HALFTONE output.
+    const int previousStretchMode = deviceContext.SetStretchBltMode(HALFTONE);
+    const CPoint previousBrushOrigin = deviceContext.SetBrushOrg(left, top);
     image->Draw(deviceContext.GetSafeHdc(), left, top, drawnWidth, drawnHeight);
+    deviceContext.SetBrushOrg(previousBrushOrigin.x, previousBrushOrigin.y);
+    deviceContext.SetStretchBltMode(previousStretchMode);
 }
 
 BOOL ImageDisplayWindow::OnEraseBkgnd(CDC *)
