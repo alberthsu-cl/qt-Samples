@@ -69,7 +69,12 @@ if(MFCQT_USE_QT)
 
     # MFC supplies WinMain. Do not link Qt's helper library, which supplies an
     # entry point for ordinary Qt applications with a main() function.
-    set_target_properties(MfcQtCoexistence PROPERTIES qt_no_entrypoint TRUE)
+    # Qt's Meta-Object Compiler (moc) generates the implementation behind
+    # QtEffectPreviewPanel::displayModeChanged().
+    set_target_properties(MfcQtCoexistence PROPERTIES
+        AUTOMOC ON
+        qt_no_entrypoint TRUE
+    )
 
     target_compile_definitions(MfcQtCoexistence PRIVATE
         MFCQT_USE_QT=1

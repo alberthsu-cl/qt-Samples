@@ -4,6 +4,7 @@
 #include <atlimage.h>
 
 #include <memory>
+#include <functional>
 
 class QtEffectPreviewPanel;
 class QImage;
@@ -13,6 +14,8 @@ class QImage;
 class QtPreviewHost final
 {
 public:
+    using DisplayModeChangedHandler = std::function<void(bool showingProcessedImage)>;
+
     QtPreviewHost();
     ~QtPreviewHost();
 
@@ -23,9 +26,11 @@ public:
     void resize(const CRect &bounds);
     void setImages(const CImage &originalImage, const CImage &processedImage);
     void setShowingProcessedImage(bool showingProcessedImage);
+    void setDisplayModeChangedHandler(DisplayModeChangedHandler handler);
 
 private:
     static QImage convertToQImage(const CImage &image);
 
     std::unique_ptr<QtEffectPreviewPanel> previewPanel_;
+    DisplayModeChangedHandler displayModeChangedHandler_;
 };

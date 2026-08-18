@@ -40,6 +40,12 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
 #if MFCQT_USE_QT
     if (!qtPreviewHost_.create(GetSafeHwnd()))
         return -1;
+
+    // Phase 3: the Qt preview is the source of a user toggle. Its signal is
+    // delivered directly on this UI thread, then MFC stores the shared state.
+    qtPreviewHost_.setDisplayModeChangedHandler([this](bool showingProcessedImage) {
+        showProcessedImage_ = showingProcessedImage;
+    });
 #else
     if (!imageDisplay_.Create(this, CRect(0, 0, 1, 1)))
         return -1;

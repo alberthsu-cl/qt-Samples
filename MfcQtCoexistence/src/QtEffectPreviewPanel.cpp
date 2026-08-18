@@ -7,6 +7,7 @@
 #include <QPixmap>
 #include <QResizeEvent>
 #include <QSizePolicy>
+#include <QSignalBlocker>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -40,6 +41,7 @@ QtEffectPreviewPanel::QtEffectPreviewPanel(QWidget *parent)
                 showingProcessedImage_ = isChecked;
                 updateToggleAppearance();
                 updateDisplayedImage();
+                emit displayModeChanged(showingProcessedImage_);
             });
 
     auto *mainLayout = new QVBoxLayout(this);
@@ -67,6 +69,10 @@ void QtEffectPreviewPanel::setImages(const QImage &originalImage,
 void QtEffectPreviewPanel::setShowingProcessedImage(bool showingProcessedImage)
 {
     showingProcessedImage_ = showingProcessedImage;
+
+    // The MFC frame is synchronizing the view. Block toggled() so this change
+    // does not look like a second, user-initiated state change.
+    const QSignalBlocker signalBlocker(toggleButton_);
     toggleButton_->setChecked(showingProcessedImage_);
     updateToggleAppearance();
     updateDisplayedImage();

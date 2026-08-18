@@ -3,6 +3,9 @@
 #include "QtEffectPreviewPanel.h"
 
 #include <QImage>
+#include <QObject>
+
+#include <utility>
 
 QtPreviewHost::QtPreviewHost() = default;
 QtPreviewHost::~QtPreviewHost() = default;
@@ -31,6 +34,17 @@ bool QtPreviewHost::create(void *mfcParentWindowHandle)
                        (style & ~frameStyles) | WS_CHILD | WS_CLIPSIBLINGS);
     ::SetWindowPos(qtWindowHandle, nullptr, 0, 0, 1, 1,
                    SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+
+    // The panel is the QObject connection context. Qt disconnects this
+    // lambda automatically when the panel is destroyed, before the host's
+    // callback member can disappear.
+    QObject::connect(previewPanel_.get(),
+                     &QtEffectPreviewPanel::displayModeChanged,
+                     previewPanel_.get(),
+                     [this](bool showingProcessedImage) {
+                         if (displayModeChangedHandler_)
+                             displayModeChangedHandler_(showingProcessedImage);
+                     });
     previewPanel_->show();
     return true;
 }
@@ -63,6 +77,11 @@ void QtPreviewHost::setShowingProcessedImage(bool showingProcessedImage)
 {
     if (previewPanel_)
         previewPanel_->setShowingProcessedImage(showingProcessedImage);
+}
+
+void QtPreviewHost::setDisplayModeChangedHandler(DisplayModeChangedHandler handler)
+{
+    displayModeChangedHandler_ = std::move(handler);
 }
 
 QImage QtPreviewHost::convertToQImage(const CImage &image)

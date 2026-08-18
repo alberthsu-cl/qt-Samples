@@ -1,10 +1,12 @@
-# MFC / Qt Coexistence — Phase 1
+# MFC / Qt Coexistence — Phases 1–3
 
 This is a gradual MFC-to-Qt UI migration exercise.
 
 - **Phase 1** created the original MFC-only baseline.
 - **Phase 2 (current)** keeps the MFC main frame and image processing, but
   replaces the settings dialog and the image-preview rectangle with Qt Widgets.
+- **Phase 3** makes the Qt preview's comparison-button change explicit: a Qt
+  signal reaches MFC, which keeps the shared comparison-mode state.
 
 ## Behavior
 
@@ -37,6 +39,13 @@ window of `MainFrame`. `QtPreviewHost.*` makes the MFC/Qt native-window
 boundary explicit and copies `CImage` pixels into Qt-owned `QImage` values.
 The panel uses normal native-child window messages; it does not continuously
 pump Qt events from MFC's idle handler.
+
+`QtEffectPreviewPanel` contains `Q_OBJECT` and emits
+`displayModeChanged(bool)` after a user clicks its comparison button. CMake's
+`AUTOMOC` property runs Qt's Meta-Object Compiler (`moc`) to generate the
+signal implementation. `QtPreviewHost` owns the Qt connection and forwards it
+to a callback installed by `MainFrame`; this gives the connection a Qt-owned
+lifetime while MFC remains the single owner of the shared display-mode state.
 
 `ImageProcessor.*` applies the CPU effects and `ImageDisplayWindow.*` owns the
 aspect-ratio-preserving display. `MainFrame` reserves space for its standard

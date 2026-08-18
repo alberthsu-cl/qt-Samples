@@ -14,11 +14,18 @@ class QWidget;
 // toggle. It does not know anything about MFC or CImage.
 class QtEffectPreviewPanel final : public QWidget
 {
+    Q_OBJECT
+
 public:
     explicit QtEffectPreviewPanel(QWidget *parent = nullptr);
 
     void setImages(const QImage &originalImage, const QImage &processedImage);
     void setShowingProcessedImage(bool showingProcessedImage);
+
+signals:
+    // Emitted only for a user click. Programmatic synchronization from MFC
+    // deliberately does not echo this signal back to the MFC frame.
+    void displayModeChanged(bool showingProcessedImage);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
