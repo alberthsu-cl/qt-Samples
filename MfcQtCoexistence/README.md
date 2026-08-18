@@ -66,6 +66,23 @@ than overwriting the newest preview. At shutdown the controller calls
 `QThread::quit()` and `QThread::wait()`; `QThread::finished` is connected to
 the worker's `deleteLater()` slot for safe worker cleanup.
 
+## Headless regression test
+
+`QtAsyncEffectProcessorTests` is a separate, windowless QtTest executable. It
+does not start the MFC sample. It verifies an exact grayscale pixel result,
+checks that the queued completion reached the UI thread, and proves that the
+same request-ID guard used by `MainFrame` ignores an older completion.
+
+Build the `QtAsyncEffectProcessorTests` target, then run:
+
+```powershell
+ctest --test-dir D:\Qt\Samples\MfcQtCoexistence\out\build\vs2022-x64 -C Debug --output-on-failure
+```
+
+`ctest` launches the test executable. Inside the test,
+`QTRY_VERIFY_WITH_TIMEOUT` lets Qt process queued events while it waits; a
+normal blocking wait would stop the UI-thread completion from being delivered.
+
 `ImageProcessor.*` applies the CPU effects and `ImageDisplayWindow.*` owns the
 aspect-ratio-preserving display. `MainFrame` reserves space for its standard
 MFC status bar before arranging the image display and comparison button. These

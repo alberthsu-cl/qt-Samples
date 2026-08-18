@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.21)
 
 project(MfcQtCoexistence VERSION 1.0 LANGUAGES CXX RC)
 
+include(CTest)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -18,7 +20,42 @@ option(MFCQT_USE_QT
        ON)
 
 if(MFCQT_USE_QT)
-    find_package(Qt6 REQUIRED COMPONENTS Widgets)
+    find_package(Qt6 REQUIRED COMPONENTS Widgets Test)
+endif()
+
+# This target is deliberately a headless QtTest executable. It exercises the
+# worker/controller without creating an MFC window or embedding a Qt widget.
+if(BUILD_TESTING AND MFCQT_USE_QT)
+    add_executable(QtAsyncEffectProcessorTests
+        tests/QtAsyncEffectProcessorTests.cpp
+        src/EffectSettings.h
+        src/QtAsyncEffectProcessor.h
+        src/QtAsyncEffectProcessor.cpp
+    )
+
+    target_include_directories(QtAsyncEffectProcessorTests PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    )
+
+    target_link_libraries(QtAsyncEffectProcessorTests PRIVATE
+        Qt6::Gui
+        Qt6::Test
+    )
+
+    set_target_properties(QtAsyncEffectProcessorTests PROPERTIES AUTOMOC ON)
+
+    # The test is its own executable and needs Qt6Test[d].dll beside it when
+    # launched by CTest outside Visual Studio's Qt-aware environment.
+    add_custom_command(TARGET QtAsyncEffectProcessorTests POST_BUILD
+        COMMAND "$<TARGET_FILE_DIR:Qt6::Core>/windeployqt.exe"
+                "$<$<CONFIG:Debug>:--debug>"
+                "$<$<NOT:$<CONFIG:Debug>>:--release>"
+                "$<TARGET_FILE:QtAsyncEffectProcessorTests>"
+        COMMENT "Deploying Qt runtime files beside QtAsyncEffectProcessorTests"
+    )
+
+    add_test(NAME QtAsyncEffectProcessorTests
+             COMMAND "$<TARGET_FILE:QtAsyncEffectProcessorTests>")
 endif()
 
 add_executable(MfcQtCoexistence WIN32
