@@ -3,8 +3,8 @@
 This is a gradual MFC-to-Qt UI migration exercise.
 
 - **Phase 1** created the original MFC-only baseline.
-- **Phase 2 (current)** keeps the MFC main frame, image display, and image
-  processing, but replaces only the settings dialog with a Qt `QDialog`.
+- **Phase 2 (current)** keeps the MFC main frame and image processing, but
+  replaces the settings dialog and the image-preview rectangle with Qt Widgets.
 
 ## Behavior
 
@@ -32,6 +32,12 @@ Only the dialog/presentation layer changes in Phase 2. The MFC main window and
 the shared settings model remain stable. `QtRuntime.*` creates the single
 `QApplication` required for Qt Widgets in the MFC process.
 
+`QtEffectPreviewPanel.*` is a persistent Qt panel embedded as a native child
+window of `MainFrame`. `QtPreviewHost.*` makes the MFC/Qt native-window
+boundary explicit and copies `CImage` pixels into Qt-owned `QImage` values.
+The panel uses normal native-child window messages; it does not continuously
+pump Qt events from MFC's idle handler.
+
 `ImageProcessor.*` applies the CPU effects and `ImageDisplayWindow.*` owns the
 aspect-ratio-preserving display. `MainFrame` reserves space for its standard
 MFC status bar before arranging the image display and comparison button. These
@@ -55,13 +61,12 @@ strings used by the sample.
 
 ## Compare the two dialog implementations
 
-By default, CMake uses the Qt dialog:
+By default, CMake builds the migrated Qt UI:
 
 ```text
-MFCQT_USE_QT_SETTINGS_DIALOG = ON
+MFCQT_USE_QT = ON
 ```
 
 Set it to `OFF` in Visual Studio's CMake cache variables (then reconfigure) to
-run the original `EffectSettingsDialog` MFC version again. Both dialogs edit
-the same `EffectSettings` data model and therefore produce identical image
-effects.
+build the complete original MFC UI again: the MFC settings dialog, image
+display, and image toggle. The `OFF` configuration does not link Qt.

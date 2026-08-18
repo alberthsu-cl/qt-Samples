@@ -1,5 +1,7 @@
 #include "MainFrame.h"
+#if MFCQT_USE_QT
 #include "QtRuntime.h"
+#endif
 #include "resource.h"
 
 #include <afxwin.h>
@@ -13,7 +15,9 @@ public:
     int ExitInstance() override;
 
 private:
+#if MFCQT_USE_QT
     std::unique_ptr<QtRuntime> qtRuntime_;
+#endif
 };
 
 MfcQtCoexistenceApp theApp;
@@ -25,7 +29,9 @@ BOOL MfcQtCoexistenceApp::InitInstance()
 
     // Phase 2: create exactly one QApplication in this MFC process, before
     // constructing any Qt Widgets. MFC still owns the main application loop.
+#if MFCQT_USE_QT
     qtRuntime_ = std::make_unique<QtRuntime>();
+#endif
 
     auto *mainFrame = new MainFrame;
     m_pMainWnd = mainFrame;
@@ -53,6 +59,8 @@ BOOL MfcQtCoexistenceApp::InitInstance()
 int MfcQtCoexistenceApp::ExitInstance()
 {
     // Destroy Qt after the MFC main window has completed its shutdown.
+#if MFCQT_USE_QT
     qtRuntime_.reset();
+#endif
     return CWinApp::ExitInstance();
 }

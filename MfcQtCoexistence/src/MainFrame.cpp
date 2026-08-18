@@ -3,7 +3,7 @@
 #include "ImageProcessor.h"
 #include "resource.h"
 
-#if MFCQT_USE_QT_SETTINGS_DIALOG
+#if MFCQT_USE_QT
 #include "QtEffectSettingsDialog.h"
 #else
 #include "EffectSettingsDialog.h"
@@ -21,6 +21,8 @@ constexpr UINT kStatusBarIndicators[] = { ID_SEPARATOR };
 
 } // namespace
 
+MainFrame::~MainFrame() = default;
+
 int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
 {
     if (CFrameWnd::OnCreate(createStructure) == -1)
@@ -35,12 +37,16 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     // One stretchable pane owns the complete status-bar message.
     statusBar_.SetPaneInfo(0, ID_SEPARATOR, SBPS_STRETCH, 300);
 
+#if MFCQT_USE_QT
+    if (!qtPreviewHost_.create(GetSafeHwnd()))
+        return -1;
+#else
     if (!imageDisplay_.Create(this, CRect(0, 0, 1, 1)))
         return -1;
 
-    if (!comparisonButton_.Create(this, CRect(0, 0, 1, 1), IDC_TOGGLE_IMAGE)) {
+    if (!comparisonButton_.Create(this, CRect(0, 0, 1, 1), IDC_TOGGLE_IMAGE))
         return -1;
-    }
+#endif
 
     if (!ImageProcessor::createDefaultImage(originalImage_))
         return -1;
@@ -99,7 +105,7 @@ void MainFrame::OnFileOpenImage()
 
 void MainFrame::OnEffectSettings()
 {
-#if MFCQT_USE_QT_SETTINGS_DIALOG
+#if MFCQT_USE_QT
     // Qt does not know that this MFC frame is its parent window. Disable the
     // frame while the modal Qt dialog runs, then re-enable it afterward.
     EnableWindow(FALSE);
@@ -122,7 +128,11 @@ void MainFrame::OnEffectSettings()
         applySelectedEffect();
         updateEffectStatus();
     } else {
+#if MFCQT_USE_QT
+        qtPreviewHost_.setShowingProcessedImage(true);
+#else
         imageDisplay_.setShowProcessed(true);
+#endif
     }
 
     updateComparisonButton();
@@ -131,7 +141,11 @@ void MainFrame::OnEffectSettings()
 void MainFrame::OnToggleImageComparison()
 {
     showProcessedImage_ = !showProcessedImage_;
+#if MFCQT_USE_QT
+    qtPreviewHost_.setShowingProcessedImage(showProcessedImage_);
+#else
     imageDisplay_.setShowProcessed(showProcessedImage_);
+#endif
     updateComparisonButton();
 }
 
@@ -153,20 +167,26 @@ void MainFrame::applySelectedEffect()
         return;
     }
 
+#if MFCQT_USE_QT
+    qtPreviewHost_.setImages(originalImage_, processedImage_);
+    qtPreviewHost_.setShowingProcessedImage(showProcessedImage_);
+#else
     imageDisplay_.setImages(&originalImage_, &processedImage_);
     imageDisplay_.setShowProcessed(showProcessedImage_);
+#endif
 }
 
 void MainFrame::updateComparisonButton()
 {
+#if MFCQT_USE_QT
+    qtPreviewHost_.setShowingProcessedImage(showProcessedImage_);
+#else
     comparisonButton_.setShowingProcessedImage(showProcessedImage_);
+#endif
 }
 
 void MainFrame::layoutChildren(int clientWidth, int clientHeight)
 {
-    if (!::IsWindow(imageDisplay_.GetSafeHwnd()))
-        return;
-
     constexpr int margin = 10;
     constexpr int buttonHeight = 30;
     constexpr int buttonWidth = 56;
@@ -185,6 +205,14 @@ void MainFrame::layoutChildren(int clientWidth, int clientHeight)
     const int displayHeight = std::max(
         0, contentBottom - buttonHeight - margin * 3);
 
+#if MFCQT_USE_QT
+    qtPreviewHost_.resize(CRect(margin, margin,
+                                std::max(margin, clientWidth - margin),
+                                margin + displayHeight + buttonHeight + margin * 2));
+#else
+    if (!::IsWindow(imageDisplay_.GetSafeHwnd()))
+        return;
+
     imageDisplay_.MoveWindow(margin, margin,
                              std::max(0, clientWidth - margin * 2),
                              displayHeight);
@@ -194,6 +222,7 @@ void MainFrame::layoutChildren(int clientWidth, int clientHeight)
                                      displayHeight + margin * 2,
                                      buttonWidth, buttonHeight);
     }
+#endif
 }
 
 BEGIN_MESSAGE_MAP(MainFrame, CFrameWnd)

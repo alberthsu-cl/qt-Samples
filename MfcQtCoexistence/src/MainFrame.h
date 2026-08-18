@@ -3,6 +3,9 @@
 #include "EffectSettings.h"
 #include "ImageDisplayWindow.h"
 #include "ImageToggleButton.h"
+#if MFCQT_USE_QT
+#include "QtPreviewHost.h"
+#endif
 
 #include <afxwin.h>
 #include <afxext.h>
@@ -11,6 +14,9 @@
 class MainFrame final : public CFrameWnd
 {
     DECLARE_DYNCREATE(MainFrame)
+
+public:
+    ~MainFrame() override;
 
 protected:
     int OnCreate(LPCREATESTRUCT createStructure);
@@ -31,6 +37,9 @@ private:
     CStatusBar statusBar_;
     ImageToggleButton comparisonButton_;
     ImageDisplayWindow imageDisplay_;
+#if MFCQT_USE_QT
+    QtPreviewHost qtPreviewHost_;
+#endif
     EffectSettings effectSettings_;
     CImage originalImage_;
     CImage processedImage_;
