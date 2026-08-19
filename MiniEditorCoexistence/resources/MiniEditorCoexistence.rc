@@ -1,0 +1,19 @@
+#include "resource.h"
+#include <afxres.h>
+
+IDR_MAINFRAME MENU
+BEGIN
+    POPUP "&File"
+    BEGIN
+        MENUITEM "E&xit", ID_FILE_EXIT
+    END
+    POPUP "&Edit"
+    BEGIN
+        MENUITEM "Undo\tCtrl+Z", 32780, GRAYED
+        MENUITEM "Redo\tCtrl+Y", 32781, GRAYED
+    END
+    POPUP "&Playback"
+    BEGIN
+        MENUITEM "Play / Pause\tSpace", 32790, GRAYED
+    END
+END
