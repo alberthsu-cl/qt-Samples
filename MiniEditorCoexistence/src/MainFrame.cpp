@@ -31,12 +31,25 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     }
     statusBar_.SetPaneInfo(0, ID_SEPARATOR, SBPS_STRETCH, 400);
 
-    if (!mediaLibraryPane_.Create(this, IDC_MEDIA_LIBRARY)
-        || !previewPane_.Create(this, IDC_PREVIEW)
+    if (!previewPane_.Create(this, IDC_PREVIEW)
         || !propertiesPane_.Create(this, IDC_PROPERTIES)
         || !timelinePane_.Create(this, IDC_TIMELINE)) {
         return -1;
     }
+
+#if MINI_EDITOR_USE_QT_MEDIA_LIBRARY
+    if (!mediaLibraryHost_.create(GetSafeHwnd()))
+        return -1;
+
+    // The Qt panel emits a framework-neutral asset index. MFC continues to
+    // own project selection and updates the three remaining MFC panes.
+    mediaLibraryHost_.setAssetSelectedHandler([this](int assetIndex) {
+        selectAsset(assetIndex);
+    });
+#else
+    if (!mediaLibraryPane_.Create(this, IDC_MEDIA_LIBRARY))
+        return -1;
+#endif
 
     selectAsset(0);
     return 0;
@@ -72,8 +85,10 @@ void MainFrame::OnFileExit()
 
 void MainFrame::layoutChildren(int clientWidth, int clientHeight)
 {
+#if !MINI_EDITOR_USE_QT_MEDIA_LIBRARY
     if (!::IsWindow(mediaLibraryPane_.GetSafeHwnd()))
         return;
+#endif
 
     int contentBottom = clientHeight;
     if (::IsWindow(statusBar_.GetSafeHwnd())) {
@@ -89,8 +104,14 @@ void MainFrame::layoutChildren(int clientWidth, int clientHeight)
     const int centerRight = std::max(centerLeft + 120,
                                      clientWidth - kOuterMargin - kPropertiesWidth - kOuterMargin);
 
+#if MINI_EDITOR_USE_QT_MEDIA_LIBRARY
+    mediaLibraryHost_.resize(CRect(kOuterMargin, kOuterMargin,
+                                   kOuterMargin + kMediaLibraryWidth,
+                                   topAreaBottom));
+#else
     mediaLibraryPane_.MoveWindow(kOuterMargin, kOuterMargin,
                                  kMediaLibraryWidth, topAreaBottom - kOuterMargin);
+#endif
     previewPane_.MoveWindow(centerLeft, kOuterMargin,
                             centerRight - centerLeft, topAreaBottom - kOuterMargin);
     propertiesPane_.MoveWindow(centerRight + kOuterMargin, kOuterMargin,
@@ -105,7 +126,11 @@ void MainFrame::selectAsset(int assetIndex)
 {
     selectedAssetIndex_ = std::clamp(assetIndex, 0,
                                      static_cast<int>(demoAssets().size()) - 1);
+#if MINI_EDITOR_USE_QT_MEDIA_LIBRARY
+    mediaLibraryHost_.setSelectedAssetIndex(selectedAssetIndex_);
+#else
     mediaLibraryPane_.setSelectedAssetIndex(selectedAssetIndex_);
+#endif
     previewPane_.setSelectedAssetIndex(selectedAssetIndex_);
     propertiesPane_.setSelectedAssetIndex(selectedAssetIndex_);
     timelinePane_.setSelectedAssetIndex(selectedAssetIndex_);

@@ -1,0 +1,128 @@
+#include "QtMediaLibraryPanel.h"
+
+#include "MediaAssetModel.h"
+
+#include <QComboBox>
+#include <QAbstractItemView>
+#include <QHBoxLayout>
+#include <QItemSelectionModel>
+#include <QLineEdit>
+#include <QListView>
+#include <QPainter>
+#include <QPen>
+#include <QStyledItemDelegate>
+#include <QSignalBlocker>
+#include <QStyleOptionViewItem>
+#include <QVBoxLayout>
+
+namespace {
+
+class MediaAssetDelegate final : public QStyledItemDelegate
+{
+public:
+    using QStyledItemDelegate::QStyledItemDelegate;
+
+    QSize sizeHint(const QStyleOptionViewItem &, const QModelIndex &) const override
+    {
+        return QSize(140, 122);
+    }
+
+    void paint(QPainter *painter, const QStyleOptionViewItem &option,
+               const QModelIndex &index) const override
+    {
+        painter->save();
+        const QRect itemRect = option.rect.adjusted(4, 4, -4, -4);
+        const bool selected = option.state.testFlag(QStyle::State_Selected);
+
+        painter->fillRect(itemRect, selected ? QColor(33, 96, 167) : QColor(35, 37, 43));
+        painter->setPen(QPen(selected ? QColor(83, 166, 255) : QColor(35, 37, 43), 2));
+        painter->drawRect(itemRect.adjusted(1, 1, -1, -1));
+
+        const QRect thumbnailRect(itemRect.left() + 5, itemRect.top() + 5,
+                                  itemRect.width() - 10, 65);
+        painter->fillRect(thumbnailRect,
+                          index.data(MediaAssetModel::ThumbnailColorRole).value<QColor>());
+
+        const QString kind = index.data(MediaAssetModel::AssetKindRole).toString();
+        const QRect badgeRect(thumbnailRect.left() + 5, thumbnailRect.top() + 5, 48, 20);
+        painter->fillRect(badgeRect, QColor(25, 27, 32));
+        painter->setPen(QColor(235, 237, 242));
+        painter->drawText(badgeRect, Qt::AlignCenter, kind);
+
+        painter->setPen(QColor(235, 237, 242));
+        const QRect nameRect(itemRect.left() + 5, itemRect.top() + 74,
+                             itemRect.width() - 10, 22);
+        painter->drawText(nameRect, Qt::AlignCenter | Qt::TextSingleLine,
+                          index.data(Qt::DisplayRole).toString());
+
+        painter->setPen(QColor(166, 171, 183));
+        const QRect durationRect(itemRect.left() + 5, itemRect.top() + 96,
+                                 itemRect.width() - 10, 18);
+        painter->drawText(durationRect, Qt::AlignCenter | Qt::TextSingleLine,
+                          index.data(MediaAssetModel::AssetDurationRole).toString());
+        painter->restore();
+    }
+};
+
+} // namespace
+
+QtMediaLibraryPanel::QtMediaLibraryPanel(QWidget *parent)
+    : QWidget(parent)
+    , assetModel_(new MediaAssetModel(this))
+    , assetView_(new QListView(this))
+{
+    setStyleSheet(QStringLiteral(
+        "QtMediaLibraryPanel { background: #23252b; }"
+        "QComboBox, QLineEdit { background: #31353e; color: #e6e8ed; "
+        "border: 1px solid #4a4f5a; padding: 5px; }"
+        "QListView { background: #1f2126; border: none; }"));
+
+    auto *categorySelector = new QComboBox(this);
+    categorySelector->addItems({ QStringLiteral("My Media"),
+                                 QStringLiteral("Stock Media"),
+                                 QStringLiteral("Backgrounds") });
+
+    auto *searchBox = new QLineEdit(this);
+    searchBox->setPlaceholderText(QStringLiteral("Search media"));
+
+    auto *headerLayout = new QHBoxLayout;
+    headerLayout->setContentsMargins(0, 0, 0, 0);
+    headerLayout->addWidget(categorySelector, 1);
+    headerLayout->addWidget(searchBox, 1);
+
+    assetView_->setModel(assetModel_);
+    assetView_->setItemDelegate(new MediaAssetDelegate(assetView_));
+    assetView_->setViewMode(QListView::IconMode);
+    assetView_->setResizeMode(QListView::Adjust);
+    assetView_->setUniformItemSizes(true);
+    assetView_->setSpacing(5);
+    assetView_->setSelectionMode(QAbstractItemView::SingleSelection);
+
+    auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(10, 10, 10, 10);
+    layout->setSpacing(8);
+    layout->addLayout(headerLayout);
+    layout->addWidget(assetView_, 1);
+
+    connect(assetView_->selectionModel(), &QItemSelectionModel::currentChanged,
+            this,
+            [this](const QModelIndex &current, const QModelIndex &) {
+                if (current.isValid())
+                    emit assetSelected(current.data(MediaAssetModel::AssetIndexRole).toInt());
+            });
+}
+
+void QtMediaLibraryPanel::setSelectedAssetIndex(int assetIndex)
+{
+    const QModelIndex index = assetModel_->index(assetIndex, 0);
+    if (!index.isValid())
+        return;
+
+    // MFC is synchronizing the selection. Do not turn it into a second user
+    // selection notification back across the coexistence boundary.
+    const QSignalBlocker signalBlocker(assetView_->selectionModel());
+    assetView_->setCurrentIndex(index);
+    assetView_->selectionModel()->select(index,
+                                         QItemSelectionModel::ClearAndSelect
+                                             | QItemSelectionModel::Rows);
+}

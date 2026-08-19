@@ -1,6 +1,10 @@
 #pragma once
 
+#if MINI_EDITOR_USE_QT_MEDIA_LIBRARY
+#include "QtMediaLibraryHost.h"
+#else
 #include "MediaLibraryPane.h"
+#endif
 #include "PreviewPane.h"
 #include "PropertiesPane.h"
 #include "TimelinePane.h"
@@ -31,7 +35,11 @@ private:
     void updateStatusText();
 
     CStatusBar statusBar_;
+#if MINI_EDITOR_USE_QT_MEDIA_LIBRARY
+    QtMediaLibraryHost mediaLibraryHost_;
+#else
     MediaLibraryPane mediaLibraryPane_;
+#endif
     PreviewPane previewPane_;
     PropertiesPane propertiesPane_;
     TimelinePane timelinePane_;

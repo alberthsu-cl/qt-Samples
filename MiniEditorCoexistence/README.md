@@ -32,6 +32,29 @@ and input behavior. This gives the migration a one-to-one seam: the Phase 1
 Qt Media Library can replace `MediaLibraryPane` without turning a large
 `switch` statement into a permanent dependency.
 
+## Phase 1 — Qt Media Library
+
+By default, CMake builds the first coexistence migration:
+
+```text
+Qt Media Library | MFC Preview | MFC Properties
+-----------------+-------------+----------------
+MFC Timeline
+```
+
+`MediaAssetModel` is a `QAbstractListModel` adapter over the existing
+framework-neutral `DemoProject.h` data. `QtMediaLibraryPanel` uses `QListView`
+in icon mode plus a custom `QStyledItemDelegate` to paint thumbnail tiles.
+`QtMediaLibraryHost` makes the native MFC/Qt HWND boundary explicit.
+
+When a Qt tile is selected, the panel emits `assetSelected(int)`. MFC receives
+that asset index and updates the unchanged MFC preview, properties, timeline,
+and status bar. The selection index is intentionally the only value crossing
+the UI-framework boundary.
+
+Set `MINI_EDITOR_USE_QT_MEDIA_LIBRARY` to `OFF` in the CMake cache to rebuild
+the exact Phase 0 pure-MFC Media Library for comparison.
+
 ## Build with Visual Studio 2022
 
 Open `D:\Qt\Samples\MiniEditorCoexistence` with **File > Open > Folder**.
