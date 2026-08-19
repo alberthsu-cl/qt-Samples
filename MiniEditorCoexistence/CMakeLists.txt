@@ -13,8 +13,16 @@ find_package(MFC REQUIRED)
 
 add_executable(MiniEditorCoexistence WIN32
     src/DemoProject.h
-    src/EditorPane.h
-    src/EditorPane.cpp
+    src/EditorPaneBase.h
+    src/EditorPaneBase.cpp
+    src/MediaLibraryPane.h
+    src/MediaLibraryPane.cpp
+    src/PreviewPane.h
+    src/PreviewPane.cpp
+    src/PropertiesPane.h
+    src/PropertiesPane.cpp
+    src/TimelinePane.h
+    src/TimelinePane.cpp
     src/MainFrame.h
     src/MainFrame.cpp
     src/MiniEditorCoexistenceApp.cpp

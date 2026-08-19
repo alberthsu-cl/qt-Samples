@@ -31,10 +31,10 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     }
     statusBar_.SetPaneInfo(0, ID_SEPARATOR, SBPS_STRETCH, 400);
 
-    if (!mediaLibraryPane_.Create(EditorPaneKind::MediaLibrary, this, IDC_MEDIA_LIBRARY)
-        || !previewPane_.Create(EditorPaneKind::Preview, this, IDC_PREVIEW)
-        || !propertiesPane_.Create(EditorPaneKind::Properties, this, IDC_PROPERTIES)
-        || !timelinePane_.Create(EditorPaneKind::Timeline, this, IDC_TIMELINE)) {
+    if (!mediaLibraryPane_.Create(this, IDC_MEDIA_LIBRARY)
+        || !previewPane_.Create(this, IDC_PREVIEW)
+        || !propertiesPane_.Create(this, IDC_PROPERTIES)
+        || !timelinePane_.Create(this, IDC_TIMELINE)) {
         return -1;
     }
 

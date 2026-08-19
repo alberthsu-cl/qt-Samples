@@ -6,7 +6,7 @@ migration, not a video editor implementation.
 
 ## Phase 0 — Pure MFC baseline
 
-The application contains four custom MFC child windows:
+The application contains four focused custom MFC child windows:
 
 ```text
 Media Library | Preview | Properties
@@ -25,6 +25,12 @@ Timeline
 `DemoProject.h` is framework-neutral and owns the sample asset data. It will
 be the stable data boundary when Phase 1 replaces only the Media Library with
 a Qt Model/View panel.
+
+`EditorPaneBase` contains only shared MFC painting mechanics. `MediaLibraryPane`,
+`PreviewPane`, `PropertiesPane`, and `TimelinePane` each own their own drawing
+and input behavior. This gives the migration a one-to-one seam: the Phase 1
+Qt Media Library can replace `MediaLibraryPane` without turning a large
+`switch` statement into a permanent dependency.
 
 ## Build with Visual Studio 2022
 

@@ -1,6 +1,9 @@
 #pragma once
 
-#include "EditorPane.h"
+#include "MediaLibraryPane.h"
+#include "PreviewPane.h"
+#include "PropertiesPane.h"
+#include "TimelinePane.h"
 
 #include <afxcmn.h>
 #include <afxext.h>
@@ -28,9 +31,9 @@ private:
     void updateStatusText();
 
     CStatusBar statusBar_;
-    EditorPane mediaLibraryPane_;
-    EditorPane previewPane_;
-    EditorPane propertiesPane_;
-    EditorPane timelinePane_;
+    MediaLibraryPane mediaLibraryPane_;
+    PreviewPane previewPane_;
+    PropertiesPane propertiesPane_;
+    TimelinePane timelinePane_;
     int selectedAssetIndex_ = 0;
 };
