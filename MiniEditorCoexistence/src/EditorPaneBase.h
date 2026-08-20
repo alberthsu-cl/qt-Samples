@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ProjectState.h"
+
 #include <afxwin.h>
 
 // Shared MFC mechanics only. Each editor area provides its own title, drawing,
@@ -8,10 +10,12 @@ class EditorPaneBase : public CWnd
 {
 public:
     void setSelectedAssetIndex(int selectedAssetIndex);
+    void setClipSettings(const ClipSettings &settings);
 
 protected:
     bool createPane(CWnd *parent, UINT controlId);
     int selectedAssetIndex() const;
+    const ClipSettings &clipSettings() const;
 
     void drawPaneTitle(CDC &deviceContext, const CString &title) const;
     void drawText(CDC &deviceContext, const CString &text, const CRect &bounds,
@@ -26,6 +30,7 @@ protected:
 
 private:
     int selectedAssetIndex_ = 0;
+    ClipSettings clipSettings_;
 };
 
 namespace EditorUi {

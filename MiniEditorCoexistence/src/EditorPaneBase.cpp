@@ -25,9 +25,20 @@ void EditorPaneBase::setSelectedAssetIndex(int selectedAssetIndex)
     Invalidate();
 }
 
+void EditorPaneBase::setClipSettings(const ClipSettings &settings)
+{
+    clipSettings_ = settings;
+    Invalidate();
+}
+
 int EditorPaneBase::selectedAssetIndex() const
 {
     return selectedAssetIndex_;
+}
+
+const ClipSettings &EditorPaneBase::clipSettings() const
+{
+    return clipSettings_;
 }
 
 void EditorPaneBase::OnPaint()

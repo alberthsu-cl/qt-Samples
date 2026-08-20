@@ -1,17 +1,22 @@
 #pragma once
 
-#if MINI_EDITOR_USE_QT_MEDIA_LIBRARY
+#include "ProjectState.h"
+
+#if MINI_EDITOR_USE_QT
 #include "QtMediaLibraryHost.h"
+#include "QtPropertiesHost.h"
 #else
 #include "MediaLibraryPane.h"
+#include "PropertiesPane.h"
 #endif
 #include "PreviewPane.h"
-#include "PropertiesPane.h"
 #include "TimelinePane.h"
 
 #include <afxcmn.h>
 #include <afxext.h>
 #include <afxwin.h>
+
+#include <array>
 
 class MainFrame final : public CFrameWnd
 {
@@ -32,16 +37,19 @@ protected:
 private:
     void layoutChildren(int clientWidth, int clientHeight);
     void selectAsset(int assetIndex);
+    void updateSelectedClipSettings(const ClipSettings &settings);
     void updateStatusText();
 
     CStatusBar statusBar_;
-#if MINI_EDITOR_USE_QT_MEDIA_LIBRARY
+#if MINI_EDITOR_USE_QT
     QtMediaLibraryHost mediaLibraryHost_;
+    QtPropertiesHost propertiesHost_;
 #else
     MediaLibraryPane mediaLibraryPane_;
+    PropertiesPane propertiesPane_;
 #endif
     PreviewPane previewPane_;
-    PropertiesPane propertiesPane_;
     TimelinePane timelinePane_;
     int selectedAssetIndex_ = 0;
+    std::array<ClipSettings, 6> clipSettings_;
 };

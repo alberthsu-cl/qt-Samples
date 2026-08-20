@@ -52,8 +52,29 @@ that asset index and updates the unchanged MFC preview, properties, timeline,
 and status bar. The selection index is intentionally the only value crossing
 the UI-framework boundary.
 
-Set `MINI_EDITOR_USE_QT_MEDIA_LIBRARY` to `OFF` in the CMake cache to rebuild
-the exact Phase 0 pure-MFC Media Library for comparison.
+## Phase 2 — Qt Properties panel
+
+Phase 2 replaces the inspector as well:
+
+```text
+Qt Media Library | MFC Preview | Qt Properties
+-----------------+-------------+--------------
+MFC Timeline
+```
+
+`ProjectState.h` defines framework-neutral `ClipSettings`: opacity, scale, and
+position. `MainFrame` owns one value per demo asset. `QtPropertiesPanel` uses
+`QFormLayout`, sliders, spin boxes, and a combo box to edit those values. It
+emits plain values back to MFC through `QtPropertiesHost`; MFC stores them and
+redraws its unchanged Preview and Timeline panes.
+
+When MFC changes selection or synchronizes stored settings, the Qt controls
+are updated under `QSignalBlocker`. That prevents a model-to-view update from
+being mistaken for a second user edit returning to MFC.
+
+`MINI_EDITOR_USE_QT` is the one migration switch. Set it to `OFF` in the
+CMake cache to rebuild the complete Phase 0 pure-MFC UI; set it to `ON` to
+enable every panel migrated to Qt so far.
 
 ## Build with Visual Studio 2022
 

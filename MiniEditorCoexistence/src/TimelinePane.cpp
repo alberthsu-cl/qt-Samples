@@ -2,6 +2,8 @@
 
 #include "DemoProject.h"
 
+#include <algorithm>
+
 bool TimelinePane::Create(CWnd *parent, UINT controlId)
 {
     return createPane(parent, controlId);
@@ -38,14 +40,22 @@ void TimelinePane::drawContent(CDC &deviceContext, const CRect &clientRect) cons
              EditorUi::kSecondaryText, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
     const auto &asset = demoAssets()[selectedAssetIndex()];
-    const CRect clipRect(76, trackTop + 5, 410, trackTop + trackHeight - 5);
-    deviceContext.FillSolidRect(clipRect, asset.thumbnailColor);
+    const ClipSettings &settings = clipSettings();
+    const int availableClipWidth = std::max(1, static_cast<int>(clientRect.right) - 76);
+    const int clipWidth = std::min(availableClipWidth,
+                                   334 * settings.scalePercent / 100);
+    const CRect clipRect(76, trackTop + 5, 76 + clipWidth, trackTop + trackHeight - 5);
+    const COLORREF fadedThumbnailColor = RGB(
+        GetRValue(asset.thumbnailColor) * settings.opacityPercent / 100,
+        GetGValue(asset.thumbnailColor) * settings.opacityPercent / 100,
+        GetBValue(asset.thumbnailColor) * settings.opacityPercent / 100);
+    deviceContext.FillSolidRect(clipRect, fadedThumbnailColor);
     deviceContext.Draw3dRect(clipRect, RGB(180, 220, 255), RGB(180, 220, 255));
     drawText(deviceContext, asset.name,
              CRect(clipRect.left + 10, clipRect.top, clipRect.right - 10, clipRect.bottom),
              RGB(255, 255, 255), DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
-    deviceContext.FillSolidRect(76, trackTop + trackHeight + 16, 334, trackHeight - 16,
+    deviceContext.FillSolidRect(76, trackTop + trackHeight + 16, clipWidth, trackHeight - 16,
                                 RGB(38, 114, 176));
     deviceContext.FillSolidRect(76, rulerTop, 2, clientRect.bottom - rulerTop, RGB(240, 74, 74));
 }

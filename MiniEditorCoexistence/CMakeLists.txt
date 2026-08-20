@@ -11,16 +11,17 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_MFC_FLAG 2)
 find_package(MFC REQUIRED)
 
-option(MINI_EDITOR_USE_QT_MEDIA_LIBRARY
-       "Replace only the MFC Media Library pane with a Qt Model/View panel"
+option(MINI_EDITOR_USE_QT
+       "Build every UI panel migrated to Qt so far"
        ON)
 
-if(MINI_EDITOR_USE_QT_MEDIA_LIBRARY)
+if(MINI_EDITOR_USE_QT)
     find_package(Qt6 REQUIRED COMPONENTS Widgets)
 endif()
 
 add_executable(MiniEditorCoexistence WIN32
     src/DemoProject.h
+    src/ProjectState.h
     src/EditorPaneBase.h
     src/EditorPaneBase.cpp
     src/MediaLibraryPane.h
@@ -49,7 +50,7 @@ target_compile_definitions(MiniEditorCoexistence PRIVATE
     _UNICODE
 )
 
-if(MINI_EDITOR_USE_QT_MEDIA_LIBRARY)
+if(MINI_EDITOR_USE_QT)
     target_sources(MiniEditorCoexistence PRIVATE
         src/MediaAssetModel.h
         src/MediaAssetModel.cpp
@@ -57,6 +58,10 @@ if(MINI_EDITOR_USE_QT_MEDIA_LIBRARY)
         src/QtMediaLibraryPanel.cpp
         src/QtMediaLibraryHost.h
         src/QtMediaLibraryHost.cpp
+        src/QtPropertiesPanel.h
+        src/QtPropertiesPanel.cpp
+        src/QtPropertiesHost.h
+        src/QtPropertiesHost.cpp
         src/QtRuntime.h
         src/QtRuntime.cpp
     )
@@ -67,7 +72,7 @@ if(MINI_EDITOR_USE_QT_MEDIA_LIBRARY)
         qt_no_entrypoint TRUE
     )
     target_compile_definitions(MiniEditorCoexistence PRIVATE
-        MINI_EDITOR_USE_QT_MEDIA_LIBRARY=1
+        MINI_EDITOR_USE_QT=1
     )
 
     add_custom_command(TARGET MiniEditorCoexistence POST_BUILD
@@ -79,6 +84,6 @@ if(MINI_EDITOR_USE_QT_MEDIA_LIBRARY)
     )
 else()
     target_compile_definitions(MiniEditorCoexistence PRIVATE
-        MINI_EDITOR_USE_QT_MEDIA_LIBRARY=0
+        MINI_EDITOR_USE_QT=0
     )
 endif()

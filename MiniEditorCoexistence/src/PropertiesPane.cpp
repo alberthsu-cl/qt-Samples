@@ -2,6 +2,8 @@
 
 #include "DemoProject.h"
 
+#include <string>
+
 bool PropertiesPane::Create(CWnd *parent, UINT controlId)
 {
     return createPane(parent, controlId);
@@ -23,9 +25,11 @@ void PropertiesPane::drawContent(CDC &deviceContext, const CRect &clientRect) co
         CString(_T("Name: ")) + asset.name,
         CString(_T("Type: ")) + asset.kind,
         CString(_T("Duration: ")) + asset.duration,
-        _T("Opacity: 100%"),
-        _T("Position: Center"),
-        _T("Scale: 100%")
+        CString(_T("Opacity: "))
+            + std::to_wstring(clipSettings().opacityPercent).c_str() + _T("%"),
+        CString(_T("Position: ")) + clipPositionDisplayName(clipSettings().position),
+        CString(_T("Scale: "))
+            + std::to_wstring(clipSettings().scalePercent).c_str() + _T("%")
     };
 
     for (int index = 0; index < _countof(rows); ++index) {

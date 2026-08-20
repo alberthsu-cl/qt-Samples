@@ -32,23 +32,29 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     statusBar_.SetPaneInfo(0, ID_SEPARATOR, SBPS_STRETCH, 400);
 
     if (!previewPane_.Create(this, IDC_PREVIEW)
-        || !propertiesPane_.Create(this, IDC_PROPERTIES)
         || !timelinePane_.Create(this, IDC_TIMELINE)) {
         return -1;
     }
 
-#if MINI_EDITOR_USE_QT_MEDIA_LIBRARY
+#if MINI_EDITOR_USE_QT
     if (!mediaLibraryHost_.create(GetSafeHwnd()))
         return -1;
+    if (!propertiesHost_.create(GetSafeHwnd()))
+        return -1;
 
-    // The Qt panel emits a framework-neutral asset index. MFC continues to
-    // own project selection and updates the three remaining MFC panes.
+    // Qt panels emit framework-neutral values. MFC continues to own selection
+    // and clip settings, then redraws the remaining MFC panes from that state.
     mediaLibraryHost_.setAssetSelectedHandler([this](int assetIndex) {
         selectAsset(assetIndex);
     });
+    propertiesHost_.setClipSettingsEditedHandler([this](const ClipSettings &settings) {
+        updateSelectedClipSettings(settings);
+    });
 #else
-    if (!mediaLibraryPane_.Create(this, IDC_MEDIA_LIBRARY))
+    if (!mediaLibraryPane_.Create(this, IDC_MEDIA_LIBRARY)
+        || !propertiesPane_.Create(this, IDC_PROPERTIES)) {
         return -1;
+    }
 #endif
 
     selectAsset(0);
@@ -85,8 +91,9 @@ void MainFrame::OnFileExit()
 
 void MainFrame::layoutChildren(int clientWidth, int clientHeight)
 {
-#if !MINI_EDITOR_USE_QT_MEDIA_LIBRARY
-    if (!::IsWindow(mediaLibraryPane_.GetSafeHwnd()))
+#if !MINI_EDITOR_USE_QT
+    if (!::IsWindow(mediaLibraryPane_.GetSafeHwnd())
+        || !::IsWindow(propertiesPane_.GetSafeHwnd()))
         return;
 #endif
 
@@ -104,7 +111,7 @@ void MainFrame::layoutChildren(int clientWidth, int clientHeight)
     const int centerRight = std::max(centerLeft + 120,
                                      clientWidth - kOuterMargin - kPropertiesWidth - kOuterMargin);
 
-#if MINI_EDITOR_USE_QT_MEDIA_LIBRARY
+#if MINI_EDITOR_USE_QT
     mediaLibraryHost_.resize(CRect(kOuterMargin, kOuterMargin,
                                    kOuterMargin + kMediaLibraryWidth,
                                    topAreaBottom));
@@ -114,9 +121,14 @@ void MainFrame::layoutChildren(int clientWidth, int clientHeight)
 #endif
     previewPane_.MoveWindow(centerLeft, kOuterMargin,
                             centerRight - centerLeft, topAreaBottom - kOuterMargin);
+#if MINI_EDITOR_USE_QT
+    propertiesHost_.resize(CRect(centerRight + kOuterMargin, kOuterMargin,
+                                 clientWidth - kOuterMargin, topAreaBottom));
+#else
     propertiesPane_.MoveWindow(centerRight + kOuterMargin, kOuterMargin,
                                std::max(0, clientWidth - centerRight - kOuterMargin * 2),
                                topAreaBottom - kOuterMargin);
+#endif
     timelinePane_.MoveWindow(kOuterMargin, topAreaBottom + kOuterMargin,
                              std::max(0, clientWidth - kOuterMargin * 2),
                              std::max(0, contentBottom - topAreaBottom - kOuterMargin));
@@ -126,14 +138,38 @@ void MainFrame::selectAsset(int assetIndex)
 {
     selectedAssetIndex_ = std::clamp(assetIndex, 0,
                                      static_cast<int>(demoAssets().size()) - 1);
-#if MINI_EDITOR_USE_QT_MEDIA_LIBRARY
+    const auto &asset = demoAssets()[selectedAssetIndex_];
+    const ClipSettings &settings = clipSettings_[selectedAssetIndex_];
+
+#if MINI_EDITOR_USE_QT
     mediaLibraryHost_.setSelectedAssetIndex(selectedAssetIndex_);
+    propertiesHost_.setSelectedAsset(asset.name, asset.kind, settings);
 #else
     mediaLibraryPane_.setSelectedAssetIndex(selectedAssetIndex_);
+    propertiesPane_.setSelectedAssetIndex(selectedAssetIndex_);
+    propertiesPane_.setClipSettings(settings);
 #endif
     previewPane_.setSelectedAssetIndex(selectedAssetIndex_);
-    propertiesPane_.setSelectedAssetIndex(selectedAssetIndex_);
+    previewPane_.setClipSettings(settings);
     timelinePane_.setSelectedAssetIndex(selectedAssetIndex_);
+    timelinePane_.setClipSettings(settings);
+    updateStatusText();
+}
+
+void MainFrame::updateSelectedClipSettings(const ClipSettings &settings)
+{
+    clipSettings_[selectedAssetIndex_] = settings;
+    const auto &asset = demoAssets()[selectedAssetIndex_];
+
+#if MINI_EDITOR_USE_QT
+    // This synchronization is signal-blocked inside QtPropertiesPanel, so a
+    // user edit never feeds back as another user edit.
+    propertiesHost_.setSelectedAsset(asset.name, asset.kind, settings);
+#else
+    propertiesPane_.setClipSettings(settings);
+#endif
+    previewPane_.setClipSettings(settings);
+    timelinePane_.setClipSettings(settings);
     updateStatusText();
 }
 
@@ -141,8 +177,10 @@ void MainFrame::updateStatusText()
 {
     const auto &asset = demoAssets()[selectedAssetIndex_];
     CString statusText;
-    statusText.Format(_T("Phase 0 — Pure MFC baseline | Selected: %s (%s)"),
-                      asset.name, asset.kind);
+    const ClipSettings &settings = clipSettings_[selectedAssetIndex_];
+    statusText.Format(_T("Selected: %s (%s) | Opacity %d%% | Scale %d%% | %s"),
+                      asset.name, asset.kind, settings.opacityPercent,
+                      settings.scalePercent, clipPositionDisplayName(settings.position));
     statusBar_.SetPaneText(0, statusText);
 }
 
