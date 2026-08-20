@@ -34,6 +34,8 @@ add_executable(MiniEditorCoexistence WIN32
     src/PropertiesPane.cpp
     src/TimelinePane.h
     src/TimelinePane.cpp
+    src/WorkspaceSplitter.h
+    src/WorkspaceSplitter.cpp
     src/MainFrame.h
     src/MainFrame.cpp
     src/MiniEditorCoexistenceApp.cpp

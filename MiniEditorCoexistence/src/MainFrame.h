@@ -13,6 +13,7 @@
 #endif
 #include "MfcPreviewCanvas.h"
 #include "TimelinePane.h"
+#include "WorkspaceSplitter.h"
 
 #include <afxcmn.h>
 #include <afxext.h>
@@ -44,6 +45,9 @@ private:
     void updateSelectedClipSettings(const ClipSettings &settings);
     void handlePlaybackCommand(PlaybackCommand command);
     void synchronizePlaybackViews();
+    void moveLeftSplitter(int parentX);
+    void moveRightSplitter(int parentX);
+    void moveTimelineSplitter(int parentY);
     void updateStatusText();
 
     CStatusBar statusBar_;
@@ -58,7 +62,13 @@ private:
 #endif
     MfcPreviewCanvas previewCanvas_;
     TimelinePane timelinePane_;
+    WorkspaceSplitter leftSplitter_;
+    WorkspaceSplitter rightSplitter_;
+    WorkspaceSplitter timelineSplitter_;
     int selectedAssetIndex_ = 0;
     std::array<ClipSettings, 6> clipSettings_;
     PlaybackState playbackState_;
+    int mediaLibraryWidth_ = 304;
+    int propertiesWidth_ = 250;
+    int timelineHeight_ = 220;
 };

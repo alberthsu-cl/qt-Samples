@@ -10,6 +10,9 @@
 #define IDC_TIMELINE            1004
 #define IDC_PREVIEW_CANVAS      1005
 #define IDC_TRANSPORT            1006
+#define IDC_LEFT_SPLITTER        1007
+#define IDC_RIGHT_SPLITTER       1008
+#define IDC_TIMELINE_SPLITTER    1009
 
 #define ID_MEDIA_ASSET_FIRST    33000
 #define ID_MEDIA_ASSET_LAST     33005

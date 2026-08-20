@@ -11,10 +11,13 @@ namespace {
 
 constexpr UINT kStatusBarIndicators[] = { ID_SEPARATOR };
 constexpr int kOuterMargin = 6;
-constexpr int kMediaLibraryWidth = 304;
-constexpr int kPropertiesWidth = 250;
-constexpr int kTimelineHeight = 220;
 constexpr int kTransportHeight = 42;
+constexpr int kSplitterThickness = 6;
+constexpr int kMinimumMediaLibraryWidth = 180;
+constexpr int kMinimumPropertiesWidth = 190;
+constexpr int kMinimumPreviewWidth = 320;
+constexpr int kMinimumTopAreaHeight = 250;
+constexpr int kMinimumTimelineHeight = 140;
 constexpr UINT_PTR kPlaybackTimerId = 1;
 
 } // namespace
@@ -38,9 +41,19 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     statusBar_.SetPaneInfo(0, ID_SEPARATOR, SBPS_STRETCH, 400);
 
     if (!previewCanvas_.Create(this, IDC_PREVIEW_CANVAS)
-        || !timelinePane_.Create(this, IDC_TIMELINE)) {
+        || !timelinePane_.Create(this, IDC_TIMELINE)
+        || !leftSplitter_.Create(WorkspaceSplitter::Orientation::Vertical,
+                                 this, IDC_LEFT_SPLITTER)
+        || !rightSplitter_.Create(WorkspaceSplitter::Orientation::Vertical,
+                                  this, IDC_RIGHT_SPLITTER)
+        || !timelineSplitter_.Create(WorkspaceSplitter::Orientation::Horizontal,
+                                     this, IDC_TIMELINE_SPLITTER)) {
         return -1;
     }
+
+    leftSplitter_.setDragHandler([this](int parentX) { moveLeftSplitter(parentX); });
+    rightSplitter_.setDragHandler([this](int parentX) { moveRightSplitter(parentX); });
+    timelineSplitter_.setDragHandler([this](int parentY) { moveTimelineSplitter(parentY); });
 
 #if MINI_EDITOR_USE_QT
     if (!mediaLibraryHost_.create(GetSafeHwnd()))
@@ -149,21 +162,40 @@ void MainFrame::layoutChildren(int clientWidth, int clientHeight)
         contentBottom = std::clamp(static_cast<int>(statusRect.top), 0, clientHeight);
     }
 
-    const int topAreaBottom = std::max(kOuterMargin,
-                                       contentBottom - kTimelineHeight - kOuterMargin);
-    const int centerLeft = kOuterMargin + kMediaLibraryWidth + kOuterMargin;
-    const int centerRight = std::max(centerLeft + 120,
-                                     clientWidth - kOuterMargin - kPropertiesWidth - kOuterMargin);
+    const int maximumTimelineHeight = std::max(kMinimumTimelineHeight,
+        contentBottom - kOuterMargin - kSplitterThickness - kMinimumTopAreaHeight);
+    timelineHeight_ = std::clamp(timelineHeight_, kMinimumTimelineHeight,
+                                 maximumTimelineHeight);
+    const int timelineTop = contentBottom - timelineHeight_;
+    const int timelineSplitterTop = timelineTop - kSplitterThickness;
+
+    const int maximumMediaWidth = std::max(kMinimumMediaLibraryWidth,
+        clientWidth - kOuterMargin * 2 - kSplitterThickness * 2
+                    - kMinimumPropertiesWidth - kMinimumPreviewWidth);
+    mediaLibraryWidth_ = std::clamp(mediaLibraryWidth_, kMinimumMediaLibraryWidth,
+                                    maximumMediaWidth);
+    const int maximumPropertiesWidth = std::max(kMinimumPropertiesWidth,
+        clientWidth - kOuterMargin * 2 - kSplitterThickness * 2
+                    - mediaLibraryWidth_ - kMinimumPreviewWidth);
+    propertiesWidth_ = std::clamp(propertiesWidth_, kMinimumPropertiesWidth,
+                                  maximumPropertiesWidth);
+
+    const int mediaRight = kOuterMargin + mediaLibraryWidth_;
+    const int centerLeft = mediaRight + kSplitterThickness;
+    const int propertiesLeft = clientWidth - kOuterMargin - propertiesWidth_;
+    const int rightSplitterLeft = propertiesLeft - kSplitterThickness;
+    const int centerRight = rightSplitterLeft;
+    const int topAreaBottom = timelineSplitterTop;
     const int canvasBottom = std::max(kOuterMargin,
                                       topAreaBottom - kTransportHeight - kOuterMargin);
 
 #if MINI_EDITOR_USE_QT
     mediaLibraryHost_.resize(CRect(kOuterMargin, kOuterMargin,
-                                   kOuterMargin + kMediaLibraryWidth,
+                                   mediaRight,
                                    topAreaBottom));
 #else
     mediaLibraryPane_.MoveWindow(kOuterMargin, kOuterMargin,
-                                 kMediaLibraryWidth, topAreaBottom - kOuterMargin);
+                                 mediaLibraryWidth_, topAreaBottom - kOuterMargin);
 #endif
     previewCanvas_.MoveWindow(centerLeft, kOuterMargin,
                               centerRight - centerLeft, canvasBottom - kOuterMargin);
@@ -175,16 +207,24 @@ void MainFrame::layoutChildren(int clientWidth, int clientHeight)
                              centerRight - centerLeft, kTransportHeight);
 #endif
 #if MINI_EDITOR_USE_QT
-    propertiesHost_.resize(CRect(centerRight + kOuterMargin, kOuterMargin,
+    propertiesHost_.resize(CRect(propertiesLeft, kOuterMargin,
                                  clientWidth - kOuterMargin, topAreaBottom));
 #else
-    propertiesPane_.MoveWindow(centerRight + kOuterMargin, kOuterMargin,
-                               std::max(0, clientWidth - centerRight - kOuterMargin * 2),
+    propertiesPane_.MoveWindow(propertiesLeft, kOuterMargin,
+                               propertiesWidth_,
                                topAreaBottom - kOuterMargin);
 #endif
-    timelinePane_.MoveWindow(kOuterMargin, topAreaBottom + kOuterMargin,
+    timelinePane_.MoveWindow(kOuterMargin, timelineTop,
                              std::max(0, clientWidth - kOuterMargin * 2),
-                             std::max(0, contentBottom - topAreaBottom - kOuterMargin));
+                             timelineHeight_);
+
+    leftSplitter_.MoveWindow(mediaRight, kOuterMargin,
+                             kSplitterThickness, topAreaBottom - kOuterMargin);
+    rightSplitter_.MoveWindow(rightSplitterLeft, kOuterMargin,
+                              kSplitterThickness, topAreaBottom - kOuterMargin);
+    timelineSplitter_.MoveWindow(kOuterMargin, timelineSplitterTop,
+                                 std::max(0, clientWidth - kOuterMargin * 2),
+                                 kSplitterThickness);
 }
 
 void MainFrame::selectAsset(int assetIndex)
@@ -267,6 +307,41 @@ void MainFrame::synchronizePlaybackViews()
 #else
     transportBar_.setPlaybackState(playbackState_);
 #endif
+}
+
+void MainFrame::moveLeftSplitter(int parentX)
+{
+    mediaLibraryWidth_ = std::max(kMinimumMediaLibraryWidth, parentX - kOuterMargin);
+    CRect clientRect;
+    GetClientRect(&clientRect);
+    layoutChildren(clientRect.Width(), clientRect.Height());
+}
+
+void MainFrame::moveRightSplitter(int parentX)
+{
+    CRect clientRect;
+    GetClientRect(&clientRect);
+    propertiesWidth_ = std::max(kMinimumPropertiesWidth,
+        clientRect.Width() - kOuterMargin - (parentX + kSplitterThickness));
+    layoutChildren(clientRect.Width(), clientRect.Height());
+}
+
+void MainFrame::moveTimelineSplitter(int parentY)
+{
+    CRect clientRect;
+    GetClientRect(&clientRect);
+
+    int contentBottom = clientRect.Height();
+    if (::IsWindow(statusBar_.GetSafeHwnd())) {
+        CRect statusRect;
+        statusBar_.GetWindowRect(&statusRect);
+        ScreenToClient(&statusRect);
+        contentBottom = std::clamp(static_cast<int>(statusRect.top), 0, clientRect.Height());
+    }
+
+    timelineHeight_ = std::max(kMinimumTimelineHeight,
+        contentBottom - (parentY + kSplitterThickness));
+    layoutChildren(clientRect.Width(), clientRect.Height());
 }
 
 void MainFrame::updateStatusText()
