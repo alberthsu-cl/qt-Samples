@@ -5,7 +5,7 @@
 class MediaAssetModel;
 class QListView;
 
-// The Phase 1 replacement for MediaLibraryPane. It owns only Qt widgets and
+// The Phase 1 replacement for MfcMediaLibraryPane. It owns only Qt widgets and
 // emits an asset index; MFC remains responsible for the selected project data.
 class QtMediaLibraryPanel final : public QWidget
 {

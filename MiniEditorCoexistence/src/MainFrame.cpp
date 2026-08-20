@@ -42,11 +42,11 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
 
     if (!previewCanvas_.Create(this, IDC_PREVIEW_CANVAS)
         || !timelinePane_.Create(this, IDC_TIMELINE)
-        || !leftSplitter_.Create(WorkspaceSplitter::Orientation::Vertical,
+        || !leftSplitter_.Create(MfcWorkspaceSplitter::Orientation::Vertical,
                                  this, IDC_LEFT_SPLITTER)
-        || !rightSplitter_.Create(WorkspaceSplitter::Orientation::Vertical,
+        || !rightSplitter_.Create(MfcWorkspaceSplitter::Orientation::Vertical,
                                   this, IDC_RIGHT_SPLITTER)
-        || !timelineSplitter_.Create(WorkspaceSplitter::Orientation::Horizontal,
+        || !timelineSplitter_.Create(MfcWorkspaceSplitter::Orientation::Horizontal,
                                      this, IDC_TIMELINE_SPLITTER)) {
         return -1;
     }

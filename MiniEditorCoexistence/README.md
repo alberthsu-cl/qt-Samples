@@ -26,10 +26,11 @@ Timeline
 be the stable data boundary when Phase 1 replaces only the Media Library with
 a Qt Model/View panel.
 
-`EditorPaneBase` contains only shared MFC painting mechanics. `MediaLibraryPane`,
-`PreviewPane`, `PropertiesPane`, and `TimelinePane` each own their own drawing
+`MfcEditorPaneBase` contains only shared MFC painting mechanics.
+`MfcMediaLibraryPane`, `MfcPreviewCanvas`, `MfcPropertiesPane`, and
+`MfcTimelinePane` each own their own drawing
 and input behavior. This gives the migration a one-to-one seam: the Phase 1
-Qt Media Library can replace `MediaLibraryPane` without turning a large
+Qt Media Library can replace `MfcMediaLibraryPane` without turning a large
 `switch` statement into a permanent dependency.
 
 ## Phase 1 — Qt Media Library

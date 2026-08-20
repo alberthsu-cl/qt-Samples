@@ -22,20 +22,20 @@ endif()
 add_executable(MiniEditorCoexistence WIN32
     src/DemoProject.h
     src/ProjectState.h
-    src/EditorPaneBase.h
-    src/EditorPaneBase.cpp
-    src/MediaLibraryPane.h
-    src/MediaLibraryPane.cpp
+    src/MfcEditorPaneBase.h
+    src/MfcEditorPaneBase.cpp
+    src/MfcMediaLibraryPane.h
+    src/MfcMediaLibraryPane.cpp
     src/MfcPreviewCanvas.h
     src/MfcPreviewCanvas.cpp
     src/MfcTransportBar.h
     src/MfcTransportBar.cpp
-    src/PropertiesPane.h
-    src/PropertiesPane.cpp
-    src/TimelinePane.h
-    src/TimelinePane.cpp
-    src/WorkspaceSplitter.h
-    src/WorkspaceSplitter.cpp
+    src/MfcPropertiesPane.h
+    src/MfcPropertiesPane.cpp
+    src/MfcTimelinePane.h
+    src/MfcTimelinePane.cpp
+    src/MfcWorkspaceSplitter.h
+    src/MfcWorkspaceSplitter.cpp
     src/MainFrame.h
     src/MainFrame.cpp
     src/MiniEditorCoexistenceApp.cpp
@@ -46,6 +46,15 @@ add_executable(MiniEditorCoexistence WIN32
 target_include_directories(MiniEditorCoexistence PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
     "${CMAKE_CURRENT_SOURCE_DIR}/resources"
+)
+
+# Visual Studio filters are virtual folders only: the files stay in src/.
+# Keep the model layer easy to find while studying the UI migration boundary.
+source_group("DataModel" FILES
+    src/DemoProject.h
+    src/ProjectState.h
+    src/MediaAssetModel.h
+    src/MediaAssetModel.cpp
 )
 
 target_compile_definitions(MiniEditorCoexistence PRIVATE

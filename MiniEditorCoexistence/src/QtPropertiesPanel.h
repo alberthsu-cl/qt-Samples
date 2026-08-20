@@ -9,7 +9,7 @@ class QLabel;
 class QSlider;
 class QSpinBox;
 
-// Phase 2 replacement for PropertiesPane. It presents settings but does not
+// Phase 2 replacement for MfcPropertiesPane. It presents settings but does not
 // own them; MFC remains the owner of the selected clip's project state.
 class QtPropertiesPanel final : public QWidget
 {

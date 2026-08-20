@@ -1,8 +1,8 @@
 #pragma once
 
-#include "EditorPaneBase.h"
+#include "MfcEditorPaneBase.h"
 
-class TimelinePane final : public EditorPaneBase
+class MfcTimelinePane final : public MfcEditorPaneBase
 {
 public:
     bool Create(CWnd *parent, UINT controlId);

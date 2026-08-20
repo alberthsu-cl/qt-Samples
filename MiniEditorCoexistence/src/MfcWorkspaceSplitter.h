@@ -6,7 +6,7 @@
 
 // A small MFC-owned splitter handle. It knows only how to capture the mouse
 // and report a parent-client coordinate; MainFrame owns all layout policy.
-class WorkspaceSplitter final : public CWnd
+class MfcWorkspaceSplitter final : public CWnd
 {
 public:
     enum class Orientation {

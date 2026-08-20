@@ -7,13 +7,13 @@
 #include "QtPropertiesHost.h"
 #include "QtTransportHost.h"
 #else
-#include "MediaLibraryPane.h"
+#include "MfcMediaLibraryPane.h"
 #include "MfcTransportBar.h"
-#include "PropertiesPane.h"
+#include "MfcPropertiesPane.h"
 #endif
 #include "MfcPreviewCanvas.h"
-#include "TimelinePane.h"
-#include "WorkspaceSplitter.h"
+#include "MfcTimelinePane.h"
+#include "MfcWorkspaceSplitter.h"
 
 #include <afxcmn.h>
 #include <afxext.h>
@@ -56,15 +56,15 @@ private:
     QtPropertiesHost propertiesHost_;
     QtTransportHost transportHost_;
 #else
-    MediaLibraryPane mediaLibraryPane_;
-    PropertiesPane propertiesPane_;
+    MfcMediaLibraryPane mediaLibraryPane_;
+    MfcPropertiesPane propertiesPane_;
     MfcTransportBar transportBar_;
 #endif
     MfcPreviewCanvas previewCanvas_;
-    TimelinePane timelinePane_;
-    WorkspaceSplitter leftSplitter_;
-    WorkspaceSplitter rightSplitter_;
-    WorkspaceSplitter timelineSplitter_;
+    MfcTimelinePane timelinePane_;
+    MfcWorkspaceSplitter leftSplitter_;
+    MfcWorkspaceSplitter rightSplitter_;
+    MfcWorkspaceSplitter timelineSplitter_;
     int selectedAssetIndex_ = 0;
     std::array<ClipSettings, 6> clipSettings_;
     PlaybackState playbackState_;

@@ -1,20 +1,20 @@
-#include "PropertiesPane.h"
+#include "MfcPropertiesPane.h"
 
 #include "DemoProject.h"
 
 #include <string>
 
-bool PropertiesPane::Create(CWnd *parent, UINT controlId)
+bool MfcPropertiesPane::Create(CWnd *parent, UINT controlId)
 {
     return createPane(parent, controlId);
 }
 
-CString PropertiesPane::paneTitle() const
+CString MfcPropertiesPane::paneTitle() const
 {
     return _T("Properties");
 }
 
-void PropertiesPane::drawContent(CDC &deviceContext, const CRect &clientRect) const
+void MfcPropertiesPane::drawContent(CDC &deviceContext, const CRect &clientRect) const
 {
     const auto &asset = demoAssets()[selectedAssetIndex()];
     const int left = 16;

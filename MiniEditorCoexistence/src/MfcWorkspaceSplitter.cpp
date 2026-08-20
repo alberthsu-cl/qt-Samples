@@ -1,8 +1,8 @@
-#include "WorkspaceSplitter.h"
+#include "MfcWorkspaceSplitter.h"
 
 #include <utility>
 
-BEGIN_MESSAGE_MAP(WorkspaceSplitter, CWnd)
+BEGIN_MESSAGE_MAP(MfcWorkspaceSplitter, CWnd)
     ON_WM_PAINT()
     ON_WM_SETCURSOR()
     ON_WM_LBUTTONDOWN()
@@ -10,7 +10,7 @@ BEGIN_MESSAGE_MAP(WorkspaceSplitter, CWnd)
     ON_WM_LBUTTONUP()
 END_MESSAGE_MAP()
 
-bool WorkspaceSplitter::Create(Orientation orientation, CWnd *parent, UINT controlId)
+bool MfcWorkspaceSplitter::Create(Orientation orientation, CWnd *parent, UINT controlId)
 {
     orientation_ = orientation;
     const CString windowClass = AfxRegisterWndClass(
@@ -21,12 +21,12 @@ bool WorkspaceSplitter::Create(Orientation orientation, CWnd *parent, UINT contr
                            CRect(0, 0, 1, 1), parent, controlId) != FALSE;
 }
 
-void WorkspaceSplitter::setDragHandler(DragHandler handler)
+void MfcWorkspaceSplitter::setDragHandler(DragHandler handler)
 {
     dragHandler_ = std::move(handler);
 }
 
-void WorkspaceSplitter::OnPaint()
+void MfcWorkspaceSplitter::OnPaint()
 {
     CPaintDC deviceContext(this);
     CRect clientRect;
@@ -43,14 +43,14 @@ void WorkspaceSplitter::OnPaint()
     }
 }
 
-BOOL WorkspaceSplitter::OnSetCursor(CWnd *, UINT, UINT)
+BOOL MfcWorkspaceSplitter::OnSetCursor(CWnd *, UINT, UINT)
 {
     const LPCTSTR cursorId = orientation_ == Orientation::Vertical ? IDC_SIZEWE : IDC_SIZENS;
     ::SetCursor(::LoadCursor(nullptr, cursorId));
     return TRUE;
 }
 
-void WorkspaceSplitter::OnLButtonDown(UINT flags, CPoint point)
+void MfcWorkspaceSplitter::OnLButtonDown(UINT flags, CPoint point)
 {
     isDragging_ = true;
     SetCapture();
@@ -58,7 +58,7 @@ void WorkspaceSplitter::OnLButtonDown(UINT flags, CPoint point)
     CWnd::OnLButtonDown(flags, point);
 }
 
-void WorkspaceSplitter::OnMouseMove(UINT flags, CPoint point)
+void MfcWorkspaceSplitter::OnMouseMove(UINT flags, CPoint point)
 {
     if (isDragging_ && GetCapture() == this && dragHandler_)
         dragHandler_(parentCoordinate(point));
@@ -66,7 +66,7 @@ void WorkspaceSplitter::OnMouseMove(UINT flags, CPoint point)
     CWnd::OnMouseMove(flags, point);
 }
 
-void WorkspaceSplitter::OnLButtonUp(UINT flags, CPoint point)
+void MfcWorkspaceSplitter::OnLButtonUp(UINT flags, CPoint point)
 {
     if (isDragging_) {
         if (dragHandler_)
@@ -79,7 +79,7 @@ void WorkspaceSplitter::OnLButtonUp(UINT flags, CPoint point)
     CWnd::OnLButtonUp(flags, point);
 }
 
-int WorkspaceSplitter::parentCoordinate(CPoint localPoint) const
+int MfcWorkspaceSplitter::parentCoordinate(CPoint localPoint) const
 {
     CPoint screenPoint = localPoint;
     ClientToScreen(&screenPoint);

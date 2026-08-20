@@ -1,20 +1,20 @@
-#include "TimelinePane.h"
+#include "MfcTimelinePane.h"
 
 #include "DemoProject.h"
 
 #include <algorithm>
 
-bool TimelinePane::Create(CWnd *parent, UINT controlId)
+bool MfcTimelinePane::Create(CWnd *parent, UINT controlId)
 {
     return createPane(parent, controlId);
 }
 
-CString TimelinePane::paneTitle() const
+CString MfcTimelinePane::paneTitle() const
 {
     return _T("Timeline");
 }
 
-void TimelinePane::drawContent(CDC &deviceContext, const CRect &clientRect) const
+void MfcTimelinePane::drawContent(CDC &deviceContext, const CRect &clientRect) const
 {
     const int rulerTop = EditorUi::kHeaderHeight;
     const int trackTop = rulerTop + 30;

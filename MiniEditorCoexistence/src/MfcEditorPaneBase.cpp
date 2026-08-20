@@ -1,12 +1,12 @@
-#include "EditorPaneBase.h"
+#include "MfcEditorPaneBase.h"
 
 #include <algorithm>
 
-BEGIN_MESSAGE_MAP(EditorPaneBase, CWnd)
+BEGIN_MESSAGE_MAP(MfcEditorPaneBase, CWnd)
     ON_WM_PAINT()
 END_MESSAGE_MAP()
 
-bool EditorPaneBase::createPane(CWnd *parent, UINT controlId)
+bool MfcEditorPaneBase::createPane(CWnd *parent, UINT controlId)
 {
     const CString windowClass = AfxRegisterWndClass(
         CS_HREDRAW | CS_VREDRAW,
@@ -19,40 +19,40 @@ bool EditorPaneBase::createPane(CWnd *parent, UINT controlId)
                            CRect(0, 0, 1, 1), parent, controlId) != FALSE;
 }
 
-void EditorPaneBase::setSelectedAssetIndex(int selectedAssetIndex)
+void MfcEditorPaneBase::setSelectedAssetIndex(int selectedAssetIndex)
 {
     selectedAssetIndex_ = std::clamp(selectedAssetIndex, 0, 5);
     Invalidate();
 }
 
-void EditorPaneBase::setClipSettings(const ClipSettings &settings)
+void MfcEditorPaneBase::setClipSettings(const ClipSettings &settings)
 {
     clipSettings_ = settings;
     Invalidate();
 }
 
-void EditorPaneBase::setPlaybackState(const PlaybackState &state)
+void MfcEditorPaneBase::setPlaybackState(const PlaybackState &state)
 {
     playbackState_ = state;
     Invalidate();
 }
 
-int EditorPaneBase::selectedAssetIndex() const
+int MfcEditorPaneBase::selectedAssetIndex() const
 {
     return selectedAssetIndex_;
 }
 
-const ClipSettings &EditorPaneBase::clipSettings() const
+const ClipSettings &MfcEditorPaneBase::clipSettings() const
 {
     return clipSettings_;
 }
 
-const PlaybackState &EditorPaneBase::playbackState() const
+const PlaybackState &MfcEditorPaneBase::playbackState() const
 {
     return playbackState_;
 }
 
-void EditorPaneBase::OnPaint()
+void MfcEditorPaneBase::OnPaint()
 {
     CPaintDC deviceContext(this);
     CRect clientRect;
@@ -64,7 +64,7 @@ void EditorPaneBase::OnPaint()
     drawContent(deviceContext, clientRect);
 }
 
-void EditorPaneBase::drawPaneTitle(CDC &deviceContext, const CString &title) const
+void MfcEditorPaneBase::drawPaneTitle(CDC &deviceContext, const CString &title) const
 {
     CRect clientRect;
     GetClientRect(&clientRect);
@@ -75,7 +75,7 @@ void EditorPaneBase::drawPaneTitle(CDC &deviceContext, const CString &title) con
              EditorUi::kText);
 }
 
-void EditorPaneBase::drawText(CDC &deviceContext, const CString &text,
+void MfcEditorPaneBase::drawText(CDC &deviceContext, const CString &text,
                               const CRect &bounds, COLORREF color, UINT format) const
 {
     const int previousBackgroundMode = deviceContext.SetBkMode(TRANSPARENT);

@@ -6,7 +6,7 @@
 
 // Shared MFC mechanics only. Each editor area provides its own title, drawing,
 // and input behavior through a focused derived class.
-class EditorPaneBase : public CWnd
+class MfcEditorPaneBase : public CWnd
 {
 public:
     void setSelectedAssetIndex(int selectedAssetIndex);

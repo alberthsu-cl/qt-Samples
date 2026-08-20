@@ -1,4 +1,4 @@
-#include "MediaLibraryPane.h"
+#include "MfcMediaLibraryPane.h"
 
 #include "DemoProject.h"
 #include "resource.h"
@@ -11,21 +11,21 @@ constexpr int kAssetSpacing = 12;
 
 } // namespace
 
-BEGIN_MESSAGE_MAP(MediaLibraryPane, EditorPaneBase)
+BEGIN_MESSAGE_MAP(MfcMediaLibraryPane, MfcEditorPaneBase)
     ON_WM_LBUTTONDOWN()
 END_MESSAGE_MAP()
 
-bool MediaLibraryPane::Create(CWnd *parent, UINT controlId)
+bool MfcMediaLibraryPane::Create(CWnd *parent, UINT controlId)
 {
     return createPane(parent, controlId);
 }
 
-CString MediaLibraryPane::paneTitle() const
+CString MfcMediaLibraryPane::paneTitle() const
 {
     return _T("Media Library (MFC baseline)");
 }
 
-void MediaLibraryPane::drawContent(CDC &deviceContext, const CRect &clientRect) const
+void MfcMediaLibraryPane::drawContent(CDC &deviceContext, const CRect &clientRect) const
 {
     CRect categoryRect(10, EditorUi::kHeaderHeight + 8,
                        clientRect.Width() - 10, EditorUi::kHeaderHeight + 38);
@@ -66,7 +66,7 @@ void MediaLibraryPane::drawContent(CDC &deviceContext, const CRect &clientRect) 
     }
 }
 
-void MediaLibraryPane::OnLButtonDown(UINT flags, CPoint point)
+void MfcMediaLibraryPane::OnLButtonDown(UINT flags, CPoint point)
 {
     const int assetIndex = mediaAssetAt(point);
     if (assetIndex >= 0) {
@@ -74,10 +74,10 @@ void MediaLibraryPane::OnLButtonDown(UINT flags, CPoint point)
                                  MAKEWPARAM(ID_MEDIA_ASSET_FIRST + assetIndex, 0));
     }
 
-    EditorPaneBase::OnLButtonDown(flags, point);
+    MfcEditorPaneBase::OnLButtonDown(flags, point);
 }
 
-int MediaLibraryPane::mediaAssetAt(CPoint point) const
+int MfcMediaLibraryPane::mediaAssetAt(CPoint point) const
 {
     if (point.y < EditorUi::kHeaderHeight + 54)
         return -1;
