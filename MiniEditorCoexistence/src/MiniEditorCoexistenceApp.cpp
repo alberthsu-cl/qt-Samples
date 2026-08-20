@@ -12,7 +12,7 @@
 namespace {
 
 #if MINI_EDITOR_USE_QT
-constexpr LPCTSTR kWindowTitle = _T("Mini Editor Coexistence - Phase 2 (MFC + Qt)");
+constexpr LPCTSTR kWindowTitle = _T("Mini Editor Coexistence - Phase 3 (MFC + Qt)");
 #else
 constexpr LPCTSTR kWindowTitle = _T("Mini Editor Coexistence - Phase 0 (MFC)");
 #endif

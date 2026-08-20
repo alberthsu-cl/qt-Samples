@@ -57,5 +57,7 @@ void TimelinePane::drawContent(CDC &deviceContext, const CRect &clientRect) cons
 
     deviceContext.FillSolidRect(76, trackTop + trackHeight + 16, clipWidth, trackHeight - 16,
                                 RGB(38, 114, 176));
-    deviceContext.FillSolidRect(76, rulerTop, 2, clientRect.bottom - rulerTop, RGB(240, 74, 74));
+    const int playheadX = 76 + clipWidth * playbackState().currentFrame / 300;
+    deviceContext.FillSolidRect(playheadX, rulerTop, 2,
+                                clientRect.bottom - rulerTop, RGB(240, 74, 74));
 }

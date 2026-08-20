@@ -1,25 +1,42 @@
-#include "PreviewPane.h"
+#include "MfcPreviewCanvas.h"
 
 #include "DemoProject.h"
 
 #include <algorithm>
 
-bool PreviewPane::Create(CWnd *parent, UINT controlId)
+namespace {
+
+CString timecodeText(const PlaybackState &state)
+{
+    const int frames = state.currentFrame % state.framesPerSecond;
+    const int totalSeconds = state.currentFrame / state.framesPerSecond;
+    const int seconds = totalSeconds % 60;
+    const int minutes = (totalSeconds / 60) % 60;
+    const int hours = totalSeconds / 3600;
+
+    CString text;
+    text.Format(_T("%02d:%02d:%02d:%02d"), hours, minutes, seconds, frames);
+    return text;
+}
+
+} // namespace
+
+bool MfcPreviewCanvas::Create(CWnd *parent, UINT controlId)
 {
     return createPane(parent, controlId);
 }
 
-CString PreviewPane::paneTitle() const
+CString MfcPreviewCanvas::paneTitle() const
 {
-    return _T("Preview");
+    return _T("Preview Canvas (MFC)");
 }
 
-void PreviewPane::drawContent(CDC &deviceContext, const CRect &clientRect) const
+void MfcPreviewCanvas::drawContent(CDC &deviceContext, const CRect &clientRect) const
 {
     const auto &asset = demoAssets()[selectedAssetIndex()];
     const ClipSettings &settings = clipSettings();
     const CRect availableRect(20, EditorUi::kHeaderHeight + 18,
-                              clientRect.right - 20, clientRect.bottom - 66);
+                              clientRect.right - 20, clientRect.bottom - 12);
     const int availableWidth = availableRect.Width();
     const int availableHeight = availableRect.Height();
     const int baseVideoHeight = std::min(availableHeight, availableWidth * 9 / 16);
@@ -49,20 +66,21 @@ void PreviewPane::drawContent(CDC &deviceContext, const CRect &clientRect) const
     case ClipPosition::Center:
         break;
     }
-    const CRect videoRect(videoLeft, videoTop, videoLeft + videoWidth, videoTop + videoHeight);
 
-    deviceContext.FillSolidRect(availableRect, EditorUi::kCanvasBackground);
+    const CRect videoRect(videoLeft, videoTop, videoLeft + videoWidth, videoTop + videoHeight);
     const COLORREF fadedThumbnailColor = RGB(
         GetRValue(asset.thumbnailColor) * settings.opacityPercent / 100,
         GetGValue(asset.thumbnailColor) * settings.opacityPercent / 100,
         GetBValue(asset.thumbnailColor) * settings.opacityPercent / 100);
+
+    deviceContext.FillSolidRect(availableRect, EditorUi::kCanvasBackground);
     deviceContext.FillSolidRect(videoRect, fadedThumbnailColor);
     deviceContext.Draw3dRect(videoRect, RGB(220, 220, 220), RGB(220, 220, 220));
 
-    CRect titleRect(videoRect.left + 12, videoRect.bottom - 38,
-                    videoRect.right - 12, videoRect.bottom - 12);
-    drawText(deviceContext, asset.name, titleRect, RGB(255, 255, 255),
-             DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+    drawText(deviceContext, asset.name,
+             CRect(videoRect.left + 12, videoRect.bottom - 38,
+                   videoRect.right - 12, videoRect.bottom - 12),
+             RGB(255, 255, 255), DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
     CString settingsText;
     settingsText.Format(_T("Opacity %d%%  |  Scale %d%%  |  %s"),
@@ -73,8 +91,8 @@ void PreviewPane::drawContent(CDC &deviceContext, const CRect &clientRect) const
                    availableRect.right, availableRect.bottom - 2),
              EditorUi::kSecondaryText, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
-    CRect controlsRect(20, clientRect.bottom - 52, clientRect.right - 20, clientRect.bottom - 14);
-    deviceContext.FillSolidRect(controlsRect, RGB(27, 29, 34));
-    drawText(deviceContext, _T("|<    <    Play / Pause    >    >|"), controlsRect,
-             EditorUi::kSecondaryText, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    drawText(deviceContext, timecodeText(playbackState()),
+             CRect(availableRect.right - 140, availableRect.top + 8,
+                   availableRect.right - 8, availableRect.top + 30),
+             RGB(255, 255, 255), DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 }

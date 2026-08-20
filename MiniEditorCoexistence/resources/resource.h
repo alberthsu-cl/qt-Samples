@@ -8,6 +8,13 @@
 #define IDC_PREVIEW             1002
 #define IDC_PROPERTIES          1003
 #define IDC_TIMELINE            1004
+#define IDC_PREVIEW_CANVAS      1005
+#define IDC_TRANSPORT            1006
 
 #define ID_MEDIA_ASSET_FIRST    33000
 #define ID_MEDIA_ASSET_LAST     33005
+
+#define ID_PLAYBACK_TOGGLE       33100
+#define ID_PLAYBACK_STOP         33101
+#define ID_PLAYBACK_STEP_BACKWARD 33102
+#define ID_PLAYBACK_STEP_FORWARD 33103

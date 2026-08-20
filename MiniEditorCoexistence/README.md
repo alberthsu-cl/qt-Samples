@@ -76,6 +76,29 @@ being mistaken for a second user edit returning to MFC.
 CMake cache to rebuild the complete Phase 0 pure-MFC UI; set it to `ON` to
 enable every panel migrated to Qt so far.
 
+## Phase 3 — Qt transport controls
+
+Phase 3 leaves the preview-rendering surface on MFC and replaces only its
+transport region:
+
+```text
+Qt Media Library | MFC Preview Canvas + Qt Transport | Qt Properties
+-----------------+-----------------------------------+--------------
+MFC Timeline
+```
+
+`MfcPreviewCanvas` represents an existing native/GPU preview surface in a
+real editor. `MfcTransportBar` is the complete MFC fallback; when
+`MINI_EDITOR_USE_QT=ON`, `QtTransportPanel` replaces only that bar through
+`QtTransportHost`.
+
+The Qt buttons emit framework-neutral `PlaybackCommand` values. `MainFrame`
+owns `PlaybackState`, handles Play/Pause, Stop, and frame-step commands, and
+uses a simple MFC timer to advance the sample playhead. It then synchronizes
+the Qt timecode/button state and redraws the MFC Preview Canvas and Timeline.
+In a production editor, the media engine would provide the playhead clock;
+the UI boundary remains the same.
+
 ## Build with Visual Studio 2022
 
 Open `D:\Qt\Samples\MiniEditorCoexistence` with **File > Open > Folder**.

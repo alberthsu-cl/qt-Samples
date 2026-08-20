@@ -16,6 +16,21 @@ struct ClipSettings {
     ClipPosition position = ClipPosition::Center;
 };
 
+// Playback remains application/MFC-owned during this migration. Qt transport
+// controls send commands and display this state; they do not own a player.
+struct PlaybackState {
+    bool isPlaying = false;
+    int currentFrame = 0;
+    int framesPerSecond = 30;
+};
+
+enum class PlaybackCommand {
+    TogglePlayPause,
+    Stop,
+    StepBackward,
+    StepForward
+};
+
 inline const wchar_t *clipPositionDisplayName(ClipPosition position)
 {
     switch (position) {

@@ -26,8 +26,10 @@ add_executable(MiniEditorCoexistence WIN32
     src/EditorPaneBase.cpp
     src/MediaLibraryPane.h
     src/MediaLibraryPane.cpp
-    src/PreviewPane.h
-    src/PreviewPane.cpp
+    src/MfcPreviewCanvas.h
+    src/MfcPreviewCanvas.cpp
+    src/MfcTransportBar.h
+    src/MfcTransportBar.cpp
     src/PropertiesPane.h
     src/PropertiesPane.cpp
     src/TimelinePane.h
@@ -62,6 +64,10 @@ if(MINI_EDITOR_USE_QT)
         src/QtPropertiesPanel.cpp
         src/QtPropertiesHost.h
         src/QtPropertiesHost.cpp
+        src/QtTransportPanel.h
+        src/QtTransportPanel.cpp
+        src/QtTransportHost.h
+        src/QtTransportHost.cpp
         src/QtRuntime.h
         src/QtRuntime.cpp
     )

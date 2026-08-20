@@ -11,11 +11,13 @@ class EditorPaneBase : public CWnd
 public:
     void setSelectedAssetIndex(int selectedAssetIndex);
     void setClipSettings(const ClipSettings &settings);
+    void setPlaybackState(const PlaybackState &state);
 
 protected:
     bool createPane(CWnd *parent, UINT controlId);
     int selectedAssetIndex() const;
     const ClipSettings &clipSettings() const;
+    const PlaybackState &playbackState() const;
 
     void drawPaneTitle(CDC &deviceContext, const CString &title) const;
     void drawText(CDC &deviceContext, const CString &text, const CRect &bounds,
@@ -31,6 +33,7 @@ protected:
 private:
     int selectedAssetIndex_ = 0;
     ClipSettings clipSettings_;
+    PlaybackState playbackState_;
 };
 
 namespace EditorUi {

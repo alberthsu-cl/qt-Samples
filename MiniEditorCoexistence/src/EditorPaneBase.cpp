@@ -31,6 +31,12 @@ void EditorPaneBase::setClipSettings(const ClipSettings &settings)
     Invalidate();
 }
 
+void EditorPaneBase::setPlaybackState(const PlaybackState &state)
+{
+    playbackState_ = state;
+    Invalidate();
+}
+
 int EditorPaneBase::selectedAssetIndex() const
 {
     return selectedAssetIndex_;
@@ -39,6 +45,11 @@ int EditorPaneBase::selectedAssetIndex() const
 const ClipSettings &EditorPaneBase::clipSettings() const
 {
     return clipSettings_;
+}
+
+const PlaybackState &EditorPaneBase::playbackState() const
+{
+    return playbackState_;
 }
 
 void EditorPaneBase::OnPaint()

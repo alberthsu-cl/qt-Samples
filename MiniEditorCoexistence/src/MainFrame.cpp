@@ -14,10 +14,16 @@ constexpr int kOuterMargin = 6;
 constexpr int kMediaLibraryWidth = 304;
 constexpr int kPropertiesWidth = 250;
 constexpr int kTimelineHeight = 220;
+constexpr int kTransportHeight = 42;
+constexpr UINT_PTR kPlaybackTimerId = 1;
 
 } // namespace
 
-MainFrame::~MainFrame() = default;
+MainFrame::~MainFrame()
+{
+    if (::IsWindow(GetSafeHwnd()))
+        KillTimer(kPlaybackTimerId);
+}
 
 int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
 {
@@ -31,7 +37,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     }
     statusBar_.SetPaneInfo(0, ID_SEPARATOR, SBPS_STRETCH, 400);
 
-    if (!previewPane_.Create(this, IDC_PREVIEW)
+    if (!previewCanvas_.Create(this, IDC_PREVIEW_CANVAS)
         || !timelinePane_.Create(this, IDC_TIMELINE)) {
         return -1;
     }
@@ -40,6 +46,8 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     if (!mediaLibraryHost_.create(GetSafeHwnd()))
         return -1;
     if (!propertiesHost_.create(GetSafeHwnd()))
+        return -1;
+    if (!transportHost_.create(GetSafeHwnd()))
         return -1;
 
     // Qt panels emit framework-neutral values. MFC continues to own selection
@@ -50,9 +58,13 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     propertiesHost_.setClipSettingsEditedHandler([this](const ClipSettings &settings) {
         updateSelectedClipSettings(settings);
     });
+    transportHost_.setPlaybackCommandHandler([this](PlaybackCommand command) {
+        handlePlaybackCommand(command);
+    });
 #else
     if (!mediaLibraryPane_.Create(this, IDC_MEDIA_LIBRARY)
-        || !propertiesPane_.Create(this, IDC_PROPERTIES)) {
+        || !propertiesPane_.Create(this, IDC_PROPERTIES)
+        || !transportBar_.Create(this, IDC_TRANSPORT)) {
         return -1;
     }
 #endif
@@ -84,6 +96,38 @@ void MainFrame::OnSelectMediaAsset(UINT commandId)
     selectAsset(static_cast<int>(commandId - ID_MEDIA_ASSET_FIRST));
 }
 
+void MainFrame::OnPlaybackCommand(UINT commandId)
+{
+    switch (commandId) {
+    case ID_PLAYBACK_TOGGLE:
+        handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+        break;
+    case ID_PLAYBACK_STOP:
+        handlePlaybackCommand(PlaybackCommand::Stop);
+        break;
+    case ID_PLAYBACK_STEP_BACKWARD:
+        handlePlaybackCommand(PlaybackCommand::StepBackward);
+        break;
+    case ID_PLAYBACK_STEP_FORWARD:
+        handlePlaybackCommand(PlaybackCommand::StepForward);
+        break;
+    }
+}
+
+void MainFrame::OnTimer(UINT_PTR timerId)
+{
+    if (timerId == kPlaybackTimerId && playbackState_.isPlaying) {
+        // This is a deliberately simple MFC timer. In a production editor the
+        // media engine would report its clock/playhead instead.
+        playbackState_.currentFrame = (playbackState_.currentFrame + 1) % 300;
+        synchronizePlaybackViews();
+        updateStatusText();
+        return;
+    }
+
+    CFrameWnd::OnTimer(timerId);
+}
+
 void MainFrame::OnFileExit()
 {
     SendMessage(WM_CLOSE);
@@ -110,6 +154,8 @@ void MainFrame::layoutChildren(int clientWidth, int clientHeight)
     const int centerLeft = kOuterMargin + kMediaLibraryWidth + kOuterMargin;
     const int centerRight = std::max(centerLeft + 120,
                                      clientWidth - kOuterMargin - kPropertiesWidth - kOuterMargin);
+    const int canvasBottom = std::max(kOuterMargin,
+                                      topAreaBottom - kTransportHeight - kOuterMargin);
 
 #if MINI_EDITOR_USE_QT
     mediaLibraryHost_.resize(CRect(kOuterMargin, kOuterMargin,
@@ -119,8 +165,15 @@ void MainFrame::layoutChildren(int clientWidth, int clientHeight)
     mediaLibraryPane_.MoveWindow(kOuterMargin, kOuterMargin,
                                  kMediaLibraryWidth, topAreaBottom - kOuterMargin);
 #endif
-    previewPane_.MoveWindow(centerLeft, kOuterMargin,
-                            centerRight - centerLeft, topAreaBottom - kOuterMargin);
+    previewCanvas_.MoveWindow(centerLeft, kOuterMargin,
+                              centerRight - centerLeft, canvasBottom - kOuterMargin);
+#if MINI_EDITOR_USE_QT
+    transportHost_.resize(CRect(centerLeft, canvasBottom + kOuterMargin,
+                                centerRight, topAreaBottom));
+#else
+    transportBar_.MoveWindow(centerLeft, canvasBottom + kOuterMargin,
+                             centerRight - centerLeft, kTransportHeight);
+#endif
 #if MINI_EDITOR_USE_QT
     propertiesHost_.resize(CRect(centerRight + kOuterMargin, kOuterMargin,
                                  clientWidth - kOuterMargin, topAreaBottom));
@@ -149,10 +202,11 @@ void MainFrame::selectAsset(int assetIndex)
     propertiesPane_.setSelectedAssetIndex(selectedAssetIndex_);
     propertiesPane_.setClipSettings(settings);
 #endif
-    previewPane_.setSelectedAssetIndex(selectedAssetIndex_);
-    previewPane_.setClipSettings(settings);
+    previewCanvas_.setSelectedAssetIndex(selectedAssetIndex_);
+    previewCanvas_.setClipSettings(settings);
     timelinePane_.setSelectedAssetIndex(selectedAssetIndex_);
     timelinePane_.setClipSettings(settings);
+    synchronizePlaybackViews();
     updateStatusText();
 }
 
@@ -168,9 +222,51 @@ void MainFrame::updateSelectedClipSettings(const ClipSettings &settings)
 #else
     propertiesPane_.setClipSettings(settings);
 #endif
-    previewPane_.setClipSettings(settings);
+    previewCanvas_.setClipSettings(settings);
     timelinePane_.setClipSettings(settings);
     updateStatusText();
+}
+
+void MainFrame::handlePlaybackCommand(PlaybackCommand command)
+{
+    switch (command) {
+    case PlaybackCommand::TogglePlayPause:
+        playbackState_.isPlaying = !playbackState_.isPlaying;
+        if (playbackState_.isPlaying)
+            SetTimer(kPlaybackTimerId, 33, nullptr);
+        else
+            KillTimer(kPlaybackTimerId);
+        break;
+    case PlaybackCommand::Stop:
+        playbackState_.isPlaying = false;
+        playbackState_.currentFrame = 0;
+        KillTimer(kPlaybackTimerId);
+        break;
+    case PlaybackCommand::StepBackward:
+        playbackState_.isPlaying = false;
+        playbackState_.currentFrame = std::max(0, playbackState_.currentFrame - 1);
+        KillTimer(kPlaybackTimerId);
+        break;
+    case PlaybackCommand::StepForward:
+        playbackState_.isPlaying = false;
+        playbackState_.currentFrame = std::min(299, playbackState_.currentFrame + 1);
+        KillTimer(kPlaybackTimerId);
+        break;
+    }
+
+    synchronizePlaybackViews();
+    updateStatusText();
+}
+
+void MainFrame::synchronizePlaybackViews()
+{
+    previewCanvas_.setPlaybackState(playbackState_);
+    timelinePane_.setPlaybackState(playbackState_);
+#if MINI_EDITOR_USE_QT
+    transportHost_.setPlaybackState(playbackState_);
+#else
+    transportBar_.setPlaybackState(playbackState_);
+#endif
 }
 
 void MainFrame::updateStatusText()
@@ -190,5 +286,8 @@ BEGIN_MESSAGE_MAP(MainFrame, CFrameWnd)
     ON_WM_GETMINMAXINFO()
     ON_COMMAND_RANGE(ID_MEDIA_ASSET_FIRST, ID_MEDIA_ASSET_LAST,
                      &MainFrame::OnSelectMediaAsset)
+    ON_COMMAND_RANGE(ID_PLAYBACK_TOGGLE, ID_PLAYBACK_STEP_FORWARD,
+                     &MainFrame::OnPlaybackCommand)
+    ON_WM_TIMER()
     ON_COMMAND(ID_FILE_EXIT, &MainFrame::OnFileExit)
 END_MESSAGE_MAP()
