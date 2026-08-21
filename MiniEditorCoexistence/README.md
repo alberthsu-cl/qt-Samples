@@ -117,6 +117,15 @@ This is the recommended incremental path for an established video-editor
 timeline: migrate ordinary controls first, then tackle the complex custom
 canvas only when its input and rendering design are ready.
 
+## Phase 7 — MFC timeline seek interaction
+
+Clicking the ruler on `MfcTimelineCanvas` converts a pixel position to a
+zoom-aware frame number. The canvas emits that number through a plain C++
+callback; `MainFrame` owns the `PlaybackState` update, then redraws the MFC
+preview/canvas and synchronizes the Qt transport timecode. This preserves the
+important boundary: the custom surface understands pixels, while the app
+understands editor state.
+
 ## Phase 6 — Framework-neutral JSON workspace settings
 
 The app saves user workspace preferences to:

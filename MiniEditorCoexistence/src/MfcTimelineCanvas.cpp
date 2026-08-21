@@ -4,9 +4,11 @@
 #include "MfcEditorPaneBase.h"
 
 #include <algorithm>
+#include <utility>
 
 BEGIN_MESSAGE_MAP(MfcTimelineCanvas, CWnd)
     ON_WM_PAINT()
+    ON_WM_LBUTTONDOWN()
 END_MESSAGE_MAP()
 
 bool MfcTimelineCanvas::Create(CWnd *parent, UINT controlId)
@@ -42,6 +44,35 @@ void MfcTimelineCanvas::setViewState(const TimelineViewState &state)
 {
     viewState_ = state;
     Invalidate();
+}
+
+void MfcTimelineCanvas::setSeekHandler(SeekHandler handler)
+{
+    seekHandler_ = std::move(handler);
+}
+
+void MfcTimelineCanvas::OnLButtonDown(UINT flags, CPoint point)
+{
+    constexpr int kRulerHeight = 30;
+    if (point.y < kRulerHeight && seekHandler_)
+        seekHandler_(frameAtRulerX(point.x));
+
+    CWnd::OnLButtonDown(flags, point);
+}
+
+int MfcTimelineCanvas::frameAtRulerX(int x) const
+{
+    constexpr int kClipLeft = 76;
+    constexpr int kClipDurationFrames = 300;
+    constexpr int kClipWidthAt100Percent = 334;
+
+    // The same zoom-aware width is used by OnPaint(). Keep this conversion in
+    // the canvas: it owns pixel coordinates, while MainFrame owns frame state.
+    const int clipWidth = std::max(1,
+        kClipWidthAt100Percent * viewState_.zoomPercent / 100);
+    const int relativeX = std::clamp(x - kClipLeft, 0, clipWidth);
+    return std::clamp(relativeX * kClipDurationFrames / clipWidth,
+                      0, kClipDurationFrames - 1);
 }
 
 void MfcTimelineCanvas::OnPaint()
@@ -82,8 +113,10 @@ void MfcTimelineCanvas::OnPaint()
 
     const auto &asset = demoAssets()[selectedAssetIndex_];
     const int availableClipWidth = std::max(1, clientRect.Width() - 76);
+    // Timeline zoom changes the visual duration width. Clip transform scale is
+    // a preview property and must not change the clip's timeline duration.
     const int clipWidth = std::min(availableClipWidth,
-        334 * clipSettings_.scalePercent * viewState_.zoomPercent / 10000);
+        334 * viewState_.zoomPercent / 100);
     const CRect clipRect(76, trackTop + 5, 76 + clipWidth, trackTop + kTrackHeight - 5);
     const COLORREF fadedThumbnailColor = RGB(
         GetRValue(asset.thumbnailColor) * clipSettings_.opacityPercent / 100,

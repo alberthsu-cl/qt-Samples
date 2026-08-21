@@ -65,6 +65,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     timelineSplitter_.setDragHandler([this](int parentY) { moveTimelineSplitter(parentY); });
 
 #if MINI_EDITOR_USE_QT
+    timelineCanvas_.setSeekHandler([this](int frame) { seekTimeline(frame); });
     if (!mediaLibraryHost_.create(GetSafeHwnd()))
         return -1;
     if (!propertiesHost_.create(GetSafeHwnd()))
@@ -350,6 +351,13 @@ void MainFrame::fitTimeline()
     updateTimelineViewState(timelineViewState_);
 }
 
+void MainFrame::seekTimeline(int frame)
+{
+    playbackState_.currentFrame = std::clamp(frame, 0, 299);
+    synchronizePlaybackViews();
+    updateStatusText();
+}
+
 void MainFrame::synchronizePlaybackViews()
 {
     previewCanvas_.setPlaybackState(playbackState_);
@@ -405,9 +413,10 @@ void MainFrame::updateStatusText()
     const auto &asset = demoAssets()[selectedAssetIndex_];
     CString statusText;
     const ClipSettings &settings = clipSettings_[selectedAssetIndex_];
-    statusText.Format(_T("Selected: %s (%s) | Opacity %d%% | Scale %d%% | %s"),
+    statusText.Format(_T("Selected: %s (%s) | Opacity %d%% | Scale %d%% | %s | Frame %d"),
                       asset.name, asset.kind, settings.opacityPercent,
-                      settings.scalePercent, clipPositionDisplayName(settings.position));
+                      settings.scalePercent, clipPositionDisplayName(settings.position),
+                      playbackState_.currentFrame);
     statusBar_.SetPaneText(0, statusText);
 }
 

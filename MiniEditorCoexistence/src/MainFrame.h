@@ -49,6 +49,7 @@ private:
     void handlePlaybackCommand(PlaybackCommand command);
     void updateTimelineViewState(const TimelineViewState &state);
     void fitTimeline();
+    void seekTimeline(int frame);
     void synchronizePlaybackViews();
     void moveLeftSplitter(int parentX);
     void moveRightSplitter(int parentX);
