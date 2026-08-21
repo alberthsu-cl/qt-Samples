@@ -27,6 +27,9 @@ MainFrame::~MainFrame()
 {
     if (::IsWindow(GetSafeHwnd()))
         KillTimer(kPlaybackTimerId);
+
+    if (isWorkspaceReady_)
+        saveWorkspaceSettings();
 }
 
 int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
@@ -40,6 +43,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         return -1;
     }
     statusBar_.SetPaneInfo(0, ID_SEPARATOR, SBPS_STRETCH, 400);
+    restoreWorkspaceSettings();
 
     if (!previewCanvas_.Create(this, IDC_PREVIEW_CANVAS)
 #if MINI_EDITOR_USE_QT
@@ -93,7 +97,8 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     }
 #endif
 
-    selectAsset(0);
+    selectAsset(selectedAssetIndex_);
+    isWorkspaceReady_ = true;
     return 0;
 }
 
@@ -404,6 +409,34 @@ void MainFrame::updateStatusText()
                       asset.name, asset.kind, settings.opacityPercent,
                       settings.scalePercent, clipPositionDisplayName(settings.position));
     statusBar_.SetPaneText(0, statusText);
+}
+
+void MainFrame::restoreWorkspaceSettings()
+{
+    const auto settings = WorkspaceSettingsStore::load();
+    if (!settings)
+        return;
+
+    // Values are clamped during the first layout, when the actual frame size
+    // is known. This also protects us from an old or manually edited JSON file.
+    mediaLibraryWidth_ = settings->mediaLibraryWidth;
+    propertiesWidth_ = settings->propertiesWidth;
+    timelineHeight_ = settings->timelineHeight;
+    selectedAssetIndex_ = std::clamp(settings->selectedAssetIndex, 0,
+                                     static_cast<int>(demoAssets().size()) - 1);
+    timelineViewState_ = settings->timelineViewState;
+    timelineViewState_.zoomPercent = std::clamp(timelineViewState_.zoomPercent, 50, 200);
+}
+
+void MainFrame::saveWorkspaceSettings() const
+{
+    WorkspaceSettings settings;
+    settings.mediaLibraryWidth = mediaLibraryWidth_;
+    settings.propertiesWidth = propertiesWidth_;
+    settings.timelineHeight = timelineHeight_;
+    settings.selectedAssetIndex = selectedAssetIndex_;
+    settings.timelineViewState = timelineViewState_;
+    WorkspaceSettingsStore::save(settings);
 }
 
 BEGIN_MESSAGE_MAP(MainFrame, CFrameWnd)

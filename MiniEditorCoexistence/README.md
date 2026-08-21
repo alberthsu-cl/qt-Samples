@@ -117,6 +117,21 @@ This is the recommended incremental path for an established video-editor
 timeline: migrate ordinary controls first, then tackle the complex custom
 canvas only when its input and rendering design are ready.
 
+## Phase 6 — Framework-neutral JSON workspace settings
+
+The app saves user workspace preferences to:
+
+```text
+%LOCALAPPDATA%\QtLearningSamples\MiniEditorCoexistence\workspace.json
+```
+
+`WorkspaceSettingsStore` is standard C++/Win32 code, not Qt or MFC code. It
+restores splitter sizes, selected media, timeline zoom, and audio-track
+visibility before child controls are constructed. It saves the latest values
+when the main frame closes. A video-editor project file would be separate:
+this JSON represents one user's workspace, not edit decisions that travel
+with a project.
+
 ## Build with Visual Studio 2022
 
 Open `D:\Qt\Samples\MiniEditorCoexistence` with **File > Open > Folder**.

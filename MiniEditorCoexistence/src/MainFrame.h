@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ProjectState.h"
+#include "WorkspaceSettings.h"
 
 #if MINI_EDITOR_USE_QT
 #include "QtMediaLibraryHost.h"
@@ -53,6 +54,8 @@ private:
     void moveRightSplitter(int parentX);
     void moveTimelineSplitter(int parentY);
     void updateStatusText();
+    void restoreWorkspaceSettings();
+    void saveWorkspaceSettings() const;
 
     CStatusBar statusBar_;
 #if MINI_EDITOR_USE_QT
@@ -81,4 +84,5 @@ private:
     int mediaLibraryWidth_ = 304;
     int propertiesWidth_ = 250;
     int timelineHeight_ = 220;
+    bool isWorkspaceReady_ = false;
 };
