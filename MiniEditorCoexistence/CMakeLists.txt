@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.21)
 
 project(MiniEditorCoexistence VERSION 1.0 LANGUAGES CXX RC)
 
+include(CTest)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -65,6 +67,31 @@ source_group("Layout" FILES
     src/WorkspaceLayout.h
     src/WorkspaceLayout.cpp
 )
+
+if(BUILD_TESTING)
+    add_executable(MiniEditorCoreTests
+        tests/MiniEditorCoreTests.cpp
+        src/EditorSession.h
+        src/EditorSession.cpp
+        src/WorkspaceLayout.h
+        src/WorkspaceLayout.cpp
+    )
+    target_include_directories(MiniEditorCoreTests PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    )
+
+    add_test(NAME MiniEditorCoreTests COMMAND $<TARGET_FILE:MiniEditorCoreTests>)
+
+    # Build this target explicitly when you want the full local check. Normal
+    # app builds stay fast and do not run tests as an implicit post-build step.
+    add_custom_target(check
+        COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure -C $<CONFIG>
+        DEPENDS MiniEditorCoexistence MiniEditorCoreTests
+        USES_TERMINAL
+    )
+
+    source_group("Tests" FILES tests/MiniEditorCoreTests.cpp)
+endif()
 
 target_compile_definitions(MiniEditorCoexistence PRIVATE
     NOMINMAX

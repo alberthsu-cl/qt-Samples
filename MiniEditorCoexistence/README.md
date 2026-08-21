@@ -123,6 +123,21 @@ This is the recommended incremental path for an established video-editor
 timeline: migrate ordinary controls first, then tackle the complex custom
 canvas only when its input and rendering design are ready.
 
+## Phase 6 — Framework-neutral JSON workspace settings
+
+The app saves user workspace preferences to:
+
+```text
+%LOCALAPPDATA%\QtLearningSamples\MiniEditorCoexistence\workspace.json
+```
+
+`WorkspaceSettingsStore` is standard C++/Win32 code, not Qt or MFC code. It
+restores splitter sizes, selected media, timeline zoom, and audio-track
+visibility before child controls are constructed. It saves the latest values
+when the main frame closes. A video-editor project file would be separate:
+this JSON represents one user's workspace, not edit decisions that travel
+with a project.
+
 ## Phase 7 — MFC timeline seek interaction
 
 Clicking the ruler on `MfcTimelineCanvas` converts a pixel position to a
@@ -150,20 +165,15 @@ status-bar boundary and applies the calculated rectangles to native MFC
 windows and embedded Qt HWNDs. `WorkspaceLayoutState` is the layout portion
 saved to the workspace JSON file.
 
-## Phase 6 — Framework-neutral JSON workspace settings
+## Phase 10 — Core tests and the `check` target
 
-The app saves user workspace preferences to:
+`MiniEditorCoreTests` is a small console test executable for the
+framework-neutral `EditorSession` and `WorkspaceLayout` classes. It has no Qt
+or MFC dependency. CTest registers it as `MiniEditorCoreTests`.
 
-```text
-%LOCALAPPDATA%\QtLearningSamples\MiniEditorCoexistence\workspace.json
-```
-
-`WorkspaceSettingsStore` is standard C++/Win32 code, not Qt or MFC code. It
-restores splitter sizes, selected media, timeline zoom, and audio-track
-visibility before child controls are constructed. It saves the latest values
-when the main frame closes. A video-editor project file would be separate:
-this JSON represents one user's workspace, not edit decisions that travel
-with a project.
+Normal application builds do **not** run tests. Build the CMake target named
+`check` when you want one local validation command: it builds the app and the
+test executable, then runs CTest for the active Debug/Release configuration.
 
 ## Build with Visual Studio 2022
 
