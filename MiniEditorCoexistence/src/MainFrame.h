@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EditorSession.h"
+#include "WorkspaceLayout.h"
 #include "WorkspaceSettings.h"
 
 #if MINI_EDITOR_USE_QT
@@ -43,6 +44,7 @@ protected:
 
 private:
     void layoutChildren(int clientWidth, int clientHeight);
+    int contentBottomForClient(int clientHeight);
     void handlePlaybackCommand(PlaybackCommand command);
     void refreshEditorViews();
     void moveLeftSplitter(int parentX);
@@ -73,8 +75,6 @@ private:
     MfcWorkspaceSplitter rightSplitter_;
     MfcWorkspaceSplitter timelineSplitter_;
     EditorSession editorSession_;
-    int mediaLibraryWidth_ = 304;
-    int propertiesWidth_ = 250;
-    int timelineHeight_ = 220;
+    WorkspaceLayout workspaceLayout_;
     bool isWorkspaceReady_ = false;
 };

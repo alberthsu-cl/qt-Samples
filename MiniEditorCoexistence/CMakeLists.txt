@@ -26,6 +26,8 @@ add_executable(MiniEditorCoexistence WIN32
     src/EditorSession.cpp
     src/WorkspaceSettings.h
     src/WorkspaceSettings.cpp
+    src/WorkspaceLayout.h
+    src/WorkspaceLayout.cpp
     src/MfcEditorPaneBase.h
     src/MfcEditorPaneBase.cpp
     src/MfcPreviewCanvas.h
@@ -57,6 +59,11 @@ source_group("DataModel" FILES
     src/WorkspaceSettings.cpp
     src/MediaAssetModel.h
     src/MediaAssetModel.cpp
+)
+
+source_group("Layout" FILES
+    src/WorkspaceLayout.h
+    src/WorkspaceLayout.cpp
 )
 
 target_compile_definitions(MiniEditorCoexistence PRIVATE

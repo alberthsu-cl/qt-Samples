@@ -141,6 +141,15 @@ window layout and registers one state-change callback that refreshes both MFC
 and Qt views. This is the important migration seam: UI controls request
 changes; the session owns state; views render the resulting state.
 
+## Phase 9 — Framework-neutral WorkspaceLayout
+
+`WorkspaceLayout` owns splitter state, minimum dimensions, clamping, and all
+child-rectangle calculations. It returns plain `WorkspaceRect` values, so it
+has no MFC or Qt dependency. `MainFrame` now handles only the MFC-specific
+status-bar boundary and applies the calculated rectangles to native MFC
+windows and embedded Qt HWNDs. `WorkspaceLayoutState` is the layout portion
+saved to the workspace JSON file.
+
 ## Phase 6 — Framework-neutral JSON workspace settings
 
 The app saves user workspace preferences to:

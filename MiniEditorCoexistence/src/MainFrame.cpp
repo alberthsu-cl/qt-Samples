@@ -10,16 +10,12 @@ IMPLEMENT_DYNCREATE(MainFrame, CFrameWnd)
 namespace {
 
 constexpr UINT kStatusBarIndicators[] = { ID_SEPARATOR };
-constexpr int kOuterMargin = 6;
-constexpr int kTransportHeight = 42;
-constexpr int kTimelineToolbarHeight = 44;
-constexpr int kSplitterThickness = 6;
-constexpr int kMinimumMediaLibraryWidth = 180;
-constexpr int kMinimumPropertiesWidth = 190;
-constexpr int kMinimumPreviewWidth = 320;
-constexpr int kMinimumTopAreaHeight = 250;
-constexpr int kMinimumTimelineHeight = 140;
 constexpr UINT_PTR kPlaybackTimerId = 1;
+
+CRect toClientRect(const WorkspaceRect &rect)
+{
+    return CRect(rect.left, rect.top, rect.left + rect.width, rect.top + rect.height);
+}
 
 } // namespace
 
@@ -177,87 +173,56 @@ void MainFrame::layoutChildren(int clientWidth, int clientHeight)
         return;
 #endif
 
-    int contentBottom = clientHeight;
-    if (::IsWindow(statusBar_.GetSafeHwnd())) {
-        CRect statusRect;
-        statusBar_.GetWindowRect(&statusRect);
-        ScreenToClient(&statusRect);
-        contentBottom = std::clamp(static_cast<int>(statusRect.top), 0, clientHeight);
-    }
-
-    const int maximumTimelineHeight = std::max(kMinimumTimelineHeight,
-        contentBottom - kOuterMargin - kSplitterThickness - kMinimumTopAreaHeight);
-    timelineHeight_ = std::clamp(timelineHeight_, kMinimumTimelineHeight,
-                                 maximumTimelineHeight);
-    const int timelineTop = contentBottom - timelineHeight_;
-    const int timelineSplitterTop = timelineTop - kSplitterThickness;
-
-    const int maximumMediaWidth = std::max(kMinimumMediaLibraryWidth,
-        clientWidth - kOuterMargin * 2 - kSplitterThickness * 2
-                    - kMinimumPropertiesWidth - kMinimumPreviewWidth);
-    mediaLibraryWidth_ = std::clamp(mediaLibraryWidth_, kMinimumMediaLibraryWidth,
-                                    maximumMediaWidth);
-    const int maximumPropertiesWidth = std::max(kMinimumPropertiesWidth,
-        clientWidth - kOuterMargin * 2 - kSplitterThickness * 2
-                    - mediaLibraryWidth_ - kMinimumPreviewWidth);
-    propertiesWidth_ = std::clamp(propertiesWidth_, kMinimumPropertiesWidth,
-                                  maximumPropertiesWidth);
-
-    const int mediaRight = kOuterMargin + mediaLibraryWidth_;
-    const int centerLeft = mediaRight + kSplitterThickness;
-    const int propertiesLeft = clientWidth - kOuterMargin - propertiesWidth_;
-    const int rightSplitterLeft = propertiesLeft - kSplitterThickness;
-    const int centerRight = rightSplitterLeft;
-    const int topAreaBottom = timelineSplitterTop;
-    const int canvasBottom = std::max(kOuterMargin,
-                                      topAreaBottom - kTransportHeight - kOuterMargin);
+    const WorkspaceGeometry geometry = workspaceLayout_.calculate(
+        clientWidth, contentBottomForClient(clientHeight));
 
 #if MINI_EDITOR_USE_QT
-    mediaLibraryHost_.resize(CRect(kOuterMargin, kOuterMargin,
-                                   mediaRight,
-                                   topAreaBottom));
+    mediaLibraryHost_.resize(toClientRect(geometry.mediaLibrary));
 #else
-    mediaLibraryPane_.MoveWindow(kOuterMargin, kOuterMargin,
-                                 mediaLibraryWidth_, topAreaBottom - kOuterMargin);
+    mediaLibraryPane_.MoveWindow(geometry.mediaLibrary.left, geometry.mediaLibrary.top,
+                                 geometry.mediaLibrary.width, geometry.mediaLibrary.height);
 #endif
-    previewCanvas_.MoveWindow(centerLeft, kOuterMargin,
-                              centerRight - centerLeft, canvasBottom - kOuterMargin);
+    previewCanvas_.MoveWindow(geometry.previewCanvas.left, geometry.previewCanvas.top,
+                              geometry.previewCanvas.width, geometry.previewCanvas.height);
 #if MINI_EDITOR_USE_QT
-    transportHost_.resize(CRect(centerLeft, canvasBottom + kOuterMargin,
-                                centerRight, topAreaBottom));
+    transportHost_.resize(toClientRect(geometry.transport));
 #else
-    transportBar_.MoveWindow(centerLeft, canvasBottom + kOuterMargin,
-                             centerRight - centerLeft, kTransportHeight);
+    transportBar_.MoveWindow(geometry.transport.left, geometry.transport.top,
+                             geometry.transport.width, geometry.transport.height);
 #endif
 #if MINI_EDITOR_USE_QT
-    propertiesHost_.resize(CRect(propertiesLeft, kOuterMargin,
-                                 clientWidth - kOuterMargin, topAreaBottom));
+    propertiesHost_.resize(toClientRect(geometry.properties));
 #else
-    propertiesPane_.MoveWindow(propertiesLeft, kOuterMargin,
-                               propertiesWidth_,
-                               topAreaBottom - kOuterMargin);
+    propertiesPane_.MoveWindow(geometry.properties.left, geometry.properties.top,
+                               geometry.properties.width, geometry.properties.height);
 #endif
 #if MINI_EDITOR_USE_QT
-    const int timelineWidth = std::max(0, clientWidth - kOuterMargin * 2);
-    timelineToolbarHost_.resize(CRect(kOuterMargin, timelineTop,
-                                      clientWidth - kOuterMargin,
-                                      timelineTop + kTimelineToolbarHeight));
-    timelineCanvas_.MoveWindow(kOuterMargin, timelineTop + kTimelineToolbarHeight,
-                               timelineWidth,
-                               std::max(0, timelineHeight_ - kTimelineToolbarHeight));
+    timelineToolbarHost_.resize(toClientRect(geometry.timelineToolbar));
+    timelineCanvas_.MoveWindow(geometry.timelineCanvas.left, geometry.timelineCanvas.top,
+                               geometry.timelineCanvas.width, geometry.timelineCanvas.height);
 #else
-    timelinePane_.MoveWindow(kOuterMargin, timelineTop,
-                             std::max(0, clientWidth - kOuterMargin * 2),
-                             timelineHeight_);
+    timelinePane_.MoveWindow(geometry.timeline.left, geometry.timeline.top,
+                             geometry.timeline.width, geometry.timeline.height);
 #endif
 
-    leftSplitter_.MoveWindow(mediaRight, kOuterMargin,
-                             kSplitterThickness, topAreaBottom - kOuterMargin);
-    rightSplitter_.MoveWindow(rightSplitterLeft, kOuterMargin,
-                              kSplitterThickness, topAreaBottom - kOuterMargin);
-    timelineSplitter_.MoveWindow(kOuterMargin, timelineSplitterTop,
-                                 std::max(0, clientWidth - kOuterMargin * 2),
-                                 kSplitterThickness);
+    leftSplitter_.MoveWindow(geometry.leftSplitter.left, geometry.leftSplitter.top,
+                             geometry.leftSplitter.width, geometry.leftSplitter.height);
+    rightSplitter_.MoveWindow(geometry.rightSplitter.left, geometry.rightSplitter.top,
+                              geometry.rightSplitter.width, geometry.rightSplitter.height);
+    timelineSplitter_.MoveWindow(geometry.timelineSplitter.left, geometry.timelineSplitter.top,
+                                 geometry.timelineSplitter.width,
+                                 geometry.timelineSplitter.height);
+}
+
+int MainFrame::contentBottomForClient(int clientHeight)
+{
+    if (!::IsWindow(statusBar_.GetSafeHwnd()))
+        return clientHeight;
+
+    CRect statusRect;
+    statusBar_.GetWindowRect(&statusRect);
+    ScreenToClient(&statusRect);
+    return std::clamp(static_cast<int>(statusRect.top), 0, clientHeight);
 }
 
 void MainFrame::handlePlaybackCommand(PlaybackCommand command)
@@ -309,7 +274,7 @@ void MainFrame::refreshEditorViews()
 
 void MainFrame::moveLeftSplitter(int parentX)
 {
-    mediaLibraryWidth_ = std::max(kMinimumMediaLibraryWidth, parentX - kOuterMargin);
+    workspaceLayout_.moveLeftSplitter(parentX);
     CRect clientRect;
     GetClientRect(&clientRect);
     layoutChildren(clientRect.Width(), clientRect.Height());
@@ -319,8 +284,7 @@ void MainFrame::moveRightSplitter(int parentX)
 {
     CRect clientRect;
     GetClientRect(&clientRect);
-    propertiesWidth_ = std::max(kMinimumPropertiesWidth,
-        clientRect.Width() - kOuterMargin - (parentX + kSplitterThickness));
+    workspaceLayout_.moveRightSplitter(parentX, clientRect.Width());
     layoutChildren(clientRect.Width(), clientRect.Height());
 }
 
@@ -328,17 +292,8 @@ void MainFrame::moveTimelineSplitter(int parentY)
 {
     CRect clientRect;
     GetClientRect(&clientRect);
-
-    int contentBottom = clientRect.Height();
-    if (::IsWindow(statusBar_.GetSafeHwnd())) {
-        CRect statusRect;
-        statusBar_.GetWindowRect(&statusRect);
-        ScreenToClient(&statusRect);
-        contentBottom = std::clamp(static_cast<int>(statusRect.top), 0, clientRect.Height());
-    }
-
-    timelineHeight_ = std::max(kMinimumTimelineHeight,
-        contentBottom - (parentY + kSplitterThickness));
+    workspaceLayout_.moveTimelineSplitter(parentY,
+                                          contentBottomForClient(clientRect.Height()));
     layoutChildren(clientRect.Width(), clientRect.Height());
 }
 
@@ -362,9 +317,9 @@ void MainFrame::restoreWorkspaceSettings()
 
     // Values are clamped during the first layout, when the actual frame size
     // is known. This also protects us from an old or manually edited JSON file.
-    mediaLibraryWidth_ = settings->mediaLibraryWidth;
-    propertiesWidth_ = settings->propertiesWidth;
-    timelineHeight_ = settings->timelineHeight;
+    workspaceLayout_.setState({ settings->mediaLibraryWidth,
+                                settings->propertiesWidth,
+                                settings->timelineHeight });
     editorSession_.restoreWorkspaceState(settings->selectedAssetIndex,
                                          settings->timelineViewState);
 }
@@ -372,9 +327,10 @@ void MainFrame::restoreWorkspaceSettings()
 void MainFrame::saveWorkspaceSettings() const
 {
     WorkspaceSettings settings;
-    settings.mediaLibraryWidth = mediaLibraryWidth_;
-    settings.propertiesWidth = propertiesWidth_;
-    settings.timelineHeight = timelineHeight_;
+    const WorkspaceLayoutState layoutState = workspaceLayout_.state();
+    settings.mediaLibraryWidth = layoutState.mediaLibraryWidth;
+    settings.propertiesWidth = layoutState.propertiesWidth;
+    settings.timelineHeight = layoutState.timelineHeight;
     settings.selectedAssetIndex = editorSession_.selectedAssetIndex();
     settings.timelineViewState = editorSession_.timelineViewState();
     WorkspaceSettingsStore::save(settings);
