@@ -27,6 +27,7 @@ protected:
     virtual void drawContent(CDC &deviceContext, const CRect &clientRect) const = 0;
 
     afx_msg void OnPaint();
+    afx_msg BOOL OnEraseBkgnd(CDC *deviceContext);
 
     DECLARE_MESSAGE_MAP()
 

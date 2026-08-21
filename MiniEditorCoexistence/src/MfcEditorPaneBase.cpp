@@ -1,9 +1,12 @@
 #include "MfcEditorPaneBase.h"
 
+#include "MfcDoubleBufferedPaint.h"
+
 #include <algorithm>
 
 BEGIN_MESSAGE_MAP(MfcEditorPaneBase, CWnd)
     ON_WM_PAINT()
+    ON_WM_ERASEBKGND()
 END_MESSAGE_MAP()
 
 bool MfcEditorPaneBase::createPane(CWnd *parent, UINT controlId)
@@ -22,19 +25,19 @@ bool MfcEditorPaneBase::createPane(CWnd *parent, UINT controlId)
 void MfcEditorPaneBase::setSelectedAssetIndex(int selectedAssetIndex)
 {
     selectedAssetIndex_ = std::clamp(selectedAssetIndex, 0, 5);
-    Invalidate();
+    Invalidate(FALSE);
 }
 
 void MfcEditorPaneBase::setClipSettings(const ClipSettings &settings)
 {
     clipSettings_ = settings;
-    Invalidate();
+    Invalidate(FALSE);
 }
 
 void MfcEditorPaneBase::setPlaybackState(const PlaybackState &state)
 {
     playbackState_ = state;
-    Invalidate();
+    Invalidate(FALSE);
 }
 
 int MfcEditorPaneBase::selectedAssetIndex() const
@@ -54,7 +57,8 @@ const PlaybackState &MfcEditorPaneBase::playbackState() const
 
 void MfcEditorPaneBase::OnPaint()
 {
-    CPaintDC deviceContext(this);
+    MfcDoubleBufferedPaint paint(this);
+    CDC &deviceContext = paint.deviceContext();
     CRect clientRect;
     GetClientRect(&clientRect);
 
@@ -62,6 +66,13 @@ void MfcEditorPaneBase::OnPaint()
     deviceContext.Draw3dRect(clientRect, EditorUi::kPanelBorder, EditorUi::kPanelBorder);
     drawPaneTitle(deviceContext, paneTitle());
     drawContent(deviceContext, clientRect);
+}
+
+BOOL MfcEditorPaneBase::OnEraseBkgnd(CDC *)
+{
+    // OnPaint always supplies the full background through the back buffer.
+    // Suppress the separate erase pass that causes visible flashing.
+    return TRUE;
 }
 
 void MfcEditorPaneBase::drawPaneTitle(CDC &deviceContext, const CString &title) const

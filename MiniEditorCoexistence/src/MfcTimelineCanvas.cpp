@@ -1,6 +1,7 @@
 #include "MfcTimelineCanvas.h"
 
 #include "DemoProject.h"
+#include "MfcDoubleBufferedPaint.h"
 #include "MfcEditorPaneBase.h"
 
 #include <algorithm>
@@ -8,6 +9,7 @@
 
 BEGIN_MESSAGE_MAP(MfcTimelineCanvas, CWnd)
     ON_WM_PAINT()
+    ON_WM_ERASEBKGND()
     ON_WM_LBUTTONDOWN()
 END_MESSAGE_MAP()
 
@@ -25,25 +27,25 @@ void MfcTimelineCanvas::setSelectedAssetIndex(int selectedAssetIndex)
 {
     selectedAssetIndex_ = std::clamp(selectedAssetIndex, 0,
                                      static_cast<int>(demoAssets().size()) - 1);
-    Invalidate();
+    Invalidate(FALSE);
 }
 
 void MfcTimelineCanvas::setClipSettings(const ClipSettings &settings)
 {
     clipSettings_ = settings;
-    Invalidate();
+    Invalidate(FALSE);
 }
 
 void MfcTimelineCanvas::setPlaybackState(const PlaybackState &state)
 {
     playbackState_ = state;
-    Invalidate();
+    Invalidate(FALSE);
 }
 
 void MfcTimelineCanvas::setViewState(const TimelineViewState &state)
 {
     viewState_ = state;
-    Invalidate();
+    Invalidate(FALSE);
 }
 
 void MfcTimelineCanvas::setSeekHandler(SeekHandler handler)
@@ -77,7 +79,8 @@ int MfcTimelineCanvas::frameAtRulerX(int x) const
 
 void MfcTimelineCanvas::OnPaint()
 {
-    CPaintDC deviceContext(this);
+    MfcDoubleBufferedPaint paint(this);
+    CDC &deviceContext = paint.deviceContext();
     CRect clientRect;
     GetClientRect(&clientRect);
 
@@ -144,4 +147,9 @@ void MfcTimelineCanvas::OnPaint()
     const int playheadX = 76 + clipWidth * playbackState_.currentFrame / 300;
     deviceContext.FillSolidRect(playheadX, rulerTop, 2,
                                 clientRect.bottom - rulerTop, RGB(240, 74, 74));
+}
+
+BOOL MfcTimelineCanvas::OnEraseBkgnd(CDC *)
+{
+    return TRUE;
 }

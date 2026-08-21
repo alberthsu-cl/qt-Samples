@@ -32,6 +32,8 @@ add_executable(MiniEditorCoexistence WIN32
     src/WorkspaceLayout.cpp
     src/MfcEditorPaneBase.h
     src/MfcEditorPaneBase.cpp
+    src/MfcDoubleBufferedPaint.h
+    src/MfcDoubleBufferedPaint.cpp
     src/MfcPreviewCanvas.h
     src/MfcPreviewCanvas.cpp
     src/MfcTimelineCanvas.h

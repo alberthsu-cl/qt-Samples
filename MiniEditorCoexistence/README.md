@@ -183,6 +183,14 @@ test executable, then runs CTest for the active Debug/Release configuration.
 and Qt views. For example, a playback timer tick updates the preview, timeline
 canvas, transport, and status bar—not the media library or properties panel.
 
+## Phase 12 — Flicker-free MFC playback painting
+
+`MfcDoubleBufferedPaint` draws MFC preview and timeline content to a
+compatible off-screen bitmap, then copies the completed frame to the window
+with one `BitBlt`. Playback invalidation uses `Invalidate(FALSE)`, and the
+paint handlers suppress the redundant `WM_ERASEBKGND` pass. This prevents the
+background from becoming visible between frequent playback repaints.
+
 ## Build with Visual Studio 2022
 
 Open `D:\Qt\Samples\MiniEditorCoexistence` with **File > Open > Folder**.

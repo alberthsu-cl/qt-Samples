@@ -22,6 +22,7 @@ public:
 
 protected:
     afx_msg void OnPaint();
+    afx_msg BOOL OnEraseBkgnd(CDC *deviceContext);
     afx_msg void OnLButtonDown(UINT flags, CPoint point);
 
     DECLARE_MESSAGE_MAP()
