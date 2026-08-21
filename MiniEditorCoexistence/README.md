@@ -100,6 +100,23 @@ the Qt timecode/button state and redraws the MFC Preview Canvas and Timeline.
 In a production editor, the media engine would provide the playhead clock;
 the UI boundary remains the same.
 
+## Phase 5 — Qt timeline toolbar
+
+The custom timeline canvas remains MFC, while the standard timeline controls
+above it are now Qt:
+
+```text
+Qt Timeline toolbar (zoom, fit, audio visibility)
+MFC Timeline canvas (ruler, tracks, clip, playhead)
+```
+
+`TimelineViewState` is framework-neutral and owned by `MainFrame`.
+`QtTimelineToolbar` emits zoom, audio-track, and fit requests through its
+host. `MfcTimelineCanvas` reads the resulting state and redraws itself.
+This is the recommended incremental path for an established video-editor
+timeline: migrate ordinary controls first, then tackle the complex custom
+canvas only when its input and rendering design are ready.
+
 ## Build with Visual Studio 2022
 
 Open `D:\Qt\Samples\MiniEditorCoexistence` with **File > Open > Folder**.

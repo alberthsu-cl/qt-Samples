@@ -31,6 +31,13 @@ enum class PlaybackCommand {
     StepForward
 };
 
+// Framework-neutral view state for the timeline. MainFrame owns it; either
+// an MFC or Qt control may present/edit it during the migration.
+struct TimelineViewState {
+    int zoomPercent = 100;
+    bool isAudioTrackVisible = true;
+};
+
 inline const wchar_t *clipPositionDisplayName(ClipPosition position)
 {
     switch (position) {

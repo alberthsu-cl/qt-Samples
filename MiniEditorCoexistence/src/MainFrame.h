@@ -5,6 +5,7 @@
 #if MINI_EDITOR_USE_QT
 #include "QtMediaLibraryHost.h"
 #include "QtPropertiesHost.h"
+#include "QtTimelineToolbarHost.h"
 #include "QtTransportHost.h"
 #else
 #include "MfcMediaLibraryPane.h"
@@ -12,6 +13,7 @@
 #include "MfcPropertiesPane.h"
 #endif
 #include "MfcPreviewCanvas.h"
+#include "MfcTimelineCanvas.h"
 #include "MfcTimelinePane.h"
 #include "MfcWorkspaceSplitter.h"
 
@@ -44,6 +46,8 @@ private:
     void selectAsset(int assetIndex);
     void updateSelectedClipSettings(const ClipSettings &settings);
     void handlePlaybackCommand(PlaybackCommand command);
+    void updateTimelineViewState(const TimelineViewState &state);
+    void fitTimeline();
     void synchronizePlaybackViews();
     void moveLeftSplitter(int parentX);
     void moveRightSplitter(int parentX);
@@ -55,19 +59,25 @@ private:
     QtMediaLibraryHost mediaLibraryHost_;
     QtPropertiesHost propertiesHost_;
     QtTransportHost transportHost_;
+    QtTimelineToolbarHost timelineToolbarHost_;
 #else
     MfcMediaLibraryPane mediaLibraryPane_;
     MfcPropertiesPane propertiesPane_;
     MfcTransportBar transportBar_;
 #endif
     MfcPreviewCanvas previewCanvas_;
+#if MINI_EDITOR_USE_QT
+    MfcTimelineCanvas timelineCanvas_;
+#else
     MfcTimelinePane timelinePane_;
+#endif
     MfcWorkspaceSplitter leftSplitter_;
     MfcWorkspaceSplitter rightSplitter_;
     MfcWorkspaceSplitter timelineSplitter_;
     int selectedAssetIndex_ = 0;
     std::array<ClipSettings, 6> clipSettings_;
     PlaybackState playbackState_;
+    TimelineViewState timelineViewState_;
     int mediaLibraryWidth_ = 304;
     int propertiesWidth_ = 250;
     int timelineHeight_ = 220;

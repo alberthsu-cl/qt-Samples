@@ -34,6 +34,8 @@ add_executable(MiniEditorCoexistence WIN32
     src/MfcPropertiesPane.cpp
     src/MfcTimelinePane.h
     src/MfcTimelinePane.cpp
+    src/MfcTimelineCanvas.h
+    src/MfcTimelineCanvas.cpp
     src/MfcWorkspaceSplitter.h
     src/MfcWorkspaceSplitter.cpp
     src/MainFrame.h
@@ -79,6 +81,10 @@ if(MINI_EDITOR_USE_QT)
         src/QtTransportPanel.cpp
         src/QtTransportHost.h
         src/QtTransportHost.cpp
+        src/QtTimelineToolbar.h
+        src/QtTimelineToolbar.cpp
+        src/QtTimelineToolbarHost.h
+        src/QtTimelineToolbarHost.cpp
         src/QtRuntime.h
         src/QtRuntime.cpp
     )

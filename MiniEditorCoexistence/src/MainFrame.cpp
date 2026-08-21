@@ -12,6 +12,7 @@ namespace {
 constexpr UINT kStatusBarIndicators[] = { ID_SEPARATOR };
 constexpr int kOuterMargin = 6;
 constexpr int kTransportHeight = 42;
+constexpr int kTimelineToolbarHeight = 44;
 constexpr int kSplitterThickness = 6;
 constexpr int kMinimumMediaLibraryWidth = 180;
 constexpr int kMinimumPropertiesWidth = 190;
@@ -41,7 +42,11 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     statusBar_.SetPaneInfo(0, ID_SEPARATOR, SBPS_STRETCH, 400);
 
     if (!previewCanvas_.Create(this, IDC_PREVIEW_CANVAS)
+#if MINI_EDITOR_USE_QT
+        || !timelineCanvas_.Create(this, IDC_TIMELINE)
+#else
         || !timelinePane_.Create(this, IDC_TIMELINE)
+#endif
         || !leftSplitter_.Create(MfcWorkspaceSplitter::Orientation::Vertical,
                                  this, IDC_LEFT_SPLITTER)
         || !rightSplitter_.Create(MfcWorkspaceSplitter::Orientation::Vertical,
@@ -62,6 +67,8 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         return -1;
     if (!transportHost_.create(GetSafeHwnd()))
         return -1;
+    if (!timelineToolbarHost_.create(GetSafeHwnd()))
+        return -1;
 
     // Qt panels emit framework-neutral values. MFC continues to own selection
     // and clip settings, then redraws the remaining MFC panes from that state.
@@ -74,6 +81,10 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     transportHost_.setPlaybackCommandHandler([this](PlaybackCommand command) {
         handlePlaybackCommand(command);
     });
+    timelineToolbarHost_.setViewStateEditedHandler([this](const TimelineViewState &state) {
+        updateTimelineViewState(state);
+    });
+    timelineToolbarHost_.setFitTimelineHandler([this] { fitTimeline(); });
 #else
     if (!mediaLibraryPane_.Create(this, IDC_MEDIA_LIBRARY)
         || !propertiesPane_.Create(this, IDC_PROPERTIES)
@@ -214,9 +225,19 @@ void MainFrame::layoutChildren(int clientWidth, int clientHeight)
                                propertiesWidth_,
                                topAreaBottom - kOuterMargin);
 #endif
+#if MINI_EDITOR_USE_QT
+    const int timelineWidth = std::max(0, clientWidth - kOuterMargin * 2);
+    timelineToolbarHost_.resize(CRect(kOuterMargin, timelineTop,
+                                      clientWidth - kOuterMargin,
+                                      timelineTop + kTimelineToolbarHeight));
+    timelineCanvas_.MoveWindow(kOuterMargin, timelineTop + kTimelineToolbarHeight,
+                               timelineWidth,
+                               std::max(0, timelineHeight_ - kTimelineToolbarHeight));
+#else
     timelinePane_.MoveWindow(kOuterMargin, timelineTop,
                              std::max(0, clientWidth - kOuterMargin * 2),
                              timelineHeight_);
+#endif
 
     leftSplitter_.MoveWindow(mediaRight, kOuterMargin,
                              kSplitterThickness, topAreaBottom - kOuterMargin);
@@ -244,8 +265,15 @@ void MainFrame::selectAsset(int assetIndex)
 #endif
     previewCanvas_.setSelectedAssetIndex(selectedAssetIndex_);
     previewCanvas_.setClipSettings(settings);
+#if MINI_EDITOR_USE_QT
+    timelineCanvas_.setSelectedAssetIndex(selectedAssetIndex_);
+    timelineCanvas_.setClipSettings(settings);
+    timelineCanvas_.setViewState(timelineViewState_);
+    timelineToolbarHost_.setViewState(timelineViewState_);
+#else
     timelinePane_.setSelectedAssetIndex(selectedAssetIndex_);
     timelinePane_.setClipSettings(settings);
+#endif
     synchronizePlaybackViews();
     updateStatusText();
 }
@@ -263,7 +291,11 @@ void MainFrame::updateSelectedClipSettings(const ClipSettings &settings)
     propertiesPane_.setClipSettings(settings);
 #endif
     previewCanvas_.setClipSettings(settings);
+#if MINI_EDITOR_USE_QT
+    timelineCanvas_.setClipSettings(settings);
+#else
     timelinePane_.setClipSettings(settings);
+#endif
     updateStatusText();
 }
 
@@ -298,10 +330,29 @@ void MainFrame::handlePlaybackCommand(PlaybackCommand command)
     updateStatusText();
 }
 
+void MainFrame::updateTimelineViewState(const TimelineViewState &state)
+{
+    timelineViewState_ = state;
+#if MINI_EDITOR_USE_QT
+    timelineCanvas_.setViewState(timelineViewState_);
+    timelineToolbarHost_.setViewState(timelineViewState_);
+#endif
+}
+
+void MainFrame::fitTimeline()
+{
+    timelineViewState_.zoomPercent = 100;
+    updateTimelineViewState(timelineViewState_);
+}
+
 void MainFrame::synchronizePlaybackViews()
 {
     previewCanvas_.setPlaybackState(playbackState_);
+#if MINI_EDITOR_USE_QT
+    timelineCanvas_.setPlaybackState(playbackState_);
+#else
     timelinePane_.setPlaybackState(playbackState_);
+#endif
 #if MINI_EDITOR_USE_QT
     transportHost_.setPlaybackState(playbackState_);
 #else
