@@ -175,6 +175,14 @@ Normal application builds do **not** run tests. Build the CMake target named
 `check` when you want one local validation command: it builds the app and the
 test executable, then runs CTest for the active Debug/Release configuration.
 
+## Phase 11 — Typed editor change notifications
+
+`EditorSession` supports multiple plain-C++ observers and reports an
+`EditorChange` bitmask: selection, clip settings, playback, or timeline view.
+`MainFrame` subscribes while it is alive and refreshes only the affected MFC
+and Qt views. For example, a playback timer tick updates the preview, timeline
+canvas, transport, and status bar—not the media library or properties panel.
+
 ## Build with Visual Studio 2022
 
 Open `D:\Qt\Samples\MiniEditorCoexistence` with **File > Open > Folder**.

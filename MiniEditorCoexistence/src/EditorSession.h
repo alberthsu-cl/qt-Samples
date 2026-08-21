@@ -6,13 +6,37 @@
 #include <functional>
 #include <vector>
 
+// A bitmask describing exactly which part of editor state changed. Keeping
+// this framework-neutral lets MFC and Qt decide which views need refreshing.
+enum class EditorChange : unsigned int {
+    None = 0,
+    Selection = 1 << 0,
+    ClipSettings = 1 << 1,
+    Playback = 1 << 2,
+    TimelineView = 1 << 3,
+    All = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3)
+};
+
+constexpr EditorChange operator|(EditorChange left, EditorChange right)
+{
+    return static_cast<EditorChange>(static_cast<unsigned int>(left)
+        | static_cast<unsigned int>(right));
+}
+
+constexpr bool includesChange(EditorChange changes, EditorChange requestedChange)
+{
+    return (static_cast<unsigned int>(changes) & static_cast<unsigned int>(requestedChange)) != 0;
+}
+#include <vector>
+
 // Framework-neutral editor state and commands. It knows no MFC window and no
 // Qt object. UI frameworks may request changes, but this session owns the
 // resulting selection, clip, playback, and timeline state.
 class EditorSession final
 {
 public:
-    using StateChangedHandler = std::function<void()>;
+    using StateChangedHandler = std::function<void(EditorChange changes)>;
+    using ObserverId = std::size_t;
 
     explicit EditorSession(std::size_t assetCount);
 
@@ -33,14 +57,21 @@ public:
     // not notify. The caller performs one initial view refresh afterwards.
     void restoreWorkspaceState(int selectedAssetIndex,
                                const TimelineViewState &timelineViewState);
-    void setStateChangedHandler(StateChangedHandler handler);
+    ObserverId addObserver(StateChangedHandler handler);
+    void removeObserver(ObserverId observerId);
 
 private:
-    void notifyStateChanged();
+    void notifyStateChanged(EditorChange changes);
 
     std::vector<ClipSettings> clipSettings_;
     int selectedAssetIndex_ = 0;
     PlaybackState playbackState_;
     TimelineViewState timelineViewState_;
-    StateChangedHandler stateChangedHandler_;
+    struct Observer {
+        ObserverId id;
+        StateChangedHandler handler;
+    };
+
+    std::vector<Observer> observers_;
+    ObserverId nextObserverId_ = 1;
 };

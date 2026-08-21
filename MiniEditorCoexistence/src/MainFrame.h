@@ -46,7 +46,7 @@ private:
     void layoutChildren(int clientWidth, int clientHeight);
     int contentBottomForClient(int clientHeight);
     void handlePlaybackCommand(PlaybackCommand command);
-    void refreshEditorViews();
+    void refreshEditorViews(EditorChange changes);
     void moveLeftSplitter(int parentX);
     void moveRightSplitter(int parentX);
     void moveTimelineSplitter(int parentY);
@@ -75,6 +75,7 @@ private:
     MfcWorkspaceSplitter rightSplitter_;
     MfcWorkspaceSplitter timelineSplitter_;
     EditorSession editorSession_;
+    EditorSession::ObserverId editorSessionObserverId_ = 0;
     WorkspaceLayout workspaceLayout_;
     bool isWorkspaceReady_ = false;
 };

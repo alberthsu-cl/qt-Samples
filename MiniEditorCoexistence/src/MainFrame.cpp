@@ -26,6 +26,9 @@ MainFrame::MainFrame()
 
 MainFrame::~MainFrame()
 {
+    if (editorSessionObserverId_ != 0)
+        editorSession_.removeObserver(editorSessionObserverId_);
+
     if (::IsWindow(GetSafeHwnd()))
         KillTimer(kPlaybackTimerId);
 
@@ -101,8 +104,9 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
 
     // From here onward each framework-neutral session change refreshes every
     // active MFC/Qt view. MainFrame remains the composition and layout owner.
-    editorSession_.setStateChangedHandler([this] { refreshEditorViews(); });
-    refreshEditorViews();
+    editorSessionObserverId_ = editorSession_.addObserver(
+        [this](EditorChange changes) { refreshEditorViews(changes); });
+    refreshEditorViews(EditorChange::All);
     isWorkspaceReady_ = true;
     return 0;
 }
@@ -234,42 +238,70 @@ void MainFrame::handlePlaybackCommand(PlaybackCommand command)
         KillTimer(kPlaybackTimerId);
 }
 
-void MainFrame::refreshEditorViews()
+void MainFrame::refreshEditorViews(EditorChange changes)
 {
     const int selectedAssetIndex = editorSession_.selectedAssetIndex();
     const auto &asset = demoAssets()[selectedAssetIndex];
     const ClipSettings &settings = editorSession_.selectedClipSettings();
     const PlaybackState &playbackState = editorSession_.playbackState();
     const TimelineViewState &timelineViewState = editorSession_.timelineViewState();
+    const bool selectionChanged = includesChange(changes, EditorChange::Selection);
+    const bool clipSettingsChanged = includesChange(changes, EditorChange::ClipSettings);
+    const bool playbackChanged = includesChange(changes, EditorChange::Playback);
+    const bool timelineViewChanged = includesChange(changes, EditorChange::TimelineView);
 
 #if MINI_EDITOR_USE_QT
-    mediaLibraryHost_.setSelectedAssetIndex(selectedAssetIndex);
-    // QtPropertiesPanel uses QSignalBlocker while it receives this state, so
-    // an editor-to-view refresh never loops back as another user request.
-    propertiesHost_.setSelectedAsset(asset.name, asset.kind, settings);
-    timelineToolbarHost_.setViewState(timelineViewState);
+    if (selectionChanged)
+        mediaLibraryHost_.setSelectedAssetIndex(selectedAssetIndex);
+    if (selectionChanged || clipSettingsChanged) {
+        // QtPropertiesPanel uses QSignalBlocker while it receives this state,
+        // so an editor-to-view refresh never loops back as a user request.
+        propertiesHost_.setSelectedAsset(asset.name, asset.kind, settings);
+    }
+    if (timelineViewChanged)
+        timelineToolbarHost_.setViewState(timelineViewState);
 #else
-    mediaLibraryPane_.setSelectedAssetIndex(selectedAssetIndex);
-    propertiesPane_.setSelectedAssetIndex(selectedAssetIndex);
-    propertiesPane_.setClipSettings(settings);
+    if (selectionChanged) {
+        mediaLibraryPane_.setSelectedAssetIndex(selectedAssetIndex);
+        propertiesPane_.setSelectedAssetIndex(selectedAssetIndex);
+    }
+    if (selectionChanged || clipSettingsChanged)
+        propertiesPane_.setClipSettings(settings);
 #endif
 
-    previewCanvas_.setSelectedAssetIndex(selectedAssetIndex);
-    previewCanvas_.setClipSettings(settings);
-    previewCanvas_.setPlaybackState(playbackState);
+    if (selectionChanged) {
+        previewCanvas_.setSelectedAssetIndex(selectedAssetIndex);
 #if MINI_EDITOR_USE_QT
-    timelineCanvas_.setSelectedAssetIndex(selectedAssetIndex);
-    timelineCanvas_.setClipSettings(settings);
-    timelineCanvas_.setViewState(timelineViewState);
-    timelineCanvas_.setPlaybackState(playbackState);
-    transportHost_.setPlaybackState(playbackState);
+        timelineCanvas_.setSelectedAssetIndex(selectedAssetIndex);
 #else
-    timelinePane_.setSelectedAssetIndex(selectedAssetIndex);
-    timelinePane_.setClipSettings(settings);
-    timelinePane_.setPlaybackState(playbackState);
-    transportBar_.setPlaybackState(playbackState);
+        timelinePane_.setSelectedAssetIndex(selectedAssetIndex);
 #endif
-    updateStatusText();
+    }
+    if (selectionChanged || clipSettingsChanged) {
+        previewCanvas_.setClipSettings(settings);
+#if MINI_EDITOR_USE_QT
+        timelineCanvas_.setClipSettings(settings);
+#else
+        timelinePane_.setClipSettings(settings);
+#endif
+    }
+    if (playbackChanged)
+        previewCanvas_.setPlaybackState(playbackState);
+#if MINI_EDITOR_USE_QT
+    if (timelineViewChanged)
+        timelineCanvas_.setViewState(timelineViewState);
+    if (playbackChanged) {
+        timelineCanvas_.setPlaybackState(playbackState);
+        transportHost_.setPlaybackState(playbackState);
+    }
+#else
+    if (playbackChanged) {
+        timelinePane_.setPlaybackState(playbackState);
+        transportBar_.setPlaybackState(playbackState);
+    }
+#endif
+    if (selectionChanged || clipSettingsChanged || playbackChanged)
+        updateStatusText();
 }
 
 void MainFrame::moveLeftSplitter(int parentX)

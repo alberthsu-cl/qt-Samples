@@ -4,6 +4,7 @@
 #include <exception>
 #include <iostream>
 #include <stdexcept>
+#include <vector>
 
 namespace {
 
@@ -26,8 +27,9 @@ int bottom(const WorkspaceRect &rect)
 void editorSessionOwnsAndClampsState()
 {
     EditorSession session(6);
-    int notificationCount = 0;
-    session.setStateChangedHandler([&notificationCount] { ++notificationCount; });
+    std::vector<EditorChange> notifications;
+    const EditorSession::ObserverId observerId = session.addObserver(
+        [&notifications](EditorChange changes) { notifications.push_back(changes); });
 
     session.selectAsset(99);
     require(session.selectedAssetIndex() == 5, "Selection must clamp to the last asset.");
@@ -59,7 +61,17 @@ void editorSessionOwnsAndClampsState()
     require(session.timelineViewState().zoomPercent == 200, "Zoom must clamp to 200%.");
     require(!session.timelineViewState().isAudioTrackVisible,
             "Session must retain audio-track visibility.");
-    require(notificationCount == 7, "Every user-visible state change must notify once.");
+    require(notifications.size() == 7, "Every user-visible state change must notify once.");
+    require(notifications[0] == EditorChange::Selection,
+            "Selection must report its typed change category.");
+    require(notifications[2] == EditorChange::Playback,
+            "Playback commands must report a playback change.");
+    require(notifications[6] == EditorChange::TimelineView,
+            "Zoom changes must report a timeline-view change.");
+
+    session.removeObserver(observerId);
+    session.selectAsset(0);
+    require(notifications.size() == 7, "Removed observer must no longer receive notifications.");
 }
 
 void workspaceLayoutProtectsPaneBounds()

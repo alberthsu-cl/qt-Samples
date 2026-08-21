@@ -41,13 +41,13 @@ void EditorSession::selectAsset(int assetIndex)
 {
     selectedAssetIndex_ = std::clamp(assetIndex, 0,
                                      static_cast<int>(clipSettings_.size()) - 1);
-    notifyStateChanged();
+    notifyStateChanged(EditorChange::Selection);
 }
 
 void EditorSession::updateSelectedClipSettings(const ClipSettings &settings)
 {
     clipSettings_[selectedAssetIndex_] = settings;
-    notifyStateChanged();
+    notifyStateChanged(EditorChange::ClipSettings);
 }
 
 void EditorSession::handlePlaybackCommand(PlaybackCommand command)
@@ -70,7 +70,7 @@ void EditorSession::handlePlaybackCommand(PlaybackCommand command)
         break;
     }
 
-    notifyStateChanged();
+    notifyStateChanged(EditorChange::Playback);
 }
 
 void EditorSession::advancePlaybackFrame()
@@ -79,13 +79,13 @@ void EditorSession::advancePlaybackFrame()
         return;
 
     playbackState_.currentFrame = (playbackState_.currentFrame + 1) % (kLastFrame + 1);
-    notifyStateChanged();
+    notifyStateChanged(EditorChange::Playback);
 }
 
 void EditorSession::seekTimeline(int frame)
 {
     playbackState_.currentFrame = std::clamp(frame, kFirstFrame, kLastFrame);
-    notifyStateChanged();
+    notifyStateChanged(EditorChange::Playback);
 }
 
 void EditorSession::updateTimelineViewState(const TimelineViewState &state)
@@ -94,13 +94,13 @@ void EditorSession::updateTimelineViewState(const TimelineViewState &state)
     timelineViewState_.zoomPercent = std::clamp(timelineViewState_.zoomPercent,
                                                  kMinimumTimelineZoom,
                                                  kMaximumTimelineZoom);
-    notifyStateChanged();
+    notifyStateChanged(EditorChange::TimelineView);
 }
 
 void EditorSession::fitTimeline()
 {
     timelineViewState_.zoomPercent = 100;
-    notifyStateChanged();
+    notifyStateChanged(EditorChange::TimelineView);
 }
 
 void EditorSession::restoreWorkspaceState(int selectedAssetIndex,
@@ -114,13 +114,27 @@ void EditorSession::restoreWorkspaceState(int selectedAssetIndex,
                                                  kMaximumTimelineZoom);
 }
 
-void EditorSession::setStateChangedHandler(StateChangedHandler handler)
+EditorSession::ObserverId EditorSession::addObserver(StateChangedHandler handler)
 {
-    stateChangedHandler_ = std::move(handler);
+    const ObserverId observerId = nextObserverId_++;
+    observers_.push_back({ observerId, std::move(handler) });
+    return observerId;
 }
 
-void EditorSession::notifyStateChanged()
+void EditorSession::removeObserver(ObserverId observerId)
 {
-    if (stateChangedHandler_)
-        stateChangedHandler_();
+    observers_.erase(std::remove_if(observers_.begin(), observers_.end(),
+        [observerId](const Observer &observer) { return observer.id == observerId; }),
+        observers_.end());
+}
+
+void EditorSession::notifyStateChanged(EditorChange changes)
+{
+    // Copy first: an observer may safely subscribe or unsubscribe while a
+    // notification is being delivered without invalidating this iteration.
+    const std::vector<Observer> observers = observers_;
+    for (const Observer &observer : observers) {
+        if (observer.handler)
+            observer.handler(changes);
+    }
 }
