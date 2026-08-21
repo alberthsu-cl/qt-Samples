@@ -23,6 +23,11 @@ constexpr UINT_PTR kPlaybackTimerId = 1;
 
 } // namespace
 
+MainFrame::MainFrame()
+    : editorSession_(demoAssets().size())
+{
+}
+
 MainFrame::~MainFrame()
 {
     if (::IsWindow(GetSafeHwnd()))
@@ -65,7 +70,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     timelineSplitter_.setDragHandler([this](int parentY) { moveTimelineSplitter(parentY); });
 
 #if MINI_EDITOR_USE_QT
-    timelineCanvas_.setSeekHandler([this](int frame) { seekTimeline(frame); });
+    timelineCanvas_.setSeekHandler([this](int frame) { editorSession_.seekTimeline(frame); });
     if (!mediaLibraryHost_.create(GetSafeHwnd()))
         return -1;
     if (!propertiesHost_.create(GetSafeHwnd()))
@@ -78,18 +83,18 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     // Qt panels emit framework-neutral values. MFC continues to own selection
     // and clip settings, then redraws the remaining MFC panes from that state.
     mediaLibraryHost_.setAssetSelectedHandler([this](int assetIndex) {
-        selectAsset(assetIndex);
+        editorSession_.selectAsset(assetIndex);
     });
     propertiesHost_.setClipSettingsEditedHandler([this](const ClipSettings &settings) {
-        updateSelectedClipSettings(settings);
+        editorSession_.updateSelectedClipSettings(settings);
     });
     transportHost_.setPlaybackCommandHandler([this](PlaybackCommand command) {
         handlePlaybackCommand(command);
     });
     timelineToolbarHost_.setViewStateEditedHandler([this](const TimelineViewState &state) {
-        updateTimelineViewState(state);
+        editorSession_.updateTimelineViewState(state);
     });
-    timelineToolbarHost_.setFitTimelineHandler([this] { fitTimeline(); });
+    timelineToolbarHost_.setFitTimelineHandler([this] { editorSession_.fitTimeline(); });
 #else
     if (!mediaLibraryPane_.Create(this, IDC_MEDIA_LIBRARY)
         || !propertiesPane_.Create(this, IDC_PROPERTIES)
@@ -98,7 +103,10 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     }
 #endif
 
-    selectAsset(selectedAssetIndex_);
+    // From here onward each framework-neutral session change refreshes every
+    // active MFC/Qt view. MainFrame remains the composition and layout owner.
+    editorSession_.setStateChangedHandler([this] { refreshEditorViews(); });
+    refreshEditorViews();
     isWorkspaceReady_ = true;
     return 0;
 }
@@ -123,7 +131,7 @@ void MainFrame::OnGetMinMaxInfo(MINMAXINFO *minMaxInfo)
 
 void MainFrame::OnSelectMediaAsset(UINT commandId)
 {
-    selectAsset(static_cast<int>(commandId - ID_MEDIA_ASSET_FIRST));
+    editorSession_.selectAsset(static_cast<int>(commandId - ID_MEDIA_ASSET_FIRST));
 }
 
 void MainFrame::OnPlaybackCommand(UINT commandId)
@@ -146,12 +154,10 @@ void MainFrame::OnPlaybackCommand(UINT commandId)
 
 void MainFrame::OnTimer(UINT_PTR timerId)
 {
-    if (timerId == kPlaybackTimerId && playbackState_.isPlaying) {
+    if (timerId == kPlaybackTimerId && editorSession_.playbackState().isPlaying) {
         // This is a deliberately simple MFC timer. In a production editor the
         // media engine would report its clock/playhead instead.
-        playbackState_.currentFrame = (playbackState_.currentFrame + 1) % 300;
-        synchronizePlaybackViews();
-        updateStatusText();
+        editorSession_.advancePlaybackFrame();
         return;
     }
 
@@ -254,123 +260,51 @@ void MainFrame::layoutChildren(int clientWidth, int clientHeight)
                                  kSplitterThickness);
 }
 
-void MainFrame::selectAsset(int assetIndex)
-{
-    selectedAssetIndex_ = std::clamp(assetIndex, 0,
-                                     static_cast<int>(demoAssets().size()) - 1);
-    const auto &asset = demoAssets()[selectedAssetIndex_];
-    const ClipSettings &settings = clipSettings_[selectedAssetIndex_];
-
-#if MINI_EDITOR_USE_QT
-    mediaLibraryHost_.setSelectedAssetIndex(selectedAssetIndex_);
-    propertiesHost_.setSelectedAsset(asset.name, asset.kind, settings);
-#else
-    mediaLibraryPane_.setSelectedAssetIndex(selectedAssetIndex_);
-    propertiesPane_.setSelectedAssetIndex(selectedAssetIndex_);
-    propertiesPane_.setClipSettings(settings);
-#endif
-    previewCanvas_.setSelectedAssetIndex(selectedAssetIndex_);
-    previewCanvas_.setClipSettings(settings);
-#if MINI_EDITOR_USE_QT
-    timelineCanvas_.setSelectedAssetIndex(selectedAssetIndex_);
-    timelineCanvas_.setClipSettings(settings);
-    timelineCanvas_.setViewState(timelineViewState_);
-    timelineToolbarHost_.setViewState(timelineViewState_);
-#else
-    timelinePane_.setSelectedAssetIndex(selectedAssetIndex_);
-    timelinePane_.setClipSettings(settings);
-#endif
-    synchronizePlaybackViews();
-    updateStatusText();
-}
-
-void MainFrame::updateSelectedClipSettings(const ClipSettings &settings)
-{
-    clipSettings_[selectedAssetIndex_] = settings;
-    const auto &asset = demoAssets()[selectedAssetIndex_];
-
-#if MINI_EDITOR_USE_QT
-    // This synchronization is signal-blocked inside QtPropertiesPanel, so a
-    // user edit never feeds back as another user edit.
-    propertiesHost_.setSelectedAsset(asset.name, asset.kind, settings);
-#else
-    propertiesPane_.setClipSettings(settings);
-#endif
-    previewCanvas_.setClipSettings(settings);
-#if MINI_EDITOR_USE_QT
-    timelineCanvas_.setClipSettings(settings);
-#else
-    timelinePane_.setClipSettings(settings);
-#endif
-    updateStatusText();
-}
-
 void MainFrame::handlePlaybackCommand(PlaybackCommand command)
 {
-    switch (command) {
-    case PlaybackCommand::TogglePlayPause:
-        playbackState_.isPlaying = !playbackState_.isPlaying;
-        if (playbackState_.isPlaying)
-            SetTimer(kPlaybackTimerId, 33, nullptr);
-        else
-            KillTimer(kPlaybackTimerId);
-        break;
-    case PlaybackCommand::Stop:
-        playbackState_.isPlaying = false;
-        playbackState_.currentFrame = 0;
+    editorSession_.handlePlaybackCommand(command);
+    if (editorSession_.playbackState().isPlaying)
+        SetTimer(kPlaybackTimerId, 33, nullptr);
+    else
         KillTimer(kPlaybackTimerId);
-        break;
-    case PlaybackCommand::StepBackward:
-        playbackState_.isPlaying = false;
-        playbackState_.currentFrame = std::max(0, playbackState_.currentFrame - 1);
-        KillTimer(kPlaybackTimerId);
-        break;
-    case PlaybackCommand::StepForward:
-        playbackState_.isPlaying = false;
-        playbackState_.currentFrame = std::min(299, playbackState_.currentFrame + 1);
-        KillTimer(kPlaybackTimerId);
-        break;
-    }
-
-    synchronizePlaybackViews();
-    updateStatusText();
 }
 
-void MainFrame::updateTimelineViewState(const TimelineViewState &state)
+void MainFrame::refreshEditorViews()
 {
-    timelineViewState_ = state;
+    const int selectedAssetIndex = editorSession_.selectedAssetIndex();
+    const auto &asset = demoAssets()[selectedAssetIndex];
+    const ClipSettings &settings = editorSession_.selectedClipSettings();
+    const PlaybackState &playbackState = editorSession_.playbackState();
+    const TimelineViewState &timelineViewState = editorSession_.timelineViewState();
+
 #if MINI_EDITOR_USE_QT
-    timelineCanvas_.setViewState(timelineViewState_);
-    timelineToolbarHost_.setViewState(timelineViewState_);
-#endif
-}
-
-void MainFrame::fitTimeline()
-{
-    timelineViewState_.zoomPercent = 100;
-    updateTimelineViewState(timelineViewState_);
-}
-
-void MainFrame::seekTimeline(int frame)
-{
-    playbackState_.currentFrame = std::clamp(frame, 0, 299);
-    synchronizePlaybackViews();
-    updateStatusText();
-}
-
-void MainFrame::synchronizePlaybackViews()
-{
-    previewCanvas_.setPlaybackState(playbackState_);
-#if MINI_EDITOR_USE_QT
-    timelineCanvas_.setPlaybackState(playbackState_);
+    mediaLibraryHost_.setSelectedAssetIndex(selectedAssetIndex);
+    // QtPropertiesPanel uses QSignalBlocker while it receives this state, so
+    // an editor-to-view refresh never loops back as another user request.
+    propertiesHost_.setSelectedAsset(asset.name, asset.kind, settings);
+    timelineToolbarHost_.setViewState(timelineViewState);
 #else
-    timelinePane_.setPlaybackState(playbackState_);
+    mediaLibraryPane_.setSelectedAssetIndex(selectedAssetIndex);
+    propertiesPane_.setSelectedAssetIndex(selectedAssetIndex);
+    propertiesPane_.setClipSettings(settings);
 #endif
+
+    previewCanvas_.setSelectedAssetIndex(selectedAssetIndex);
+    previewCanvas_.setClipSettings(settings);
+    previewCanvas_.setPlaybackState(playbackState);
 #if MINI_EDITOR_USE_QT
-    transportHost_.setPlaybackState(playbackState_);
+    timelineCanvas_.setSelectedAssetIndex(selectedAssetIndex);
+    timelineCanvas_.setClipSettings(settings);
+    timelineCanvas_.setViewState(timelineViewState);
+    timelineCanvas_.setPlaybackState(playbackState);
+    transportHost_.setPlaybackState(playbackState);
 #else
-    transportBar_.setPlaybackState(playbackState_);
+    timelinePane_.setSelectedAssetIndex(selectedAssetIndex);
+    timelinePane_.setClipSettings(settings);
+    timelinePane_.setPlaybackState(playbackState);
+    transportBar_.setPlaybackState(playbackState);
 #endif
+    updateStatusText();
 }
 
 void MainFrame::moveLeftSplitter(int parentX)
@@ -410,13 +344,13 @@ void MainFrame::moveTimelineSplitter(int parentY)
 
 void MainFrame::updateStatusText()
 {
-    const auto &asset = demoAssets()[selectedAssetIndex_];
+    const auto &asset = demoAssets()[editorSession_.selectedAssetIndex()];
     CString statusText;
-    const ClipSettings &settings = clipSettings_[selectedAssetIndex_];
+    const ClipSettings &settings = editorSession_.selectedClipSettings();
     statusText.Format(_T("Selected: %s (%s) | Opacity %d%% | Scale %d%% | %s | Frame %d"),
                       asset.name, asset.kind, settings.opacityPercent,
                       settings.scalePercent, clipPositionDisplayName(settings.position),
-                      playbackState_.currentFrame);
+                      editorSession_.playbackState().currentFrame);
     statusBar_.SetPaneText(0, statusText);
 }
 
@@ -431,10 +365,8 @@ void MainFrame::restoreWorkspaceSettings()
     mediaLibraryWidth_ = settings->mediaLibraryWidth;
     propertiesWidth_ = settings->propertiesWidth;
     timelineHeight_ = settings->timelineHeight;
-    selectedAssetIndex_ = std::clamp(settings->selectedAssetIndex, 0,
-                                     static_cast<int>(demoAssets().size()) - 1);
-    timelineViewState_ = settings->timelineViewState;
-    timelineViewState_.zoomPercent = std::clamp(timelineViewState_.zoomPercent, 50, 200);
+    editorSession_.restoreWorkspaceState(settings->selectedAssetIndex,
+                                         settings->timelineViewState);
 }
 
 void MainFrame::saveWorkspaceSettings() const
@@ -443,8 +375,8 @@ void MainFrame::saveWorkspaceSettings() const
     settings.mediaLibraryWidth = mediaLibraryWidth_;
     settings.propertiesWidth = propertiesWidth_;
     settings.timelineHeight = timelineHeight_;
-    settings.selectedAssetIndex = selectedAssetIndex_;
-    settings.timelineViewState = timelineViewState_;
+    settings.selectedAssetIndex = editorSession_.selectedAssetIndex();
+    settings.timelineViewState = editorSession_.timelineViewState();
     WorkspaceSettingsStore::save(settings);
 }
 

@@ -22,6 +22,8 @@ endif()
 add_executable(MiniEditorCoexistence WIN32
     src/DemoProject.h
     src/ProjectState.h
+    src/EditorSession.h
+    src/EditorSession.cpp
     src/WorkspaceSettings.h
     src/WorkspaceSettings.cpp
     src/MfcEditorPaneBase.h
@@ -49,6 +51,8 @@ target_include_directories(MiniEditorCoexistence PRIVATE
 source_group("DataModel" FILES
     src/DemoProject.h
     src/ProjectState.h
+    src/EditorSession.h
+    src/EditorSession.cpp
     src/WorkspaceSettings.h
     src/WorkspaceSettings.cpp
     src/MediaAssetModel.h

@@ -132,6 +132,15 @@ preview/canvas and synchronizes the Qt transport timecode. This preserves the
 important boundary: the custom surface understands pixels, while the app
 understands editor state.
 
+## Phase 8 — Framework-neutral EditorSession
+
+`EditorSession` now owns selection, per-clip settings, playback state, and
+timeline view state. It exposes editor commands such as selection, seeking,
+playback, and zoom, but has no MFC or Qt dependency. `MainFrame` keeps native
+window layout and registers one state-change callback that refreshes both MFC
+and Qt views. This is the important migration seam: UI controls request
+changes; the session owns state; views render the resulting state.
+
 ## Phase 6 — Framework-neutral JSON workspace settings
 
 The app saves user workspace preferences to:

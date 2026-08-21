@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ProjectState.h"
+#include "EditorSession.h"
 #include "WorkspaceSettings.h"
 
 #if MINI_EDITOR_USE_QT
@@ -22,13 +22,12 @@
 #include <afxext.h>
 #include <afxwin.h>
 
-#include <array>
-
 class MainFrame final : public CFrameWnd
 {
     DECLARE_DYNCREATE(MainFrame)
 
 public:
+    MainFrame();
     ~MainFrame() override;
 
 protected:
@@ -44,13 +43,8 @@ protected:
 
 private:
     void layoutChildren(int clientWidth, int clientHeight);
-    void selectAsset(int assetIndex);
-    void updateSelectedClipSettings(const ClipSettings &settings);
     void handlePlaybackCommand(PlaybackCommand command);
-    void updateTimelineViewState(const TimelineViewState &state);
-    void fitTimeline();
-    void seekTimeline(int frame);
-    void synchronizePlaybackViews();
+    void refreshEditorViews();
     void moveLeftSplitter(int parentX);
     void moveRightSplitter(int parentX);
     void moveTimelineSplitter(int parentY);
@@ -78,10 +72,7 @@ private:
     MfcWorkspaceSplitter leftSplitter_;
     MfcWorkspaceSplitter rightSplitter_;
     MfcWorkspaceSplitter timelineSplitter_;
-    int selectedAssetIndex_ = 0;
-    std::array<ClipSettings, 6> clipSettings_;
-    PlaybackState playbackState_;
-    TimelineViewState timelineViewState_;
+    EditorSession editorSession_;
     int mediaLibraryWidth_ = 304;
     int propertiesWidth_ = 250;
     int timelineHeight_ = 220;
