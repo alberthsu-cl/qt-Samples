@@ -26,16 +26,8 @@ add_executable(MiniEditorCoexistence WIN32
     src/WorkspaceSettings.cpp
     src/MfcEditorPaneBase.h
     src/MfcEditorPaneBase.cpp
-    src/MfcMediaLibraryPane.h
-    src/MfcMediaLibraryPane.cpp
     src/MfcPreviewCanvas.h
     src/MfcPreviewCanvas.cpp
-    src/MfcTransportBar.h
-    src/MfcTransportBar.cpp
-    src/MfcPropertiesPane.h
-    src/MfcPropertiesPane.cpp
-    src/MfcTimelinePane.h
-    src/MfcTimelinePane.cpp
     src/MfcTimelineCanvas.h
     src/MfcTimelineCanvas.cpp
     src/MfcWorkspaceSplitter.h
@@ -110,6 +102,18 @@ if(MINI_EDITOR_USE_QT)
         COMMENT "Deploying Qt runtime files beside MiniEditorCoexistence"
     )
 else()
+    # These are complete MFC fallbacks. They intentionally stay out of the
+    # Qt-enabled target, where their corresponding Qt panels are used instead.
+    target_sources(MiniEditorCoexistence PRIVATE
+        src/MfcMediaLibraryPane.h
+        src/MfcMediaLibraryPane.cpp
+        src/MfcTransportBar.h
+        src/MfcTransportBar.cpp
+        src/MfcPropertiesPane.h
+        src/MfcPropertiesPane.cpp
+        src/MfcTimelinePane.h
+        src/MfcTimelinePane.cpp
+    )
     target_compile_definitions(MiniEditorCoexistence PRIVATE
         MINI_EDITOR_USE_QT=0
     )

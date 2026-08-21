@@ -77,6 +77,12 @@ being mistaken for a second user edit returning to MFC.
 CMake cache to rebuild the complete Phase 0 pure-MFC UI; set it to `ON` to
 enable every panel migrated to Qt so far.
 
+The Qt-enabled target contains only MFC files that it still uses:
+`MfcPreviewCanvas`, `MfcTimelineCanvas`, `MfcWorkspaceSplitter`, and their
+shared `MfcEditorPaneBase`. The complete fallback panes are included only in
+the `MINI_EDITOR_USE_QT=OFF` target, so they do not distract from the active
+coexistence project in Visual Studio.
+
 ## Phase 3 — Qt transport controls
 
 Phase 3 leaves the preview-rendering surface on MFC and replaces only its
