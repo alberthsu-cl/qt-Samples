@@ -14,7 +14,8 @@ class QtTimelineCanvasHost final
 {
 public:
     using SeekHandler = std::function<void(int frame)>;
-    using TimelineClipEditedHandler = std::function<void(const TimelineClipState &state)>;
+    using TimelineClipEditedHandler = std::function<void(int clipId,
+                                                         const TimelineClipState &state)>;
     using MediaAssetDroppedHandler = std::function<void(int mediaAssetIndex, int frame)>;
 
     QtTimelineCanvasHost();

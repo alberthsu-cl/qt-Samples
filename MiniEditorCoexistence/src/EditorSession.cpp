@@ -99,6 +99,16 @@ int EditorSession::addTimelineClip(int mediaAssetIndex, TimelineTrackType trackT
     return clipId;
 }
 
+bool EditorSession::moveTimelineClip(int clipId, const TimelineClipState &state)
+{
+    if (!timelineModel_.moveClip(clipId, state))
+        return false;
+
+    projectDirty_ = true;
+    notifyStateChanged(EditorChange::TimelineClip);
+    return true;
+}
+
 bool EditorSession::isProjectDirty() const
 {
     return projectDirty_;

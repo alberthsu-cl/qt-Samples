@@ -50,6 +50,7 @@ public:
     EditorProject projectSnapshot() const;
     const TimelineModel &timelineModel() const;
     int addTimelineClip(int mediaAssetIndex, TimelineTrackType trackType, int startFrame);
+    bool moveTimelineClip(int clipId, const TimelineClipState &state);
     bool isProjectDirty() const;
 
     void selectAsset(int assetIndex);

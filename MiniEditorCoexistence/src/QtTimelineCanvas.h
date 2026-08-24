@@ -12,7 +12,8 @@ class QtTimelineCanvas final : public QWidget
 {
 public:
     using SeekHandler = std::function<void(int frame)>;
-    using TimelineClipEditedHandler = std::function<void(const TimelineClipState &state)>;
+    using TimelineClipEditedHandler = std::function<void(int clipId,
+                                                         const TimelineClipState &state)>;
     using MediaAssetDroppedHandler = std::function<void(int mediaAssetIndex, int frame)>;
 
     explicit QtTimelineCanvas(QWidget *parent = nullptr);
@@ -38,7 +39,8 @@ protected:
 private:
     int frameAtRulerX(int x) const;
     int frameAtTimelineX(int x) const;
-    QRect timelineClipRect() const;
+    QRect timelineClipRect(const TimelineClip &clip) const;
+    const TimelineClip *clipAt(const QPoint &point) const;
 
     int selectedAssetIndex_ = 0;
     ClipSettings clipSettings_;
@@ -51,5 +53,6 @@ private:
     std::vector<TimelineClip> timelineClips_;
     bool isDraggingClip_ = false;
     int dragFrameOffset_ = 0;
+    int dragClipId_ = 0;
     TimelineClipState dragPreviewState_;
 };

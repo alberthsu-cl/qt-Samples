@@ -108,7 +108,10 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
     painter.drawText(12, kRulerHeight + 38, QStringLiteral("V1"));
     painter.drawText(12, kRulerHeight + kTrackHeight + 46, QStringLiteral("A1"));
 
-    const auto drawClip = [&painter, this](const TimelineClip &clip) {
+    const auto drawClip = [&painter, this](const TimelineClip &sourceClip) {
+        TimelineClip clip = sourceClip;
+        if (isDraggingClip_ && clip.id == dragClipId_)
+            clip.state = dragPreviewState_;
         const auto &asset = demoAssets()[std::clamp(clip.mediaAssetIndex, 0,
                                                      static_cast<int>(demoAssets().size()) - 1)];
         const QColor assetColor = QColor::fromRgb(asset.thumbnailColor).darker(100);
@@ -153,9 +156,10 @@ void QtTimelineCanvas::mousePressEvent(QMouseEvent *event)
     const QPoint point = event->position().toPoint();
     if (point.y() < kRulerHeight && seekHandler_) {
         seekHandler_(frameAtRulerX(point.x()));
-    } else if (timelineClipRect().contains(point)) {
+    } else if (const TimelineClip *clip = clipAt(point)) {
         isDraggingClip_ = true;
-        dragPreviewState_ = timelineClipState_;
+        dragClipId_ = clip->id;
+        dragPreviewState_ = clip->state;
         dragFrameOffset_ = frameAtTimelineX(point.x()) - dragPreviewState_.startFrame;
         grabMouse();
     }
@@ -182,7 +186,8 @@ void QtTimelineCanvas::mouseReleaseEvent(QMouseEvent *event)
         releaseMouse();
         isDraggingClip_ = false;
         if (timelineClipEditedHandler_)
-            timelineClipEditedHandler_(dragPreviewState_);
+            timelineClipEditedHandler_(dragClipId_, dragPreviewState_);
+        dragClipId_ = 0;
         update();
     }
     QWidget::mouseReleaseEvent(event);
@@ -222,12 +227,24 @@ int QtTimelineCanvas::frameAtTimelineX(int x) const
                       0, kTimelineMaximumFrame);
 }
 
-QRect QtTimelineCanvas::timelineClipRect() const
+QRect QtTimelineCanvas::timelineClipRect(const TimelineClip &clip) const
 {
-    const TimelineClipState &clipState = isDraggingClip_ ? dragPreviewState_ : timelineClipState_;
+    const TimelineClipState &clipState = isDraggingClip_ && clip.id == dragClipId_
+        ? dragPreviewState_ : clip.state;
     const int pixels = pixelsPerScaleUnit(viewState_);
     const int left = kTimelineLeft + clipState.startFrame * pixels / kTimelineFramesPerScaleUnit;
     const int clipWidth = std::max(1, clipState.durationFrames * pixels
         / kTimelineFramesPerScaleUnit);
-    return QRect(left, kRulerHeight + 5, clipWidth, kTrackHeight - 10);
+    const int trackTop = clip.trackType == TimelineTrackType::Audio
+        ? kRulerHeight + kTrackHeight + 8 : kRulerHeight;
+    return QRect(left, trackTop + 5, clipWidth, kTrackHeight - 10);
+}
+
+const TimelineClip *QtTimelineCanvas::clipAt(const QPoint &point) const
+{
+    for (const TimelineClip &clip : timelineClips_) {
+        if (timelineClipRect(clip).contains(point))
+            return &clip;
+    }
+    return nullptr;
 }
