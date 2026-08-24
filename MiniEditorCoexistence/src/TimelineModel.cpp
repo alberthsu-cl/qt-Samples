@@ -36,6 +36,12 @@ bool TimelineModel::removeClip(int clipId)
     return true;
 }
 
+void TimelineModel::clear()
+{
+    clips_.clear();
+    nextClipId_ = 1;
+}
+
 const TimelineClip *TimelineModel::findClip(int clipId) const
 {
     const auto iterator = std::find_if(clips_.begin(), clips_.end(),

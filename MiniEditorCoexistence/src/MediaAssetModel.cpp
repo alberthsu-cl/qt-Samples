@@ -3,6 +3,11 @@
 #include "DemoProject.h"
 
 #include <QColor>
+#include <QMimeData>
+
+namespace {
+constexpr char kMediaAssetMimeType[] = "application/x-mini-editor-media-index";
+}
 
 MediaAssetModel::MediaAssetModel(QObject *parent)
     : QAbstractListModel(parent)
@@ -38,4 +43,28 @@ QVariant MediaAssetModel::data(const QModelIndex &index, int role) const
     default:
         return {};
     }
+}
+
+Qt::ItemFlags MediaAssetModel::flags(const QModelIndex &index) const
+{
+    Qt::ItemFlags defaultFlags = QAbstractListModel::flags(index);
+    if (index.isValid())
+        defaultFlags |= Qt::ItemIsDragEnabled;
+    return defaultFlags;
+}
+
+QStringList MediaAssetModel::mimeTypes() const
+{
+    return { QString::fromLatin1(kMediaAssetMimeType) };
+}
+
+QMimeData *MediaAssetModel::mimeData(const QModelIndexList &indexes) const
+{
+    if (indexes.empty() || !indexes.front().isValid())
+        return nullptr;
+
+    auto *mimeData = new QMimeData;
+    mimeData->setData(QString::fromLatin1(kMediaAssetMimeType),
+                      QByteArray::number(indexes.front().row()));
+    return mimeData;
 }

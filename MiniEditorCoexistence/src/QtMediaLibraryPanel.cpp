@@ -97,6 +97,8 @@ QtMediaLibraryPanel::QtMediaLibraryPanel(QWidget *parent)
     assetView_->setUniformItemSizes(true);
     assetView_->setSpacing(5);
     assetView_->setSelectionMode(QAbstractItemView::SingleSelection);
+    assetView_->setDragEnabled(true);
+    assetView_->setDragDropMode(QAbstractItemView::DragOnly);
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(10, 10, 10, 10);

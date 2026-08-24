@@ -83,6 +83,21 @@ EditorProject EditorSession::projectSnapshot() const
     return { clipSettings_, timelineClipStates_ };
 }
 
+const TimelineModel &EditorSession::timelineModel() const
+{
+    return timelineModel_;
+}
+
+int EditorSession::addTimelineClip(int mediaAssetIndex, int startFrame)
+{
+    TimelineClipState state;
+    state.startFrame = std::clamp(startFrame, 0, kMaximumTimelineFrame - state.durationFrames);
+    const int clipId = timelineModel_.addClip(mediaAssetIndex, state);
+    projectDirty_ = true;
+    notifyStateChanged(EditorChange::TimelineClip);
+    return clipId;
+}
+
 bool EditorSession::isProjectDirty() const
 {
     return projectDirty_;
@@ -138,6 +153,7 @@ void EditorSession::replaceProject(const EditorProject &project)
         clipSettings_[index] = clampedClipSettings(project.clipSettings[index]);
         timelineClipStates_[index] = clampedTimelineClipState(project.timelineClips[index]);
     }
+    timelineModel_.clear();
     projectDirty_ = false;
     undoHistory_.clear();
     redoHistory_.clear();

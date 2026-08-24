@@ -3,7 +3,10 @@
 #include "DemoProject.h"
 
 #include <QMouseEvent>
+#include <QMimeData>
 #include <QPainter>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 
 #include <algorithm>
 
@@ -15,6 +18,7 @@ constexpr int kTrackHeight = 66;
 constexpr int kTimelineFramesPerScaleUnit = 300;
 constexpr int kTimelineMaximumFrame = 600;
 constexpr int kTimelinePixelsAt100Percent = 334;
+constexpr char kMediaAssetMimeType[] = "application/x-mini-editor-media-index";
 
 int pixelsPerScaleUnit(const TimelineViewState &state)
 {
@@ -27,6 +31,7 @@ QtTimelineCanvas::QtTimelineCanvas(QWidget *parent)
     : QWidget(parent)
 {
     setMouseTracking(true);
+    setAcceptDrops(true);
     setAutoFillBackground(false);
 }
 
@@ -73,6 +78,17 @@ void QtTimelineCanvas::setTimelineClipEditedHandler(TimelineClipEditedHandler ha
     timelineClipEditedHandler_ = std::move(handler);
 }
 
+void QtTimelineCanvas::setTimelineClips(const std::vector<TimelineClip> &clips)
+{
+    timelineClips_ = clips;
+    update();
+}
+
+void QtTimelineCanvas::setMediaAssetDroppedHandler(MediaAssetDroppedHandler handler)
+{
+    mediaAssetDroppedHandler_ = std::move(handler);
+}
+
 void QtTimelineCanvas::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
@@ -92,16 +108,35 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
     painter.drawText(12, kRulerHeight + 38, QStringLiteral("V1"));
     painter.drawText(12, kRulerHeight + kTrackHeight + 46, QStringLiteral("A1"));
 
-    const auto &asset = demoAssets()[selectedAssetIndex_];
-    const QColor assetColor = QColor::fromRgb(asset.thumbnailColor).darker(
-        std::max(1, 10000 / std::max(1, clipSettings_.opacityPercent)));
+    const auto drawClip = [&painter, this](const TimelineClip &clip) {
+        const auto &asset = demoAssets()[std::clamp(clip.mediaAssetIndex, 0,
+                                                     static_cast<int>(demoAssets().size()) - 1)];
+        const QColor assetColor = QColor::fromRgb(asset.thumbnailColor).darker(100);
+        const int pixels = pixelsPerScaleUnit(viewState_);
+        const int left = kTimelineLeft + clip.state.startFrame * pixels
+            / kTimelineFramesPerScaleUnit;
+        const int clipWidth = std::max(1, clip.state.durationFrames * pixels
+            / kTimelineFramesPerScaleUnit);
+        const QRect clipRect(left, kRulerHeight + 5, clipWidth, kTrackHeight - 10);
+        painter.fillRect(clipRect, assetColor);
+        painter.setPen(QColor(180, 220, 255));
+        painter.drawRect(clipRect.adjusted(0, 0, -1, -1));
+        painter.setPen(Qt::white);
+        painter.drawText(clipRect.adjusted(10, 0, -10, 0),
+                         Qt::AlignCenter | Qt::TextSingleLine,
+                         QString::fromWCharArray(asset.name));
+    };
+    if (!timelineClips_.empty()) {
+        for (const TimelineClip &clip : timelineClips_)
+            drawClip(clip);
+    } else {
+        painter.setPen(QColor(166, 171, 183));
+        painter.drawText(QRect(kTimelineLeft, kRulerHeight,
+                               width() - kTimelineLeft - 12, kTrackHeight),
+                         Qt::AlignCenter, QStringLiteral("Drag media here to begin editing"));
+    }
+
     const QRect clipRect = timelineClipRect();
-    painter.fillRect(clipRect, assetColor);
-    painter.setPen(QColor(180, 220, 255));
-    painter.drawRect(clipRect.adjusted(0, 0, -1, -1));
-    painter.setPen(Qt::white);
-    painter.drawText(clipRect.adjusted(10, 0, -10, 0),
-                     Qt::AlignCenter | Qt::TextSingleLine, QString::fromWCharArray(asset.name));
 
     if (viewState_.isAudioTrackVisible)
         painter.fillRect(clipRect.left(), kRulerHeight + kTrackHeight + 24,
@@ -154,6 +189,25 @@ void QtTimelineCanvas::mouseReleaseEvent(QMouseEvent *event)
         update();
     }
     QWidget::mouseReleaseEvent(event);
+}
+
+void QtTimelineCanvas::dragEnterEvent(QDragEnterEvent *event)
+{
+    if (event->mimeData()->hasFormat(QString::fromLatin1(kMediaAssetMimeType)))
+        event->acceptProposedAction();
+    else
+        event->ignore();
+}
+
+void QtTimelineCanvas::dropEvent(QDropEvent *event)
+{
+    const QByteArray data = event->mimeData()->data(QString::fromLatin1(kMediaAssetMimeType));
+    bool ok = false;
+    const int mediaAssetIndex = QString::fromLatin1(data).toInt(&ok);
+    if (ok && mediaAssetDroppedHandler_)
+        mediaAssetDroppedHandler_(mediaAssetIndex, frameAtTimelineX(event->position().x()));
+    event->setDropAction(Qt::CopyAction);
+    event->accept();
 }
 
 int QtTimelineCanvas::frameAtRulerX(int x) const

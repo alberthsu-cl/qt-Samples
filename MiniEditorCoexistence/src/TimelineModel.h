@@ -24,6 +24,7 @@ public:
                 const TimelineClipState &state = {});
     bool moveClip(int clipId, const TimelineClipState &state);
     bool removeClip(int clipId);
+    void clear();
     const TimelineClip *findClip(int clipId) const;
 
 private:

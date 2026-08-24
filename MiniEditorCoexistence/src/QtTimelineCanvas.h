@@ -1,16 +1,19 @@
 #pragma once
 
 #include "ProjectState.h"
+#include "TimelineModel.h"
 
 #include <QWidget>
 
 #include <functional>
+#include <vector>
 
 class QtTimelineCanvas final : public QWidget
 {
 public:
     using SeekHandler = std::function<void(int frame)>;
     using TimelineClipEditedHandler = std::function<void(const TimelineClipState &state)>;
+    using MediaAssetDroppedHandler = std::function<void(int mediaAssetIndex, int frame)>;
 
     explicit QtTimelineCanvas(QWidget *parent = nullptr);
 
@@ -21,12 +24,16 @@ public:
     void setViewState(const TimelineViewState &state);
     void setSeekHandler(SeekHandler handler);
     void setTimelineClipEditedHandler(TimelineClipEditedHandler handler);
+    void setTimelineClips(const std::vector<TimelineClip> &clips);
+    void setMediaAssetDroppedHandler(MediaAssetDroppedHandler handler);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
 
 private:
     int frameAtRulerX(int x) const;
@@ -40,6 +47,8 @@ private:
     TimelineViewState viewState_;
     SeekHandler seekHandler_;
     TimelineClipEditedHandler timelineClipEditedHandler_;
+    MediaAssetDroppedHandler mediaAssetDroppedHandler_;
+    std::vector<TimelineClip> timelineClips_;
     bool isDraggingClip_ = false;
     int dragFrameOffset_ = 0;
     TimelineClipState dragPreviewState_;

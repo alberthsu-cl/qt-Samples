@@ -253,6 +253,15 @@ placed multiple times. The current compatibility UI still uses its older
 single-clip adapter; the next step will connect media-library drag/drop to
 `TimelineModel` and then remove that adapter.
 
+The Qt media library now provides a drag source, and the Qt timeline accepts
+the asset MIME type and inserts a clip at the drop frame. `EditorSession` owns
+the model and marks the project dirty when an insertion occurs. Serialization
+of these new placements is the next sub-step.
+
+An empty Qt timeline now shows a drag-and-drop hint instead of drawing the
+legacy default asset. The pure-MFC fallback intentionally remains unchanged
+until it is migrated to the new timeline model.
+
 ## Phase 12 — Flicker-free MFC playback painting
 
 `MfcDoubleBufferedPaint` draws MFC preview and timeline content to a

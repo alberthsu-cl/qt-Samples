@@ -2,6 +2,7 @@
 
 #include "EditorProject.h"
 #include "ProjectState.h"
+#include "TimelineModel.h"
 
 #include <cstddef>
 #include <functional>
@@ -47,6 +48,8 @@ public:
     const PlaybackState &playbackState() const;
     const TimelineViewState &timelineViewState() const;
     EditorProject projectSnapshot() const;
+    const TimelineModel &timelineModel() const;
+    int addTimelineClip(int mediaAssetIndex, int startFrame);
     bool isProjectDirty() const;
 
     void selectAsset(int assetIndex);
@@ -90,6 +93,7 @@ private:
 
     std::vector<ClipSettings> clipSettings_;
     std::vector<TimelineClipState> timelineClipStates_;
+    TimelineModel timelineModel_;
     int selectedAssetIndex_ = 0;
     PlaybackState playbackState_;
     TimelineViewState timelineViewState_;

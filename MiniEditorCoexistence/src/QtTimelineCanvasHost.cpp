@@ -81,3 +81,15 @@ void QtTimelineCanvasHost::setTimelineClipEditedHandler(TimelineClipEditedHandle
     if (canvas_)
         canvas_->setTimelineClipEditedHandler(std::move(handler));
 }
+
+void QtTimelineCanvasHost::setTimelineClips(const std::vector<TimelineClip> &clips)
+{
+    if (canvas_)
+        canvas_->setTimelineClips(clips);
+}
+
+void QtTimelineCanvasHost::setMediaAssetDroppedHandler(MediaAssetDroppedHandler handler)
+{
+    if (canvas_)
+        canvas_->setMediaAssetDroppedHandler(std::move(handler));
+}

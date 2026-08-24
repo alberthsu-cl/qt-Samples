@@ -204,6 +204,8 @@ void timelineModelStartsEmptyAndOwnsIndependentClipIds()
             "Moving a clip must update only that placement.");
     require(timeline.removeClip(firstClipId), "Timeline must remove a clip by ID.");
     require(timeline.clips().size() == 1, "Removing one clip must preserve the other.");
+    timeline.clear();
+    require(timeline.clips().empty(), "Clearing a timeline must remove all placements.");
 }
 
 void workspaceLayoutProtectsPaneBounds()

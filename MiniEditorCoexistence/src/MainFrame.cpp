@@ -74,6 +74,10 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     timelineCanvasHost_.setTimelineClipEditedHandler([this](const TimelineClipState &state) {
         editorSession_.updateSelectedTimelineClipState(state);
     });
+    timelineCanvasHost_.setMediaAssetDroppedHandler(
+        [this](int mediaAssetIndex, int frame) {
+            editorSession_.addTimelineClip(mediaAssetIndex, frame);
+        });
     if (!mediaLibraryHost_.create(GetSafeHwnd()))
         return -1;
     if (!propertiesHost_.create(GetSafeHwnd()))
@@ -375,6 +379,8 @@ void MainFrame::refreshEditorViews(EditorChange changes)
 #if MINI_EDITOR_USE_QT
     if (selectionChanged || timelineClipChanged)
         timelineCanvasHost_.setTimelineClipState(timelineClipState);
+    if (timelineClipChanged)
+        timelineCanvasHost_.setTimelineClips(editorSession_.timelineModel().clips());
     if (timelineViewChanged)
         timelineCanvasHost_.setViewState(timelineViewState);
     if (playbackChanged) {
