@@ -189,6 +189,21 @@ void MainFrame::OnFileExit()
     SendMessage(WM_CLOSE);
 }
 
+BOOL MainFrame::PreTranslateMessage(MSG *message)
+{
+    // This frame is created with CFrameWnd::Create rather than LoadFrame, so
+    // it does not automatically load the accelerator table from the resource.
+    // Translate it explicitly before normal MFC message processing.
+    static const HACCEL acceleratorTable = ::LoadAccelerators(
+        AfxGetResourceHandle(), MAKEINTRESOURCE(IDR_MAINFRAME));
+    if (acceleratorTable != nullptr
+        && ::TranslateAccelerator(GetSafeHwnd(), acceleratorTable, message)) {
+        return TRUE;
+    }
+
+    return CFrameWnd::PreTranslateMessage(message);
+}
+
 void MainFrame::layoutChildren(int clientWidth, int clientHeight)
 {
 #if !MINI_EDITOR_USE_QT

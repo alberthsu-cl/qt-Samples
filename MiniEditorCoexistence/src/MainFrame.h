@@ -43,6 +43,7 @@ protected:
     afx_msg void OnUpdateEditRedo(CCmdUI *commandUi);
     afx_msg void OnTimer(UINT_PTR timerId);
     afx_msg void OnFileExit();
+    BOOL PreTranslateMessage(MSG *message) override;
 
     DECLARE_MESSAGE_MAP()
 

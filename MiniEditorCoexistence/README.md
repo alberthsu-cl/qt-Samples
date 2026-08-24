@@ -192,6 +192,12 @@ state, not project-edit decisions. The MFC Edit menu invokes the same
 framework-neutral `undo()` and `redo()` operations, and enables each action
 only when the matching history stack has an entry.
 
+The MFC menu also has real keyboard handling: **Space** toggles playback,
+**Ctrl+Z** invokes Undo, and **Ctrl+Y** invokes Redo. The resource accelerator
+table documents these shortcuts; `MainFrame::PreTranslateMessage()` performs
+the translation because this sample creates its frame with `CFrameWnd::Create`
+rather than MFC's resource-loading `LoadFrame()` path.
+
 ## Phase 12 — Flicker-free MFC playback painting
 
 `MfcDoubleBufferedPaint` draws MFC preview and timeline content to a

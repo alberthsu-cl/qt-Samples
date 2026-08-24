@@ -9,11 +9,18 @@ BEGIN
     END
     POPUP "&Edit"
     BEGIN
-        MENUITEM "&Undo", ID_EDIT_UNDO
-        MENUITEM "&Redo", ID_EDIT_REDO
+        MENUITEM "&Undo\tCtrl+Z", ID_EDIT_UNDO
+        MENUITEM "&Redo\tCtrl+Y", ID_EDIT_REDO
     END
     POPUP "&Playback"
     BEGIN
-        MENUITEM "Play / Pause\tSpace", 32790, GRAYED
+        MENUITEM "&Play / Pause\tSpace", ID_PLAYBACK_TOGGLE
     END
+END
+
+IDR_MAINFRAME ACCELERATORS
+BEGIN
+    VK_SPACE, ID_PLAYBACK_TOGGLE, VIRTKEY
+    "Z", ID_EDIT_UNDO, VIRTKEY, CONTROL
+    "Y", ID_EDIT_REDO, VIRTKEY, CONTROL
 END
