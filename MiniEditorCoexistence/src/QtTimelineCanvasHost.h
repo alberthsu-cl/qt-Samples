@@ -17,6 +17,7 @@ public:
     using TimelineClipEditedHandler = std::function<void(int clipId,
                                                          const TimelineClipState &state)>;
     using MediaAssetDroppedHandler = std::function<void(int mediaAssetIndex, int frame)>;
+    using TimelineClipDeletedHandler = std::function<void(int clipId)>;
 
     QtTimelineCanvasHost();
     ~QtTimelineCanvasHost();
@@ -32,6 +33,7 @@ public:
     void setTimelineClipEditedHandler(TimelineClipEditedHandler handler);
     void setTimelineClips(const std::vector<TimelineClip> &clips);
     void setMediaAssetDroppedHandler(MediaAssetDroppedHandler handler);
+    void setTimelineClipDeletedHandler(TimelineClipDeletedHandler handler);
 
 private:
     std::unique_ptr<QtTimelineCanvas> canvas_;

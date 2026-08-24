@@ -15,6 +15,7 @@ public:
     using TimelineClipEditedHandler = std::function<void(int clipId,
                                                          const TimelineClipState &state)>;
     using MediaAssetDroppedHandler = std::function<void(int mediaAssetIndex, int frame)>;
+    using TimelineClipDeletedHandler = std::function<void(int clipId)>;
 
     explicit QtTimelineCanvas(QWidget *parent = nullptr);
 
@@ -27,12 +28,14 @@ public:
     void setTimelineClipEditedHandler(TimelineClipEditedHandler handler);
     void setTimelineClips(const std::vector<TimelineClip> &clips);
     void setMediaAssetDroppedHandler(MediaAssetDroppedHandler handler);
+    void setTimelineClipDeletedHandler(TimelineClipDeletedHandler handler);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
 
@@ -50,9 +53,11 @@ private:
     SeekHandler seekHandler_;
     TimelineClipEditedHandler timelineClipEditedHandler_;
     MediaAssetDroppedHandler mediaAssetDroppedHandler_;
+    TimelineClipDeletedHandler timelineClipDeletedHandler_;
     std::vector<TimelineClip> timelineClips_;
     bool isDraggingClip_ = false;
     int dragFrameOffset_ = 0;
     int dragClipId_ = 0;
+    int selectedClipId_ = 0;
     TimelineClipState dragPreviewState_;
 };

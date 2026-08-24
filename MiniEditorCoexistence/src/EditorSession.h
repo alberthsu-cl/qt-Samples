@@ -51,6 +51,7 @@ public:
     const TimelineModel &timelineModel() const;
     int addTimelineClip(int mediaAssetIndex, TimelineTrackType trackType, int startFrame);
     bool moveTimelineClip(int clipId, const TimelineClipState &state);
+    bool removeTimelineClip(int clipId);
     bool isProjectDirty() const;
 
     void selectAsset(int assetIndex);
@@ -78,7 +79,10 @@ public:
 private:
     enum class HistoryEntryType {
         ClipSettings,
-        TimelineClip
+        TimelineClip,
+        TimelineModelMove,
+        TimelineModelAdd,
+        TimelineModelRemove
     };
 
     struct HistoryEntry {
@@ -88,6 +92,8 @@ private:
         ClipSettings clipSettingsAfter;
         TimelineClipState timelineClipBefore;
         TimelineClipState timelineClipAfter;
+        int timelineClipId = 0;
+        TimelineClip timelineClip;
     };
 
     void notifyStateChanged(EditorChange changes);

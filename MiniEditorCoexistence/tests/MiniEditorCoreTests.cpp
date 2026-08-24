@@ -210,6 +210,53 @@ void timelineModelStartsEmptyAndOwnsIndependentClipIds()
     require(timeline.clips().empty(), "Clearing a timeline must remove all placements.");
 }
 
+void editorSessionUndoRedoTracksModelClipMoves()
+{
+    EditorSession session(2);
+    const int clipId = session.addTimelineClip(0, TimelineTrackType::Video, 0);
+    require(session.moveTimelineClip(clipId, { 150, 180 }),
+            "Moving a model clip must succeed through EditorSession.");
+    require(session.canUndo(), "A model clip move must become undoable.");
+    require(session.timelineModel().findClip(clipId)->state.startFrame == 150,
+            "Session must retain the moved model clip.");
+    require(session.undo(), "Undo must restore a model clip move.");
+    require(session.timelineModel().findClip(clipId)->state.startFrame == 0,
+            "Undo must restore the original model clip position.");
+    require(session.redo(), "Redo must reapply a model clip move.");
+    require(session.timelineModel().findClip(clipId)->state.startFrame == 150,
+            "Redo must restore the moved model clip position.");
+}
+
+void editorSessionUndoRedoTracksLibraryInsertion()
+{
+    EditorSession session(2);
+    const int clipId = session.addTimelineClip(1, TimelineTrackType::Video, 60);
+    require(clipId > 0, "Adding a library item must create a timeline clip.");
+    require(session.timelineModel().clips().size() == 1,
+            "The inserted clip must appear in the timeline model.");
+    require(session.undo(), "Undo must remove a library insertion.");
+    require(session.timelineModel().clips().empty(),
+            "Undo must remove the inserted timeline clip.");
+    require(session.redo(), "Redo must restore a library insertion.");
+    require(session.timelineModel().findClip(clipId) != nullptr,
+            "Redo must restore the same timeline clip ID.");
+}
+
+void editorSessionUndoRedoTracksClipDeletion()
+{
+    EditorSession session(2);
+    const int clipId = session.addTimelineClip(0, TimelineTrackType::Video, 30);
+    require(session.removeTimelineClip(clipId), "Deleting a timeline clip must succeed.");
+    require(session.timelineModel().clips().empty(),
+            "Deleting a timeline clip must remove it from the model.");
+    require(session.undo(), "Undo must restore a deleted timeline clip.");
+    require(session.timelineModel().findClip(clipId) != nullptr,
+            "Undo must restore the deleted clip identity.");
+    require(session.redo(), "Redo must delete the timeline clip again.");
+    require(session.timelineModel().findClip(clipId) == nullptr,
+            "Redo must remove the deleted clip again.");
+}
+
 void workspaceLayoutProtectsPaneBounds()
 {
     WorkspaceLayout layout;
@@ -249,6 +296,9 @@ int main()
         editorSessionUndoRedoTracksTimelineClipMoves();
         projectDocumentRoundTripsEditState();
         timelineModelStartsEmptyAndOwnsIndependentClipIds();
+        editorSessionUndoRedoTracksModelClipMoves();
+        editorSessionUndoRedoTracksLibraryInsertion();
+        editorSessionUndoRedoTracksClipDeletion();
         workspaceLayoutProtectsPaneBounds();
         std::cout << "MiniEditorCoreTests passed.\n";
         return 0;

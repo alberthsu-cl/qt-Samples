@@ -84,6 +84,8 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
                                                    : TimelineTrackType::Video,
                                            frame);
         });
+    timelineCanvasHost_.setTimelineClipDeletedHandler(
+        [this](int clipId) { editorSession_.removeTimelineClip(clipId); });
     if (!mediaLibraryHost_.create(GetSafeHwnd()))
         return -1;
     if (!propertiesHost_.create(GetSafeHwnd()))

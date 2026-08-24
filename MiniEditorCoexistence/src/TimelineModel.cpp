@@ -15,6 +15,16 @@ int TimelineModel::addClip(int mediaAssetIndex, TimelineTrackType trackType,
     return clipId;
 }
 
+bool TimelineModel::restoreClip(const TimelineClip &clip)
+{
+    if (clip.id <= 0 || findClip(clip.id) != nullptr)
+        return false;
+
+    clips_.push_back(clip);
+    nextClipId_ = std::max(nextClipId_, clip.id + 1);
+    return true;
+}
+
 bool TimelineModel::moveClip(int clipId, const TimelineClipState &state)
 {
     const auto iterator = std::find_if(clips_.begin(), clips_.end(),

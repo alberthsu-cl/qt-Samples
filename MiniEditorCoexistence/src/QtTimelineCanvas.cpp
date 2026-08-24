@@ -7,6 +7,7 @@
 #include <QPainter>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QKeyEvent>
 
 #include <algorithm>
 
@@ -32,6 +33,7 @@ QtTimelineCanvas::QtTimelineCanvas(QWidget *parent)
 {
     setMouseTracking(true);
     setAcceptDrops(true);
+    setFocusPolicy(Qt::StrongFocus);
     setAutoFillBackground(false);
 }
 
@@ -87,6 +89,11 @@ void QtTimelineCanvas::setTimelineClips(const std::vector<TimelineClip> &clips)
 void QtTimelineCanvas::setMediaAssetDroppedHandler(MediaAssetDroppedHandler handler)
 {
     mediaAssetDroppedHandler_ = std::move(handler);
+}
+
+void QtTimelineCanvas::setTimelineClipDeletedHandler(TimelineClipDeletedHandler handler)
+{
+    timelineClipDeletedHandler_ = std::move(handler);
 }
 
 void QtTimelineCanvas::paintEvent(QPaintEvent *)
@@ -157,6 +164,7 @@ void QtTimelineCanvas::mousePressEvent(QMouseEvent *event)
     if (point.y() < kRulerHeight && seekHandler_) {
         seekHandler_(frameAtRulerX(point.x()));
     } else if (const TimelineClip *clip = clipAt(point)) {
+        selectedClipId_ = clip->id;
         isDraggingClip_ = true;
         dragClipId_ = clip->id;
         dragPreviewState_ = clip->state;
@@ -191,6 +199,18 @@ void QtTimelineCanvas::mouseReleaseEvent(QMouseEvent *event)
         update();
     }
     QWidget::mouseReleaseEvent(event);
+}
+
+void QtTimelineCanvas::keyPressEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_Delete && selectedClipId_ != 0
+        && timelineClipDeletedHandler_) {
+        timelineClipDeletedHandler_(selectedClipId_);
+        selectedClipId_ = 0;
+        event->accept();
+        return;
+    }
+    QWidget::keyPressEvent(event);
 }
 
 void QtTimelineCanvas::dragEnterEvent(QDragEnterEvent *event)

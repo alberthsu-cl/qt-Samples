@@ -93,3 +93,9 @@ void QtTimelineCanvasHost::setMediaAssetDroppedHandler(MediaAssetDroppedHandler 
     if (canvas_)
         canvas_->setMediaAssetDroppedHandler(std::move(handler));
 }
+
+void QtTimelineCanvasHost::setTimelineClipDeletedHandler(TimelineClipDeletedHandler handler)
+{
+    if (canvas_)
+        canvas_->setTimelineClipDeletedHandler(std::move(handler));
+}

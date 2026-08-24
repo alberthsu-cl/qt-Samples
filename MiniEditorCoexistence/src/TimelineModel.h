@@ -29,6 +29,7 @@ public:
     int addClip(int mediaAssetIndex,
                 TimelineTrackType trackType,
                 const TimelineClipState &state = {});
+    bool restoreClip(const TimelineClip &clip);
     bool moveClip(int clipId, const TimelineClipState &state);
     bool removeClip(int clipId);
     void clear();

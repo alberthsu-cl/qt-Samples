@@ -258,6 +258,10 @@ go to V1, while audio assets go to A1; both lanes remain empty until a clip is
 dropped. The model test verifies that the same timeline can contain both track
 types.
 
+Selecting a Qt timeline clip and pressing Delete now removes it through
+`EditorSession`. Insertion, movement, and deletion all participate in the
+same Undo/Redo history and preserve the clip ID when restored.
+
 The Qt media library now provides a drag source, and the Qt timeline accepts
 the asset MIME type and inserts a clip at the drop frame. `EditorSession` owns
 the model and marks the project dirty when an insertion occurs. Serialization

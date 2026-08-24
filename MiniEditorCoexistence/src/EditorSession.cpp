@@ -94,17 +94,50 @@ int EditorSession::addTimelineClip(int mediaAssetIndex, TimelineTrackType trackT
     TimelineClipState state;
     state.startFrame = std::clamp(startFrame, 0, kMaximumTimelineFrame - state.durationFrames);
     const int clipId = timelineModel_.addClip(mediaAssetIndex, trackType, state);
+    const TimelineClip *addedClip = timelineModel_.findClip(clipId);
+    if (addedClip == nullptr)
+        return 0;
+
     projectDirty_ = true;
+    undoHistory_.push_back({ HistoryEntryType::TimelineModelAdd, selectedAssetIndex_,
+                             {}, {}, {}, {}, clipId, *addedClip });
+    redoHistory_.clear();
     notifyStateChanged(EditorChange::TimelineClip);
     return clipId;
 }
 
 bool EditorSession::moveTimelineClip(int clipId, const TimelineClipState &state)
 {
-    if (!timelineModel_.moveClip(clipId, state))
+    const TimelineClip *clip = timelineModel_.findClip(clipId);
+    if (clip == nullptr || hasSameTimelineClipState(clip->state, state))
+        return false;
+
+    const TimelineClipState previousState = clip->state;
+    if (!timelineModel_.moveClip(clipId, clampedTimelineClipState(state)))
         return false;
 
     projectDirty_ = true;
+    undoHistory_.push_back({ HistoryEntryType::TimelineModelMove, selectedAssetIndex_,
+                             {}, {}, previousState, clampedTimelineClipState(state), clipId });
+    redoHistory_.clear();
+    notifyStateChanged(EditorChange::TimelineClip);
+    return true;
+}
+
+bool EditorSession::removeTimelineClip(int clipId)
+{
+    const TimelineClip *clip = timelineModel_.findClip(clipId);
+    if (clip == nullptr)
+        return false;
+
+    const TimelineClip removedClip = *clip;
+    if (!timelineModel_.removeClip(clipId))
+        return false;
+
+    projectDirty_ = true;
+    undoHistory_.push_back({ HistoryEntryType::TimelineModelRemove, selectedAssetIndex_,
+                             {}, {}, {}, {}, clipId, removedClip });
+    redoHistory_.clear();
     notifyStateChanged(EditorChange::TimelineClip);
     return true;
 }
@@ -199,8 +232,17 @@ bool EditorSession::undo()
     if (entry.type == HistoryEntryType::ClipSettings) {
         clipSettings_[entry.assetIndex] = entry.clipSettingsBefore;
         changes = changes | EditorChange::ClipSettings;
-    } else {
+    } else if (entry.type == HistoryEntryType::TimelineClip) {
         timelineClipStates_[entry.assetIndex] = entry.timelineClipBefore;
+        changes = changes | EditorChange::TimelineClip;
+    } else if (entry.type == HistoryEntryType::TimelineModelMove) {
+        timelineModel_.moveClip(entry.timelineClipId, entry.timelineClipBefore);
+        changes = changes | EditorChange::TimelineClip;
+    } else if (entry.type == HistoryEntryType::TimelineModelAdd) {
+        timelineModel_.removeClip(entry.timelineClipId);
+        changes = changes | EditorChange::TimelineClip;
+    } else {
+        timelineModel_.restoreClip(entry.timelineClip);
         changes = changes | EditorChange::TimelineClip;
     }
     selectedAssetIndex_ = entry.assetIndex;
@@ -221,8 +263,17 @@ bool EditorSession::redo()
     if (entry.type == HistoryEntryType::ClipSettings) {
         clipSettings_[entry.assetIndex] = entry.clipSettingsAfter;
         changes = changes | EditorChange::ClipSettings;
-    } else {
+    } else if (entry.type == HistoryEntryType::TimelineClip) {
         timelineClipStates_[entry.assetIndex] = entry.timelineClipAfter;
+        changes = changes | EditorChange::TimelineClip;
+    } else if (entry.type == HistoryEntryType::TimelineModelMove) {
+        timelineModel_.moveClip(entry.timelineClipId, entry.timelineClipAfter);
+        changes = changes | EditorChange::TimelineClip;
+    } else if (entry.type == HistoryEntryType::TimelineModelAdd) {
+        timelineModel_.restoreClip(entry.timelineClip);
+        changes = changes | EditorChange::TimelineClip;
+    } else {
+        timelineModel_.removeClip(entry.timelineClipId);
         changes = changes | EditorChange::TimelineClip;
     }
     selectedAssetIndex_ = entry.assetIndex;
