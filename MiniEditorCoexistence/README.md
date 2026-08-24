@@ -244,6 +244,15 @@ native layout and `EditorSession` still owns all state and Undo/Redo history.
 The pure-MFC configuration retains `MfcTimelineCanvas`, making the two
 implementations easy to compare while studying the migration boundary.
 
+## Phase 19 — Timeline model foundation
+
+`TimelineModel` is the first step toward a real editor timeline. It starts
+empty and stores independent `TimelineClip` records, each with its own ID,
+source media-asset index, and timing. This allows the same source asset to be
+placed multiple times. The current compatibility UI still uses its older
+single-clip adapter; the next step will connect media-library drag/drop to
+`TimelineModel` and then remove that adapter.
+
 ## Phase 12 — Flicker-free MFC playback painting
 
 `MfcDoubleBufferedPaint` draws MFC preview and timeline content to a

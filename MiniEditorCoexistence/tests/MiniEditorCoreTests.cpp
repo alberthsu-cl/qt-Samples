@@ -1,5 +1,6 @@
 #include "EditorSession.h"
 #include "ProjectSerializer.h"
+#include "TimelineModel.h"
 #include "WorkspaceLayout.h"
 
 #include <exception>
@@ -185,6 +186,26 @@ void projectDocumentRoundTripsEditState()
     require(!destinationSession.isProjectDirty(), "Marking a project saved must clear dirty state.");
 }
 
+void timelineModelStartsEmptyAndOwnsIndependentClipIds()
+{
+    TimelineModel timeline;
+    require(timeline.clips().empty(), "A new timeline must start empty.");
+
+    const int firstClipId = timeline.addClip(2);
+    const int secondClipId = timeline.addClip(2, { 180, 90 });
+    require(firstClipId != secondClipId, "Each timeline placement needs a unique ID.");
+    require(timeline.clips().size() == 2, "Timeline must retain multiple placements.");
+    require(timeline.findClip(firstClipId)->mediaAssetIndex == 2,
+            "A timeline clip must reference its source media asset.");
+
+    require(timeline.moveClip(secondClipId, { 240, 120 }),
+            "Timeline must move an existing clip by ID.");
+    require(timeline.findClip(secondClipId)->state.startFrame == 240,
+            "Moving a clip must update only that placement.");
+    require(timeline.removeClip(firstClipId), "Timeline must remove a clip by ID.");
+    require(timeline.clips().size() == 1, "Removing one clip must preserve the other.");
+}
+
 void workspaceLayoutProtectsPaneBounds()
 {
     WorkspaceLayout layout;
@@ -223,6 +244,7 @@ int main()
         editorSessionUndoRedoTracksOnlyClipEdits();
         editorSessionUndoRedoTracksTimelineClipMoves();
         projectDocumentRoundTripsEditState();
+        timelineModelStartsEmptyAndOwnsIndependentClipIds();
         workspaceLayoutProtectsPaneBounds();
         std::cout << "MiniEditorCoreTests passed.\n";
         return 0;
