@@ -6,6 +6,8 @@
 
 namespace {
 
+constexpr int kVideoDurationFrames = 300;
+
 CString timecodeText(const PlaybackState &state)
 {
     const int frames = state.currentFrame % state.framesPerSecond;
@@ -17,6 +19,13 @@ CString timecodeText(const PlaybackState &state)
     CString text;
     text.Format(_T("%02d:%02d:%02d:%02d"), hours, minutes, seconds, frames);
     return text;
+}
+
+CString durationText(const PlaybackState &state)
+{
+    PlaybackState durationState = state;
+    durationState.currentFrame = kVideoDurationFrames;
+    return timecodeText(durationState);
 }
 
 } // namespace
@@ -95,4 +104,19 @@ void MfcPreviewCanvas::drawContent(CDC &deviceContext, const CRect &clientRect) 
              CRect(availableRect.right - 140, availableRect.top + 8,
                    availableRect.right - 8, availableRect.top + 30),
              RGB(255, 255, 255), DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+    if (playbackState().isPlaying) {
+        const CRect overlayRect(videoRect.left + (videoRect.Width() - 250) / 2,
+                                videoRect.top + (videoRect.Height() - 54) / 2,
+                                videoRect.left + (videoRect.Width() + 250) / 2,
+                                videoRect.top + (videoRect.Height() + 54) / 2);
+        deviceContext.FillSolidRect(overlayRect, RGB(18, 20, 24));
+        deviceContext.Draw3dRect(overlayRect, RGB(150, 155, 165), RGB(150, 155, 165));
+
+        CString overlayText;
+        overlayText.Format(_T("%s / %s"), timecodeText(playbackState()),
+                           durationText(playbackState()));
+        drawText(deviceContext, overlayText, overlayRect, RGB(255, 255, 255),
+                 DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    }
 }

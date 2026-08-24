@@ -227,6 +227,13 @@ ask whether to Save, Discard, or Cancel before replacing or closing a dirty
 project. Save clears the dirty state, the title displays `*` while modified,
 and the Save command is disabled when there is nothing to save.
 
+## Phase 17 — Playback preview overlay
+
+While playback is active, `MfcPreviewCanvas` draws a centered time overlay in
+the preview: current time followed by the sample duration. It is rendered by
+the existing double-buffered MFC canvas, so the overlay updates with the same
+flicker-free timer repaint as the preview and timeline playhead.
+
 ## Phase 12 — Flicker-free MFC playback painting
 
 `MfcDoubleBufferedPaint` draws MFC preview and timeline content to a
