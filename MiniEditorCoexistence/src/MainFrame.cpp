@@ -193,8 +193,17 @@ void MainFrame::OnFileExit()
     SendMessage(WM_CLOSE);
 }
 
+void MainFrame::OnClose()
+{
+    if (confirmSaveBeforeDestructiveAction())
+        CFrameWnd::OnClose();
+}
+
 void MainFrame::OnFileNew()
 {
+    if (!confirmSaveBeforeDestructiveAction())
+        return;
+
     editorSession_.replaceProject(EditorProject::createDefault(demoAssets().size()));
     projectFilePath_.clear();
     updateWindowTitle();
@@ -202,6 +211,9 @@ void MainFrame::OnFileNew()
 
 void MainFrame::OnFileOpen()
 {
+    if (!confirmSaveBeforeDestructiveAction())
+        return;
+
     CFileDialog dialog(TRUE, L"mini-editor.json", nullptr,
                        OFN_FILEMUSTEXIST | OFN_HIDEREADONLY,
                        L"Mini Editor Project (*.mini-editor.json)|*.mini-editor.json||", this);
@@ -219,6 +231,11 @@ void MainFrame::OnFileSave()
 void MainFrame::OnFileSaveAs()
 {
     saveProject(true);
+}
+
+void MainFrame::OnUpdateFileSave(CCmdUI *commandUi)
+{
+    commandUi->Enable(editorSession_.isProjectDirty());
 }
 
 BOOL MainFrame::PreTranslateMessage(MSG *message)
@@ -373,6 +390,8 @@ void MainFrame::refreshEditorViews(EditorChange changes)
 #endif
     if (selectionChanged || clipSettingsChanged || playbackChanged)
         updateStatusText();
+    if (clipSettingsChanged || timelineClipChanged)
+        updateWindowTitle();
 }
 
 void MainFrame::moveLeftSplitter(int parentX)
@@ -453,6 +472,7 @@ bool MainFrame::saveProject(bool chooseFilePath)
 
     std::wstring errorMessage;
     if (ProjectSerializer::save(projectFilePath_, editorSession_.projectSnapshot(), &errorMessage)) {
+        editorSession_.markProjectSaved();
         updateWindowTitle();
         return true;
     }
@@ -487,7 +507,24 @@ void MainFrame::updateWindowTitle()
         title += _T(" - ");
         title += projectFilePath_.filename().c_str();
     }
+    if (editorSession_.isProjectDirty())
+        title += _T(" *");
     SetWindowText(title);
+}
+
+bool MainFrame::confirmSaveBeforeDestructiveAction()
+{
+    if (!editorSession_.isProjectDirty())
+        return true;
+
+    const int answer = AfxMessageBox(
+        _T("The project has unsaved changes. Save them before continuing?"),
+        MB_YESNOCANCEL | MB_ICONQUESTION);
+    if (answer == IDCANCEL)
+        return false;
+    if (answer == IDYES)
+        return saveProject(false);
+    return true;
 }
 
 BEGIN_MESSAGE_MAP(MainFrame, CFrameWnd)
@@ -507,5 +544,7 @@ BEGIN_MESSAGE_MAP(MainFrame, CFrameWnd)
     ON_COMMAND(ID_FILE_OPEN, &MainFrame::OnFileOpen)
     ON_COMMAND(ID_FILE_SAVE, &MainFrame::OnFileSave)
     ON_COMMAND(ID_FILE_SAVE_AS, &MainFrame::OnFileSaveAs)
+    ON_UPDATE_COMMAND_UI(ID_FILE_SAVE, &MainFrame::OnUpdateFileSave)
     ON_COMMAND(ID_FILE_EXIT, &MainFrame::OnFileExit)
+    ON_WM_CLOSE()
 END_MESSAGE_MAP()

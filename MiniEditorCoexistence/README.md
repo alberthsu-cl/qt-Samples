@@ -220,6 +220,13 @@ only presents MFC file dialogs and messages; the serializer and the session
 know nothing about MFC or Qt. Loading a project clears Undo/Redo history and
 restores every editable clip state in one session notification.
 
+## Phase 16 — Document dirty state
+
+`EditorSession` tracks whether project edits are unsaved. New/Open/Exit now
+ask whether to Save, Discard, or Cancel before replacing or closing a dirty
+project. Save clears the dirty state, the title displays `*` while modified,
+and the Save command is disabled when there is nothing to save.
+
 ## Phase 12 — Flicker-free MFC playback painting
 
 `MfcDoubleBufferedPaint` draws MFC preview and timeline content to a

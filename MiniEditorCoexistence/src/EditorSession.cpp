@@ -83,6 +83,11 @@ EditorProject EditorSession::projectSnapshot() const
     return { clipSettings_, timelineClipStates_ };
 }
 
+bool EditorSession::isProjectDirty() const
+{
+    return projectDirty_;
+}
+
 void EditorSession::selectAsset(int assetIndex)
 {
     selectedAssetIndex_ = std::clamp(assetIndex, 0,
@@ -98,6 +103,7 @@ void EditorSession::updateSelectedClipSettings(const ClipSettings &settings)
         return;
 
     clipSettings_[selectedAssetIndex_] = updatedSettings;
+    projectDirty_ = true;
     undoHistory_.push_back({ HistoryEntryType::ClipSettings, selectedAssetIndex_,
                              previousSettings, updatedSettings, {}, {} });
     redoHistory_.clear();
@@ -112,6 +118,7 @@ void EditorSession::updateSelectedTimelineClipState(const TimelineClipState &sta
         return;
 
     timelineClipStates_[selectedAssetIndex_] = updatedState;
+    projectDirty_ = true;
     undoHistory_.push_back({ HistoryEntryType::TimelineClip, selectedAssetIndex_,
                              {}, {}, previousState, updatedState });
     redoHistory_.clear();
@@ -131,11 +138,17 @@ void EditorSession::replaceProject(const EditorProject &project)
         clipSettings_[index] = clampedClipSettings(project.clipSettings[index]);
         timelineClipStates_[index] = clampedTimelineClipState(project.timelineClips[index]);
     }
+    projectDirty_ = false;
     undoHistory_.clear();
     redoHistory_.clear();
     playbackState_.isPlaying = false;
     playbackState_.currentFrame = kFirstFrame;
     notifyStateChanged(EditorChange::All);
+}
+
+void EditorSession::markProjectSaved()
+{
+    projectDirty_ = false;
 }
 
 bool EditorSession::canUndo() const
@@ -164,6 +177,7 @@ bool EditorSession::undo()
         changes = changes | EditorChange::TimelineClip;
     }
     selectedAssetIndex_ = entry.assetIndex;
+    projectDirty_ = true;
     redoHistory_.push_back(entry);
     notifyStateChanged(changes);
     return true;
@@ -185,6 +199,7 @@ bool EditorSession::redo()
         changes = changes | EditorChange::TimelineClip;
     }
     selectedAssetIndex_ = entry.assetIndex;
+    projectDirty_ = true;
     undoHistory_.push_back(entry);
     notifyStateChanged(changes);
     return true;

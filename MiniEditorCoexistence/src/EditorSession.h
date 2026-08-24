@@ -47,11 +47,13 @@ public:
     const PlaybackState &playbackState() const;
     const TimelineViewState &timelineViewState() const;
     EditorProject projectSnapshot() const;
+    bool isProjectDirty() const;
 
     void selectAsset(int assetIndex);
     void updateSelectedClipSettings(const ClipSettings &settings);
     void updateSelectedTimelineClipState(const TimelineClipState &state);
     void replaceProject(const EditorProject &project);
+    void markProjectSaved();
     bool canUndo() const;
     bool canRedo() const;
     bool undo();
@@ -91,6 +93,7 @@ private:
     int selectedAssetIndex_ = 0;
     PlaybackState playbackState_;
     TimelineViewState timelineViewState_;
+    bool projectDirty_ = false;
     std::vector<HistoryEntry> undoHistory_;
     std::vector<HistoryEntry> redoHistory_;
     struct Observer {

@@ -50,6 +50,8 @@ protected:
     afx_msg void OnFileOpen();
     afx_msg void OnFileSave();
     afx_msg void OnFileSaveAs();
+    afx_msg void OnClose();
+    afx_msg void OnUpdateFileSave(CCmdUI *commandUi);
     BOOL PreTranslateMessage(MSG *message) override;
 
     DECLARE_MESSAGE_MAP()
@@ -67,6 +69,7 @@ private:
     void saveWorkspaceSettings() const;
     bool saveProject(bool chooseFilePath);
     bool openProject(const std::filesystem::path &path);
+    bool confirmSaveBeforeDestructiveAction();
     void updateWindowTitle();
 
     CStatusBar statusBar_;

@@ -154,6 +154,7 @@ void projectDocumentRoundTripsEditState()
     settings.opacityPercent = 55;
     settings.position = ClipPosition::BottomRight;
     sourceSession.updateSelectedClipSettings(settings);
+    require(sourceSession.isProjectDirty(), "An edit must mark the project dirty.");
     TimelineClipState timelineClip = sourceSession.selectedTimelineClipState();
     timelineClip.startFrame = 240;
     sourceSession.updateSelectedTimelineClipState(timelineClip);
@@ -179,6 +180,9 @@ void projectDocumentRoundTripsEditState()
     require(destinationSession.selectedTimelineClipState().startFrame == 240,
             "Loaded project must restore timeline position.");
     require(!destinationSession.canUndo(), "Loading a project must begin with clean edit history.");
+    require(!destinationSession.isProjectDirty(), "Loading a project must clear dirty state.");
+    destinationSession.markProjectSaved();
+    require(!destinationSession.isProjectDirty(), "Marking a project saved must clear dirty state.");
 }
 
 void workspaceLayoutProtectsPaneBounds()
