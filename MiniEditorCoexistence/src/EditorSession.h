@@ -14,7 +14,8 @@ enum class EditorChange : unsigned int {
     ClipSettings = 1 << 1,
     Playback = 1 << 2,
     TimelineView = 1 << 3,
-    All = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3)
+    TimelineClip = 1 << 4,
+    All = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4)
 };
 
 constexpr EditorChange operator|(EditorChange left, EditorChange right)
@@ -41,11 +42,13 @@ public:
 
     int selectedAssetIndex() const;
     const ClipSettings &selectedClipSettings() const;
+    const TimelineClipState &selectedTimelineClipState() const;
     const PlaybackState &playbackState() const;
     const TimelineViewState &timelineViewState() const;
 
     void selectAsset(int assetIndex);
     void updateSelectedClipSettings(const ClipSettings &settings);
+    void updateSelectedTimelineClipState(const TimelineClipState &state);
     bool canUndo() const;
     bool canRedo() const;
     bool undo();
@@ -64,20 +67,29 @@ public:
     void removeObserver(ObserverId observerId);
 
 private:
-    struct ClipSettingsHistoryEntry {
+    enum class HistoryEntryType {
+        ClipSettings,
+        TimelineClip
+    };
+
+    struct HistoryEntry {
+        HistoryEntryType type;
         int assetIndex;
-        ClipSettings before;
-        ClipSettings after;
+        ClipSettings clipSettingsBefore;
+        ClipSettings clipSettingsAfter;
+        TimelineClipState timelineClipBefore;
+        TimelineClipState timelineClipAfter;
     };
 
     void notifyStateChanged(EditorChange changes);
 
     std::vector<ClipSettings> clipSettings_;
+    std::vector<TimelineClipState> timelineClipStates_;
     int selectedAssetIndex_ = 0;
     PlaybackState playbackState_;
     TimelineViewState timelineViewState_;
-    std::vector<ClipSettingsHistoryEntry> undoHistory_;
-    std::vector<ClipSettingsHistoryEntry> redoHistory_;
+    std::vector<HistoryEntry> undoHistory_;
+    std::vector<HistoryEntry> redoHistory_;
     struct Observer {
         ObserverId id;
         StateChangedHandler handler;

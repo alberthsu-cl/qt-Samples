@@ -7,10 +7,23 @@
 #include <algorithm>
 #include <utility>
 
+namespace {
+
+constexpr int kTimelineLeft = 76;
+constexpr int kRulerHeight = 30;
+constexpr int kTrackHeight = 66;
+constexpr int kTimelineFramesPerScaleUnit = 300;
+constexpr int kTimelineMaximumFrame = 600;
+constexpr int kTimelinePixelsAt100Percent = 334;
+
+} // namespace
+
 BEGIN_MESSAGE_MAP(MfcTimelineCanvas, CWnd)
     ON_WM_PAINT()
     ON_WM_ERASEBKGND()
     ON_WM_LBUTTONDOWN()
+    ON_WM_MOUSEMOVE()
+    ON_WM_LBUTTONUP()
 END_MESSAGE_MAP()
 
 bool MfcTimelineCanvas::Create(CWnd *parent, UINT controlId)
@@ -36,6 +49,14 @@ void MfcTimelineCanvas::setClipSettings(const ClipSettings &settings)
     Invalidate(FALSE);
 }
 
+void MfcTimelineCanvas::setTimelineClipState(const TimelineClipState &state)
+{
+    timelineClipState_ = state;
+    if (!isDraggingClip_)
+        dragPreviewState_ = state;
+    Invalidate(FALSE);
+}
+
 void MfcTimelineCanvas::setPlaybackState(const PlaybackState &state)
 {
     playbackState_ = state;
@@ -53,28 +74,85 @@ void MfcTimelineCanvas::setSeekHandler(SeekHandler handler)
     seekHandler_ = std::move(handler);
 }
 
+void MfcTimelineCanvas::setTimelineClipEditedHandler(TimelineClipEditedHandler handler)
+{
+    timelineClipEditedHandler_ = std::move(handler);
+}
+
 void MfcTimelineCanvas::OnLButtonDown(UINT flags, CPoint point)
 {
-    constexpr int kRulerHeight = 30;
     if (point.y < kRulerHeight && seekHandler_)
         seekHandler_(frameAtRulerX(point.x));
+    else if (timelineClipRect().PtInRect(point)) {
+        isDraggingClip_ = true;
+        dragPreviewState_ = timelineClipState_;
+        dragFrameOffset_ = frameAtTimelineX(point.x) - dragPreviewState_.startFrame;
+        SetCapture();
+    }
 
     CWnd::OnLButtonDown(flags, point);
 }
 
+void MfcTimelineCanvas::OnMouseMove(UINT flags, CPoint point)
+{
+    if (isDraggingClip_ && GetCapture() == this) {
+        dragPreviewState_.startFrame = std::clamp(
+            frameAtTimelineX(point.x) - dragFrameOffset_, 0,
+            kTimelineMaximumFrame - dragPreviewState_.durationFrames);
+        Invalidate(FALSE);
+    }
+
+    CWnd::OnMouseMove(flags, point);
+}
+
+void MfcTimelineCanvas::OnLButtonUp(UINT flags, CPoint point)
+{
+    if (isDraggingClip_) {
+        dragPreviewState_.startFrame = std::clamp(
+            frameAtTimelineX(point.x) - dragFrameOffset_, 0,
+            kTimelineMaximumFrame - dragPreviewState_.durationFrames);
+        ReleaseCapture();
+        isDraggingClip_ = false;
+
+        if (timelineClipEditedHandler_)
+            timelineClipEditedHandler_(dragPreviewState_);
+        Invalidate(FALSE);
+    }
+
+    CWnd::OnLButtonUp(flags, point);
+}
+
 int MfcTimelineCanvas::frameAtRulerX(int x) const
 {
-    constexpr int kClipLeft = 76;
-    constexpr int kClipDurationFrames = 300;
-    constexpr int kClipWidthAt100Percent = 334;
-
     // The same zoom-aware width is used by OnPaint(). Keep this conversion in
     // the canvas: it owns pixel coordinates, while MainFrame owns frame state.
     const int clipWidth = std::max(1,
-        kClipWidthAt100Percent * viewState_.zoomPercent / 100);
-    const int relativeX = std::clamp(x - kClipLeft, 0, clipWidth);
-    return std::clamp(relativeX * kClipDurationFrames / clipWidth,
-                      0, kClipDurationFrames - 1);
+        kTimelinePixelsAt100Percent * viewState_.zoomPercent / 100);
+    const int relativeX = std::clamp(x - kTimelineLeft, 0, clipWidth);
+    return std::clamp(relativeX * kTimelineFramesPerScaleUnit / clipWidth,
+                      0, kTimelineFramesPerScaleUnit - 1);
+}
+
+int MfcTimelineCanvas::frameAtTimelineX(int x) const
+{
+    const int pixelsPerScaleUnit = std::max(1,
+        kTimelinePixelsAt100Percent * viewState_.zoomPercent / 100);
+    return std::clamp((x - kTimelineLeft) * kTimelineFramesPerScaleUnit
+                          / pixelsPerScaleUnit,
+                      0, kTimelineMaximumFrame);
+}
+
+CRect MfcTimelineCanvas::timelineClipRect() const
+{
+    const TimelineClipState &clipState = isDraggingClip_ ? dragPreviewState_ : timelineClipState_;
+    const int pixelsPerScaleUnit = std::max(1,
+        kTimelinePixelsAt100Percent * viewState_.zoomPercent / 100);
+    const int clipLeft = kTimelineLeft + clipState.startFrame * pixelsPerScaleUnit
+        / kTimelineFramesPerScaleUnit;
+    const int clipWidth = std::max(1, clipState.durationFrames * pixelsPerScaleUnit
+        / kTimelineFramesPerScaleUnit);
+    return CRect(clipLeft, kRulerHeight + 5, clipLeft + clipWidth,
+                 kRulerHeight + kTrackHeight - 5);
 }
 
 void MfcTimelineCanvas::OnPaint()
@@ -87,8 +165,6 @@ void MfcTimelineCanvas::OnPaint()
     deviceContext.FillSolidRect(clientRect, EditorUi::kPanelBackground);
     deviceContext.Draw3dRect(clientRect, EditorUi::kPanelBorder, EditorUi::kPanelBorder);
 
-    constexpr int kRulerHeight = 30;
-    constexpr int kTrackHeight = 66;
     const int rulerTop = 0;
     const int trackTop = rulerTop + kRulerHeight;
     const int audioTrackTop = trackTop + kTrackHeight + 8;
@@ -115,12 +191,8 @@ void MfcTimelineCanvas::OnPaint()
                            DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
     const auto &asset = demoAssets()[selectedAssetIndex_];
-    const int availableClipWidth = std::max(1, clientRect.Width() - 76);
-    // Timeline zoom changes the visual duration width. Clip transform scale is
-    // a preview property and must not change the clip's timeline duration.
-    const int clipWidth = std::min(availableClipWidth,
-        334 * viewState_.zoomPercent / 100);
-    const CRect clipRect(76, trackTop + 5, 76 + clipWidth, trackTop + kTrackHeight - 5);
+    const CRect clipRect = timelineClipRect();
+    const int clipWidth = clipRect.Width();
     const COLORREF fadedThumbnailColor = RGB(
         GetRValue(asset.thumbnailColor) * clipSettings_.opacityPercent / 100,
         GetGValue(asset.thumbnailColor) * clipSettings_.opacityPercent / 100,
@@ -134,17 +206,20 @@ void MfcTimelineCanvas::OnPaint()
                            DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
     if (viewState_.isAudioTrackVisible) {
-        deviceContext.FillSolidRect(76, audioTrackTop + 16, clipWidth, kTrackHeight - 16,
+        deviceContext.FillSolidRect(clipRect.left, audioTrackTop + 16, clipWidth, kTrackHeight - 16,
                                     RGB(38, 114, 176));
     } else {
         deviceContext.SetTextColor(EditorUi::kSecondaryText);
         deviceContext.DrawText(_T("Audio track hidden"),
-                               CRect(76, audioTrackTop, clientRect.right - 12,
+                               CRect(kTimelineLeft, audioTrackTop, clientRect.right - 12,
                                      audioTrackTop + kTrackHeight),
                                DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     }
 
-    const int playheadX = 76 + clipWidth * playbackState_.currentFrame / 300;
+    const int pixelsPerScaleUnit = std::max(1,
+        kTimelinePixelsAt100Percent * viewState_.zoomPercent / 100);
+    const int playheadX = kTimelineLeft + playbackState_.currentFrame * pixelsPerScaleUnit
+        / kTimelineFramesPerScaleUnit;
     deviceContext.FillSolidRect(playheadX, rulerTop, 2,
                                 clientRect.bottom - rulerTop, RGB(240, 74, 74));
 }

@@ -192,6 +192,14 @@ state, not project-edit decisions. The MFC Edit menu invokes the same
 framework-neutral `undo()` and `redo()` operations, and enables each action
 only when the matching history stack has an entry.
 
+## Phase 14 — Undoable timeline clip moves
+
+Drag the selected clip horizontally in `MfcTimelineCanvas`, then release the
+mouse to commit one `TimelineClipState` edit. The canvas owns only the pixel
+coordinate conversion and temporary drag preview; `EditorSession` owns the
+start-frame state and records one Undo/Redo history entry on release. Seeking
+on the ruler remains a playback action and is intentionally not undoable.
+
 The MFC menu also has real keyboard handling: **Space** toggles playback,
 **Ctrl+Z** invokes Undo, and **Ctrl+Y** invokes Redo. The resource accelerator
 table documents these shortcuts; `MainFrame::PreTranslateMessage()` performs

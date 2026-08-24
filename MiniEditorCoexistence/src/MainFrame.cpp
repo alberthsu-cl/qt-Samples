@@ -70,6 +70,9 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
 
 #if MINI_EDITOR_USE_QT
     timelineCanvas_.setSeekHandler([this](int frame) { editorSession_.seekTimeline(frame); });
+    timelineCanvas_.setTimelineClipEditedHandler([this](const TimelineClipState &state) {
+        editorSession_.updateSelectedTimelineClipState(state);
+    });
     if (!mediaLibraryHost_.create(GetSafeHwnd()))
         return -1;
     if (!propertiesHost_.create(GetSafeHwnd()))
@@ -280,10 +283,12 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     const ClipSettings &settings = editorSession_.selectedClipSettings();
     const PlaybackState &playbackState = editorSession_.playbackState();
     const TimelineViewState &timelineViewState = editorSession_.timelineViewState();
+    const TimelineClipState &timelineClipState = editorSession_.selectedTimelineClipState();
     const bool selectionChanged = includesChange(changes, EditorChange::Selection);
     const bool clipSettingsChanged = includesChange(changes, EditorChange::ClipSettings);
     const bool playbackChanged = includesChange(changes, EditorChange::Playback);
     const bool timelineViewChanged = includesChange(changes, EditorChange::TimelineView);
+    const bool timelineClipChanged = includesChange(changes, EditorChange::TimelineClip);
 
 #if MINI_EDITOR_USE_QT
     if (selectionChanged)
@@ -323,6 +328,8 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     if (playbackChanged)
         previewCanvas_.setPlaybackState(playbackState);
 #if MINI_EDITOR_USE_QT
+    if (selectionChanged || timelineClipChanged)
+        timelineCanvas_.setTimelineClipState(timelineClipState);
     if (timelineViewChanged)
         timelineCanvas_.setViewState(timelineViewState);
     if (playbackChanged) {

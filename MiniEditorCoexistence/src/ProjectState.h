@@ -38,6 +38,13 @@ struct TimelineViewState {
     bool isAudioTrackVisible = true;
 };
 
+// Project-edit state for one clip on the timeline. Unlike TimelineViewState,
+// this is part of the edit decision and therefore belongs in Undo/Redo.
+struct TimelineClipState {
+    int startFrame = 0;
+    int durationFrames = 180;
+};
+
 inline const wchar_t *clipPositionDisplayName(ClipPosition position)
 {
     switch (position) {

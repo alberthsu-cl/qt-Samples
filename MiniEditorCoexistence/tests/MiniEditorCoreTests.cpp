@@ -112,6 +112,36 @@ void editorSessionUndoRedoTracksOnlyClipEdits()
             "Undo must still target the clip edit, not timeline view state.");
 }
 
+void editorSessionUndoRedoTracksTimelineClipMoves()
+{
+    EditorSession session(2);
+    session.selectAsset(1);
+
+    TimelineClipState movedClip = session.selectedTimelineClipState();
+    movedClip.startFrame = 120;
+    session.updateSelectedTimelineClipState(movedClip);
+    require(session.canUndo(), "A timeline clip move must become undoable.");
+    require(session.selectedTimelineClipState().startFrame == 120,
+            "Timeline move must update the selected clip start frame.");
+
+    session.selectAsset(0);
+    require(session.undo(), "Undo must restore the previous timeline clip position.");
+    require(session.selectedAssetIndex() == 1,
+            "Undo must select the asset whose timeline clip changed.");
+    require(session.selectedTimelineClipState().startFrame == 0,
+            "Undo must restore the original clip start frame.");
+
+    require(session.redo(), "Redo must reapply a timeline clip move.");
+    require(session.selectedTimelineClipState().startFrame == 120,
+            "Redo must restore the moved clip start frame.");
+
+    movedClip.startFrame = 999;
+    movedClip.durationFrames = 300;
+    session.updateSelectedTimelineClipState(movedClip);
+    require(session.selectedTimelineClipState().startFrame == 300,
+            "Timeline clip start must clamp within the editable timeline range.");
+}
+
 void workspaceLayoutProtectsPaneBounds()
 {
     WorkspaceLayout layout;
@@ -148,6 +178,7 @@ int main()
     try {
         editorSessionOwnsAndClampsState();
         editorSessionUndoRedoTracksOnlyClipEdits();
+        editorSessionUndoRedoTracksTimelineClipMoves();
         workspaceLayoutProtectsPaneBounds();
         std::cout << "MiniEditorCoreTests passed.\n";
         return 0;

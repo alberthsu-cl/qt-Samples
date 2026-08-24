@@ -9,6 +9,7 @@ constexpr int kFirstFrame = 0;
 constexpr int kLastFrame = 299;
 constexpr int kMinimumTimelineZoom = 50;
 constexpr int kMaximumTimelineZoom = 200;
+constexpr int kMaximumTimelineFrame = 600;
 
 bool hasSameClipSettings(const ClipSettings &left, const ClipSettings &right)
 {
@@ -17,10 +18,25 @@ bool hasSameClipSettings(const ClipSettings &left, const ClipSettings &right)
         && left.position == right.position;
 }
 
+bool hasSameTimelineClipState(const TimelineClipState &left, const TimelineClipState &right)
+{
+    return left.startFrame == right.startFrame
+        && left.durationFrames == right.durationFrames;
+}
+
+TimelineClipState clampedTimelineClipState(TimelineClipState state)
+{
+    state.durationFrames = std::clamp(state.durationFrames, 1, kMaximumTimelineFrame);
+    state.startFrame = std::clamp(state.startFrame, 0,
+                                  kMaximumTimelineFrame - state.durationFrames);
+    return state;
+}
+
 } // namespace
 
 EditorSession::EditorSession(std::size_t assetCount)
     : clipSettings_(std::max<std::size_t>(assetCount, 1))
+    , timelineClipStates_(clipSettings_.size())
 {
 }
 
@@ -32,6 +48,11 @@ int EditorSession::selectedAssetIndex() const
 const ClipSettings &EditorSession::selectedClipSettings() const
 {
     return clipSettings_[selectedAssetIndex_];
+}
+
+const TimelineClipState &EditorSession::selectedTimelineClipState() const
+{
+    return timelineClipStates_[selectedAssetIndex_];
 }
 
 const PlaybackState &EditorSession::playbackState() const
@@ -58,9 +79,24 @@ void EditorSession::updateSelectedClipSettings(const ClipSettings &settings)
         return;
 
     clipSettings_[selectedAssetIndex_] = settings;
-    undoHistory_.push_back({ selectedAssetIndex_, previousSettings, settings });
+    undoHistory_.push_back({ HistoryEntryType::ClipSettings, selectedAssetIndex_,
+                             previousSettings, settings, {}, {} });
     redoHistory_.clear();
     notifyStateChanged(EditorChange::ClipSettings);
+}
+
+void EditorSession::updateSelectedTimelineClipState(const TimelineClipState &state)
+{
+    const TimelineClipState previousState = timelineClipStates_[selectedAssetIndex_];
+    const TimelineClipState updatedState = clampedTimelineClipState(state);
+    if (hasSameTimelineClipState(previousState, updatedState))
+        return;
+
+    timelineClipStates_[selectedAssetIndex_] = updatedState;
+    undoHistory_.push_back({ HistoryEntryType::TimelineClip, selectedAssetIndex_,
+                             {}, {}, previousState, updatedState });
+    redoHistory_.clear();
+    notifyStateChanged(EditorChange::TimelineClip);
 }
 
 bool EditorSession::canUndo() const
@@ -78,12 +114,19 @@ bool EditorSession::undo()
     if (!canUndo())
         return false;
 
-    const ClipSettingsHistoryEntry entry = undoHistory_.back();
+    const HistoryEntry entry = undoHistory_.back();
     undoHistory_.pop_back();
-    clipSettings_[entry.assetIndex] = entry.before;
+    EditorChange changes = EditorChange::Selection;
+    if (entry.type == HistoryEntryType::ClipSettings) {
+        clipSettings_[entry.assetIndex] = entry.clipSettingsBefore;
+        changes = changes | EditorChange::ClipSettings;
+    } else {
+        timelineClipStates_[entry.assetIndex] = entry.timelineClipBefore;
+        changes = changes | EditorChange::TimelineClip;
+    }
     selectedAssetIndex_ = entry.assetIndex;
     redoHistory_.push_back(entry);
-    notifyStateChanged(EditorChange::Selection | EditorChange::ClipSettings);
+    notifyStateChanged(changes);
     return true;
 }
 
@@ -92,12 +135,19 @@ bool EditorSession::redo()
     if (!canRedo())
         return false;
 
-    const ClipSettingsHistoryEntry entry = redoHistory_.back();
+    const HistoryEntry entry = redoHistory_.back();
     redoHistory_.pop_back();
-    clipSettings_[entry.assetIndex] = entry.after;
+    EditorChange changes = EditorChange::Selection;
+    if (entry.type == HistoryEntryType::ClipSettings) {
+        clipSettings_[entry.assetIndex] = entry.clipSettingsAfter;
+        changes = changes | EditorChange::ClipSettings;
+    } else {
+        timelineClipStates_[entry.assetIndex] = entry.timelineClipAfter;
+        changes = changes | EditorChange::TimelineClip;
+    }
     selectedAssetIndex_ = entry.assetIndex;
     undoHistory_.push_back(entry);
-    notifyStateChanged(EditorChange::Selection | EditorChange::ClipSettings);
+    notifyStateChanged(changes);
     return true;
 }
 
