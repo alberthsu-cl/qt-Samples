@@ -15,6 +15,15 @@ constexpr int kTrackHeight = 66;
 constexpr int kTimelineFramesPerScaleUnit = 300;
 constexpr int kTimelineMaximumFrame = 600;
 constexpr int kTimelinePixelsAt100Percent = 334;
+constexpr int kFramesPerSecond = 30;
+
+CString timeLabelForFrame(int frame)
+{
+    const int totalSeconds = frame / kFramesPerSecond;
+    CString label;
+    label.Format(_T("%02d:%02d"), totalSeconds / 60, totalSeconds % 60);
+    return label;
+}
 
 } // namespace
 
@@ -172,14 +181,18 @@ void MfcTimelineCanvas::OnPaint()
     deviceContext.FillSolidRect(0, trackTop, clientRect.Width(), kTrackHeight, RGB(43, 46, 54));
     deviceContext.FillSolidRect(0, audioTrackTop, clientRect.Width(), kTrackHeight, RGB(38, 41, 48));
 
-    const int tickSpacing = std::max(30, 80 * viewState_.zoomPercent / 100);
-    for (int x = 110; x < clientRect.Width(); x += tickSpacing) {
+    const int tickFrames = viewState_.zoomPercent < 75 ? 120 : 60;
+    const int pixels = std::max(1,
+        kTimelinePixelsAt100Percent * viewState_.zoomPercent / 100);
+    for (int frame = 0; frame <= kTimelineMaximumFrame; frame += tickFrames) {
+        const int x = kTimelineLeft + frame * pixels / kTimelineFramesPerScaleUnit;
+        if (x >= clientRect.right)
+            break;
         deviceContext.FillSolidRect(x, rulerTop + 18, 1, 12, EditorUi::kSecondaryText);
-        CString timeLabel;
-        timeLabel.Format(_T("%d"), (x - 110) * 10 / tickSpacing);
         deviceContext.SetBkMode(TRANSPARENT);
         deviceContext.SetTextColor(EditorUi::kSecondaryText);
-        deviceContext.DrawText(timeLabel, CRect(x + 3, rulerTop + 2, x + 53, rulerTop + 18),
+        deviceContext.DrawText(timeLabelForFrame(frame),
+                               CRect(x + 3, rulerTop + 2, x + 53, rulerTop + 18),
                                DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     }
 

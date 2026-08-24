@@ -24,7 +24,10 @@ struct TimelineClip {
 class TimelineModel final
 {
 public:
+    static constexpr int kMinimumDurationFrames = 600;
+
     const std::vector<TimelineClip> &clips() const;
+    int durationFrames() const;
 
     int addClip(int mediaAssetIndex,
                 TimelineTrackType trackType,

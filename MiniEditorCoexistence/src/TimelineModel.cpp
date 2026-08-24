@@ -7,6 +7,14 @@ const std::vector<TimelineClip> &TimelineModel::clips() const
     return clips_;
 }
 
+int TimelineModel::durationFrames() const
+{
+    int duration = kMinimumDurationFrames;
+    for (const TimelineClip &clip : clips_)
+        duration = std::max(duration, clip.state.startFrame + clip.state.durationFrames);
+    return duration;
+}
+
 int TimelineModel::addClip(int mediaAssetIndex, TimelineTrackType trackType,
                            const TimelineClipState &state)
 {

@@ -199,11 +199,19 @@ void timelineModelStartsEmptyAndOwnsIndependentClipIds()
             "A timeline clip must reference its source media asset.");
     require(timeline.findClip(secondClipId)->trackType == TimelineTrackType::Audio,
             "Audio placements must target the audio track.");
+    require(timeline.durationFrames() == 600,
+            "A new timeline must retain its minimum duration.");
 
     require(timeline.moveClip(secondClipId, { 240, 120 }),
             "Timeline must move an existing clip by ID.");
     require(timeline.findClip(secondClipId)->state.startFrame == 240,
             "Moving a clip must update only that placement.");
+    require(timeline.durationFrames() == 600,
+            "Short clips must not shrink the timeline below its minimum.");
+    require(timeline.moveClip(secondClipId, { 700, 120 }),
+            "Timeline must allow a clip beyond the initial duration.");
+    require(timeline.durationFrames() == 820,
+            "Timeline duration must extend to the furthest clip end.");
     require(timeline.removeClip(firstClipId), "Timeline must remove a clip by ID.");
     require(timeline.clips().size() == 1, "Removing one clip must preserve the other.");
     timeline.clear();
@@ -240,6 +248,22 @@ void editorSessionUndoRedoTracksLibraryInsertion()
     require(session.redo(), "Redo must restore a library insertion.");
     require(session.timelineModel().findClip(clipId) != nullptr,
             "Redo must restore the same timeline clip ID.");
+}
+
+void editorSessionUsesRequestedTimelineClipDuration()
+{
+    EditorSession session(2);
+    const int clipId = session.addTimelineClip(0, TimelineTrackType::Audio, 0, 4170);
+    require(session.timelineModel().findClip(clipId)->state.durationFrames == 4170,
+            "Session must retain an asset's timeline duration.");
+    require(session.timelineModel().durationFrames() == 4170,
+            "A long audio clip must extend the timeline duration.");
+    require(session.moveTimelineClip(clipId, { 600, 4170 }),
+            "A long clip must remain movable beyond the legacy timeline range.");
+    require(session.timelineModel().findClip(clipId)->state.durationFrames == 4170,
+            "Moving a long clip must not truncate its duration.");
+    require(session.timelineModel().durationFrames() == 4770,
+            "Moving a long clip must extend the project duration dynamically.");
 }
 
 void editorSessionUndoRedoTracksClipDeletion()
@@ -298,6 +322,7 @@ int main()
         timelineModelStartsEmptyAndOwnsIndependentClipIds();
         editorSessionUndoRedoTracksModelClipMoves();
         editorSessionUndoRedoTracksLibraryInsertion();
+        editorSessionUsesRequestedTimelineClipDuration();
         editorSessionUndoRedoTracksClipDeletion();
         workspaceLayoutProtectsPaneBounds();
         std::cout << "MiniEditorCoreTests passed.\n";

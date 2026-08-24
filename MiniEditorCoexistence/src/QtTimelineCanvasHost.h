@@ -9,6 +9,7 @@
 #include <memory>
 
 class QtTimelineCanvas;
+class QScrollArea;
 
 class QtTimelineCanvasHost final
 {
@@ -32,9 +33,11 @@ public:
     void setSeekHandler(SeekHandler handler);
     void setTimelineClipEditedHandler(TimelineClipEditedHandler handler);
     void setTimelineClips(const std::vector<TimelineClip> &clips);
+    void setTimelineDuration(int durationFrames);
     void setMediaAssetDroppedHandler(MediaAssetDroppedHandler handler);
     void setTimelineClipDeletedHandler(TimelineClipDeletedHandler handler);
 
 private:
-    std::unique_ptr<QtTimelineCanvas> canvas_;
+    std::unique_ptr<QScrollArea> scrollArea_;
+    QtTimelineCanvas *canvas_ = nullptr;
 };

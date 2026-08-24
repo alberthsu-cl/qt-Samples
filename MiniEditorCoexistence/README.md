@@ -258,6 +258,19 @@ go to V1, while audio assets go to A1; both lanes remain empty until a clip is
 dropped. The model test verifies that the same timeline can contain both track
 types.
 
+`TimelineModel::durationFrames()` now keeps a 600-frame minimum but extends
+automatically to the end of the furthest clip. The hardcoded range is becoming
+model data; horizontal scrolling is the next UI step needed to view longer
+projects comfortably.
+
+Each demo asset now has a numeric timeline duration. Video and audio retain
+their catalog duration; still images use a 90-frame (three-second) default.
+Dropped clip widths are therefore proportional to the source duration.
+
+The timeline ruler now derives labels from frame position at 30 FPS and shows
+timecode such as `00:00`, `00:02`, and `00:04`; the old pixel-based placeholder
+numbers were removed.
+
 Selecting a Qt timeline clip and pressing Delete now removes it through
 `EditorSession`. Insertion, movement, and deletion all participate in the
 same Undo/Redo history and preserve the clip ID when restored.

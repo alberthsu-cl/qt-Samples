@@ -82,7 +82,8 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
             editorSession_.addTimelineClip(mediaAssetIndex,
                                            isAudio ? TimelineTrackType::Audio
                                                    : TimelineTrackType::Video,
-                                           frame);
+                                           frame,
+                                           demoAssets()[mediaAssetIndex].timelineDurationFrames);
         });
     timelineCanvasHost_.setTimelineClipDeletedHandler(
         [this](int clipId) { editorSession_.removeTimelineClip(clipId); });
@@ -387,6 +388,9 @@ void MainFrame::refreshEditorViews(EditorChange changes)
 #if MINI_EDITOR_USE_QT
     if (timelineClipChanged)
         timelineCanvasHost_.setTimelineClips(editorSession_.timelineModel().clips());
+    if (timelineClipChanged)
+        timelineCanvasHost_.setTimelineDuration(
+            editorSession_.timelineModel().durationFrames());
     if (timelineViewChanged)
         timelineCanvasHost_.setViewState(timelineViewState);
     if (playbackChanged) {

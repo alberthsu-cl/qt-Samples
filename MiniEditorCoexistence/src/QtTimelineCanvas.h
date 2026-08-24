@@ -27,6 +27,7 @@ public:
     void setSeekHandler(SeekHandler handler);
     void setTimelineClipEditedHandler(TimelineClipEditedHandler handler);
     void setTimelineClips(const std::vector<TimelineClip> &clips);
+    void setTimelineDuration(int durationFrames);
     void setMediaAssetDroppedHandler(MediaAssetDroppedHandler handler);
     void setTimelineClipDeletedHandler(TimelineClipDeletedHandler handler);
 
@@ -55,6 +56,7 @@ private:
     MediaAssetDroppedHandler mediaAssetDroppedHandler_;
     TimelineClipDeletedHandler timelineClipDeletedHandler_;
     std::vector<TimelineClip> timelineClips_;
+    int timelineDurationFrames_ = 600;
     bool isDraggingClip_ = false;
     int dragFrameOffset_ = 0;
     int dragClipId_ = 0;

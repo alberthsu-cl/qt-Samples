@@ -3,6 +3,7 @@
 #include "QtTimelineCanvas.h"
 
 #include <QObject>
+#include <QScrollArea>
 
 #include <utility>
 
@@ -11,11 +12,19 @@ QtTimelineCanvasHost::~QtTimelineCanvasHost() = default;
 
 bool QtTimelineCanvasHost::create(void *mfcParentWindowHandle)
 {
-    canvas_ = std::make_unique<QtTimelineCanvas>();
-    canvas_->setWindowFlag(Qt::FramelessWindowHint, true);
-    canvas_->setAttribute(Qt::WA_NativeWindow);
+    scrollArea_ = std::make_unique<QScrollArea>();
+    scrollArea_->setFrameShape(QFrame::NoFrame);
+    scrollArea_->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scrollArea_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    // Let the canvas fill the available track height. Its minimum width still
+    // controls horizontal overflow, which is what produces the timeline bar.
+    scrollArea_->setWidgetResizable(true);
+    canvas_ = new QtTimelineCanvas;
+    scrollArea_->setWidget(canvas_);
+    scrollArea_->setWindowFlag(Qt::FramelessWindowHint, true);
+    scrollArea_->setAttribute(Qt::WA_NativeWindow);
 
-    const HWND qtWindowHandle = reinterpret_cast<HWND>(canvas_->winId());
+    const HWND qtWindowHandle = reinterpret_cast<HWND>(scrollArea_->winId());
     const HWND mfcWindowHandle = static_cast<HWND>(mfcParentWindowHandle);
     if (qtWindowHandle == nullptr || mfcWindowHandle == nullptr)
         return false;
@@ -28,14 +37,14 @@ bool QtTimelineCanvasHost::create(void *mfcParentWindowHandle)
                        (style & ~frameStyles) | WS_CHILD | WS_CLIPSIBLINGS);
     ::SetWindowPos(qtWindowHandle, nullptr, 0, 0, 1, 1,
                    SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-    canvas_->show();
+    scrollArea_->show();
     return true;
 }
 
 void QtTimelineCanvasHost::resize(const CRect &bounds)
 {
-    if (canvas_)
-        ::SetWindowPos(reinterpret_cast<HWND>(canvas_->winId()), nullptr,
+    if (scrollArea_)
+        ::SetWindowPos(reinterpret_cast<HWND>(scrollArea_->winId()), nullptr,
                        bounds.left, bounds.top, bounds.Width(), bounds.Height(),
                        SWP_NOZORDER | SWP_NOACTIVATE);
 }
@@ -86,6 +95,12 @@ void QtTimelineCanvasHost::setTimelineClips(const std::vector<TimelineClip> &cli
 {
     if (canvas_)
         canvas_->setTimelineClips(clips);
+}
+
+void QtTimelineCanvasHost::setTimelineDuration(int durationFrames)
+{
+    if (canvas_)
+        canvas_->setTimelineDuration(durationFrames);
 }
 
 void QtTimelineCanvasHost::setMediaAssetDroppedHandler(MediaAssetDroppedHandler handler)

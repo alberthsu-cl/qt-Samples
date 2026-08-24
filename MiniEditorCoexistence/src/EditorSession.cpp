@@ -45,6 +45,16 @@ TimelineClipState clampedTimelineClipState(TimelineClipState state)
     return state;
 }
 
+TimelineClipState clampedTimelineModelClipState(TimelineClipState state)
+{
+    // Model clips may extend the project beyond the original learning-sample
+    // range. Only prevent negative values here; TimelineModel calculates the
+    // resulting project duration dynamically.
+    state.startFrame = std::max(0, state.startFrame);
+    state.durationFrames = std::max(1, state.durationFrames);
+    return state;
+}
+
 } // namespace
 
 EditorSession::EditorSession(std::size_t assetCount)
@@ -89,10 +99,11 @@ const TimelineModel &EditorSession::timelineModel() const
 }
 
 int EditorSession::addTimelineClip(int mediaAssetIndex, TimelineTrackType trackType,
-                                   int startFrame)
+                                   int startFrame, int durationFrames)
 {
     TimelineClipState state;
-    state.startFrame = std::clamp(startFrame, 0, kMaximumTimelineFrame - state.durationFrames);
+    state.startFrame = std::max(0, startFrame);
+    state.durationFrames = std::max(1, durationFrames);
     const int clipId = timelineModel_.addClip(mediaAssetIndex, trackType, state);
     const TimelineClip *addedClip = timelineModel_.findClip(clipId);
     if (addedClip == nullptr)
@@ -109,16 +120,17 @@ int EditorSession::addTimelineClip(int mediaAssetIndex, TimelineTrackType trackT
 bool EditorSession::moveTimelineClip(int clipId, const TimelineClipState &state)
 {
     const TimelineClip *clip = timelineModel_.findClip(clipId);
-    if (clip == nullptr || hasSameTimelineClipState(clip->state, state))
+    const TimelineClipState updatedState = clampedTimelineModelClipState(state);
+    if (clip == nullptr || hasSameTimelineClipState(clip->state, updatedState))
         return false;
 
     const TimelineClipState previousState = clip->state;
-    if (!timelineModel_.moveClip(clipId, clampedTimelineClipState(state)))
+    if (!timelineModel_.moveClip(clipId, updatedState))
         return false;
 
     projectDirty_ = true;
     undoHistory_.push_back({ HistoryEntryType::TimelineModelMove, selectedAssetIndex_,
-                             {}, {}, previousState, clampedTimelineClipState(state), clipId });
+                             {}, {}, previousState, updatedState, clipId });
     redoHistory_.clear();
     notifyStateChanged(EditorChange::TimelineClip);
     return true;

@@ -16,14 +16,24 @@ namespace {
 constexpr int kTimelineLeft = 76;
 constexpr int kRulerHeight = 30;
 constexpr int kTrackHeight = 66;
+constexpr int kCanvasHeight = kRulerHeight + kTrackHeight * 2 + 16;
 constexpr int kTimelineFramesPerScaleUnit = 300;
 constexpr int kTimelineMaximumFrame = 600;
 constexpr int kTimelinePixelsAt100Percent = 334;
+constexpr int kFramesPerSecond = 30;
 constexpr char kMediaAssetMimeType[] = "application/x-mini-editor-media-index";
 
 int pixelsPerScaleUnit(const TimelineViewState &state)
 {
     return std::max(1, kTimelinePixelsAt100Percent * state.zoomPercent / 100);
+}
+
+QString timeLabelForFrame(int frame)
+{
+    const int totalSeconds = frame / kFramesPerSecond;
+    return QStringLiteral("%1:%2")
+        .arg(totalSeconds / 60, 2, 10, QLatin1Char('0'))
+        .arg(totalSeconds % 60, 2, 10, QLatin1Char('0'));
 }
 
 } // namespace
@@ -34,6 +44,7 @@ QtTimelineCanvas::QtTimelineCanvas(QWidget *parent)
     setMouseTracking(true);
     setAcceptDrops(true);
     setFocusPolicy(Qt::StrongFocus);
+    setMinimumHeight(kCanvasHeight);
     setAutoFillBackground(false);
 }
 
@@ -67,6 +78,7 @@ void QtTimelineCanvas::setPlaybackState(const PlaybackState &state)
 void QtTimelineCanvas::setViewState(const TimelineViewState &state)
 {
     viewState_ = state;
+    setTimelineDuration(timelineDurationFrames_);
     update();
 }
 
@@ -83,6 +95,16 @@ void QtTimelineCanvas::setTimelineClipEditedHandler(TimelineClipEditedHandler ha
 void QtTimelineCanvas::setTimelineClips(const std::vector<TimelineClip> &clips)
 {
     timelineClips_ = clips;
+    update();
+}
+
+void QtTimelineCanvas::setTimelineDuration(int durationFrames)
+{
+    timelineDurationFrames_ = std::max(600, durationFrames);
+    const int contentWidth = kTimelineLeft
+        + timelineDurationFrames_ * pixelsPerScaleUnit(viewState_)
+            / kTimelineFramesPerScaleUnit + 24;
+    setMinimumWidth(contentWidth);
     update();
 }
 
@@ -105,11 +127,13 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
     painter.fillRect(0, kRulerHeight + kTrackHeight + 8,
                      width(), kTrackHeight, QColor(38, 41, 48));
 
-    const int tickSpacing = std::max(30, 80 * viewState_.zoomPercent / 100);
+    const int tickFrames = viewState_.zoomPercent < 75 ? 120 : 60;
     painter.setPen(QColor(190, 195, 205));
-    for (int x = 110; x < width(); x += tickSpacing) {
+    for (int frame = 0; frame <= timelineDurationFrames_; frame += tickFrames) {
+        const int x = kTimelineLeft + frame * pixelsPerScaleUnit(viewState_)
+            / kTimelineFramesPerScaleUnit;
         painter.drawLine(x, 18, x, kRulerHeight);
-        painter.drawText(x + 3, 16, QString::number((x - 110) * 10 / tickSpacing));
+        painter.drawText(x + 3, 16, timeLabelForFrame(frame));
     }
 
     painter.drawText(12, kRulerHeight + 38, QStringLiteral("V1"));
@@ -177,9 +201,8 @@ void QtTimelineCanvas::mousePressEvent(QMouseEvent *event)
 void QtTimelineCanvas::mouseMoveEvent(QMouseEvent *event)
 {
     if (isDraggingClip_ && (event->buttons() & Qt::LeftButton)) {
-        dragPreviewState_.startFrame = std::clamp(
-            frameAtTimelineX(event->position().x()) - dragFrameOffset_, 0,
-            kTimelineMaximumFrame - dragPreviewState_.durationFrames);
+        dragPreviewState_.startFrame = std::max(
+            0, frameAtTimelineX(event->position().x()) - dragFrameOffset_);
         update();
     }
     QWidget::mouseMoveEvent(event);
@@ -188,9 +211,8 @@ void QtTimelineCanvas::mouseMoveEvent(QMouseEvent *event)
 void QtTimelineCanvas::mouseReleaseEvent(QMouseEvent *event)
 {
     if (isDraggingClip_ && event->button() == Qt::LeftButton) {
-        dragPreviewState_.startFrame = std::clamp(
-            frameAtTimelineX(event->position().x()) - dragFrameOffset_, 0,
-            kTimelineMaximumFrame - dragPreviewState_.durationFrames);
+        dragPreviewState_.startFrame = std::max(
+            0, frameAtTimelineX(event->position().x()) - dragFrameOffset_);
         releaseMouse();
         isDraggingClip_ = false;
         if (timelineClipEditedHandler_)
@@ -244,7 +266,7 @@ int QtTimelineCanvas::frameAtTimelineX(int x) const
 {
     return std::clamp((x - kTimelineLeft) * kTimelineFramesPerScaleUnit
                           / pixelsPerScaleUnit(viewState_),
-                      0, kTimelineMaximumFrame);
+                      0, timelineDurationFrames_);
 }
 
 QRect QtTimelineCanvas::timelineClipRect(const TimelineClip &clip) const
