@@ -40,8 +40,6 @@ add_executable(MiniEditorCoexistence WIN32
     src/MfcDoubleBufferedPaint.cpp
     src/MfcPreviewCanvas.h
     src/MfcPreviewCanvas.cpp
-    src/MfcTimelineCanvas.h
-    src/MfcTimelineCanvas.cpp
     src/MfcWorkspaceSplitter.h
     src/MfcWorkspaceSplitter.cpp
     src/MainFrame.h
@@ -133,6 +131,10 @@ if(MINI_EDITOR_USE_QT)
         src/QtTimelineToolbar.cpp
         src/QtTimelineToolbarHost.h
         src/QtTimelineToolbarHost.cpp
+        src/QtTimelineCanvas.h
+        src/QtTimelineCanvas.cpp
+        src/QtTimelineCanvasHost.h
+        src/QtTimelineCanvasHost.cpp
         src/QtRuntime.h
         src/QtRuntime.cpp
     )
@@ -165,6 +167,8 @@ else()
         src/MfcPropertiesPane.cpp
         src/MfcTimelinePane.h
         src/MfcTimelinePane.cpp
+        src/MfcTimelineCanvas.h
+        src/MfcTimelineCanvas.cpp
     )
     target_compile_definitions(MiniEditorCoexistence PRIVATE
         MINI_EDITOR_USE_QT=0

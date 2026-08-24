@@ -51,9 +51,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     restoreWorkspaceSettings();
 
     if (!previewCanvas_.Create(this, IDC_PREVIEW_CANVAS)
-#if MINI_EDITOR_USE_QT
-        || !timelineCanvas_.Create(this, IDC_TIMELINE)
-#else
+#if !MINI_EDITOR_USE_QT
         || !timelinePane_.Create(this, IDC_TIMELINE)
 #endif
         || !leftSplitter_.Create(MfcWorkspaceSplitter::Orientation::Vertical,
@@ -70,8 +68,10 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     timelineSplitter_.setDragHandler([this](int parentY) { moveTimelineSplitter(parentY); });
 
 #if MINI_EDITOR_USE_QT
-    timelineCanvas_.setSeekHandler([this](int frame) { editorSession_.seekTimeline(frame); });
-    timelineCanvas_.setTimelineClipEditedHandler([this](const TimelineClipState &state) {
+    if (!timelineCanvasHost_.create(GetSafeHwnd()))
+        return -1;
+    timelineCanvasHost_.setSeekHandler([this](int frame) { editorSession_.seekTimeline(frame); });
+    timelineCanvasHost_.setTimelineClipEditedHandler([this](const TimelineClipState &state) {
         editorSession_.updateSelectedTimelineClipState(state);
     });
     if (!mediaLibraryHost_.create(GetSafeHwnd()))
@@ -286,8 +286,7 @@ void MainFrame::layoutChildren(int clientWidth, int clientHeight)
 #endif
 #if MINI_EDITOR_USE_QT
     timelineToolbarHost_.resize(toClientRect(geometry.timelineToolbar));
-    timelineCanvas_.MoveWindow(geometry.timelineCanvas.left, geometry.timelineCanvas.top,
-                               geometry.timelineCanvas.width, geometry.timelineCanvas.height);
+    timelineCanvasHost_.resize(toClientRect(geometry.timelineCanvas));
 #else
     timelinePane_.MoveWindow(geometry.timeline.left, geometry.timeline.top,
                              geometry.timeline.width, geometry.timeline.height);
@@ -358,7 +357,7 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     if (selectionChanged) {
         previewCanvas_.setSelectedAssetIndex(selectedAssetIndex);
 #if MINI_EDITOR_USE_QT
-        timelineCanvas_.setSelectedAssetIndex(selectedAssetIndex);
+        timelineCanvasHost_.setSelectedAssetIndex(selectedAssetIndex);
 #else
         timelinePane_.setSelectedAssetIndex(selectedAssetIndex);
 #endif
@@ -366,7 +365,7 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     if (selectionChanged || clipSettingsChanged) {
         previewCanvas_.setClipSettings(settings);
 #if MINI_EDITOR_USE_QT
-        timelineCanvas_.setClipSettings(settings);
+        timelineCanvasHost_.setClipSettings(settings);
 #else
         timelinePane_.setClipSettings(settings);
 #endif
@@ -375,11 +374,11 @@ void MainFrame::refreshEditorViews(EditorChange changes)
         previewCanvas_.setPlaybackState(playbackState);
 #if MINI_EDITOR_USE_QT
     if (selectionChanged || timelineClipChanged)
-        timelineCanvas_.setTimelineClipState(timelineClipState);
+        timelineCanvasHost_.setTimelineClipState(timelineClipState);
     if (timelineViewChanged)
-        timelineCanvas_.setViewState(timelineViewState);
+        timelineCanvasHost_.setViewState(timelineViewState);
     if (playbackChanged) {
-        timelineCanvas_.setPlaybackState(playbackState);
+        timelineCanvasHost_.setPlaybackState(playbackState);
         transportHost_.setPlaybackState(playbackState);
     }
 #else

@@ -234,6 +234,16 @@ the preview: current time followed by the sample duration. It is rendered by
 the existing double-buffered MFC canvas, so the overlay updates with the same
 flicker-free timer repaint as the preview and timeline playhead.
 
+## Phase 18 — Qt timeline canvas
+
+The Qt-enabled build now uses `QtTimelineCanvas`, a QWidget that paints the
+ruler, clip, audio track, and playhead with QPainter. It handles ruler seeking
+and clip dragging through plain C++ callbacks. `MainFrame` still owns the
+native layout and `EditorSession` still owns all state and Undo/Redo history.
+
+The pure-MFC configuration retains `MfcTimelineCanvas`, making the two
+implementations easy to compare while studying the migration boundary.
+
 ## Phase 12 — Flicker-free MFC playback painting
 
 `MfcDoubleBufferedPaint` draws MFC preview and timeline content to a
