@@ -4,6 +4,7 @@
 #include "resource.h"
 
 #include <algorithm>
+#include <filesystem>
 
 IMPLEMENT_DYNCREATE(MainFrame, CFrameWnd)
 
@@ -190,6 +191,34 @@ void MainFrame::OnTimer(UINT_PTR timerId)
 void MainFrame::OnFileExit()
 {
     SendMessage(WM_CLOSE);
+}
+
+void MainFrame::OnFileNew()
+{
+    editorSession_.replaceProject(EditorProject::createDefault(demoAssets().size()));
+    projectFilePath_.clear();
+    updateWindowTitle();
+}
+
+void MainFrame::OnFileOpen()
+{
+    CFileDialog dialog(TRUE, L"mini-editor.json", nullptr,
+                       OFN_FILEMUSTEXIST | OFN_HIDEREADONLY,
+                       L"Mini Editor Project (*.mini-editor.json)|*.mini-editor.json||", this);
+    if (dialog.DoModal() != IDOK)
+        return;
+
+    openProject(std::filesystem::path(static_cast<LPCTSTR>(dialog.GetPathName())));
+}
+
+void MainFrame::OnFileSave()
+{
+    saveProject(false);
+}
+
+void MainFrame::OnFileSaveAs()
+{
+    saveProject(true);
 }
 
 BOOL MainFrame::PreTranslateMessage(MSG *message)
@@ -410,6 +439,57 @@ void MainFrame::saveWorkspaceSettings() const
     WorkspaceSettingsStore::save(settings);
 }
 
+bool MainFrame::saveProject(bool chooseFilePath)
+{
+    if (chooseFilePath || projectFilePath_.empty()) {
+        CFileDialog dialog(FALSE, L"mini-editor.json", L"Untitled.mini-editor.json",
+                           OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT,
+                           L"Mini Editor Project (*.mini-editor.json)|*.mini-editor.json||", this);
+        if (dialog.DoModal() != IDOK)
+            return false;
+
+        projectFilePath_ = std::filesystem::path(static_cast<LPCTSTR>(dialog.GetPathName()));
+    }
+
+    std::wstring errorMessage;
+    if (ProjectSerializer::save(projectFilePath_, editorSession_.projectSnapshot(), &errorMessage)) {
+        updateWindowTitle();
+        return true;
+    }
+
+    CString message(errorMessage.c_str());
+    AfxMessageBox(message, MB_ICONERROR | MB_OK);
+    return false;
+}
+
+bool MainFrame::openProject(const std::filesystem::path &path)
+{
+    std::wstring errorMessage;
+    const auto project = ProjectSerializer::load(path, demoAssets().size(), &errorMessage);
+    if (!project) {
+        CString message(errorMessage.c_str());
+        AfxMessageBox(message, MB_ICONERROR | MB_OK);
+        return false;
+    }
+
+    editorSession_.replaceProject(*project);
+    projectFilePath_ = path;
+    updateWindowTitle();
+    return true;
+}
+
+void MainFrame::updateWindowTitle()
+{
+    CString title(_T("Mini Editor Coexistence"));
+    if (projectFilePath_.empty()) {
+        title += _T(" - Untitled Project");
+    } else {
+        title += _T(" - ");
+        title += projectFilePath_.filename().c_str();
+    }
+    SetWindowText(title);
+}
+
 BEGIN_MESSAGE_MAP(MainFrame, CFrameWnd)
     ON_WM_CREATE()
     ON_WM_SIZE()
@@ -423,5 +503,9 @@ BEGIN_MESSAGE_MAP(MainFrame, CFrameWnd)
     ON_UPDATE_COMMAND_UI(ID_EDIT_UNDO, &MainFrame::OnUpdateEditUndo)
     ON_UPDATE_COMMAND_UI(ID_EDIT_REDO, &MainFrame::OnUpdateEditRedo)
     ON_WM_TIMER()
+    ON_COMMAND(ID_FILE_NEW, &MainFrame::OnFileNew)
+    ON_COMMAND(ID_FILE_OPEN, &MainFrame::OnFileOpen)
+    ON_COMMAND(ID_FILE_SAVE, &MainFrame::OnFileSave)
+    ON_COMMAND(ID_FILE_SAVE_AS, &MainFrame::OnFileSaveAs)
     ON_COMMAND(ID_FILE_EXIT, &MainFrame::OnFileExit)
 END_MESSAGE_MAP()

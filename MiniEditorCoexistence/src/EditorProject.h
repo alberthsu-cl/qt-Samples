@@ -1,0 +1,16 @@
+#pragma once
+
+#include "ProjectState.h"
+
+#include <cstddef>
+#include <vector>
+
+// The portable content of an editing project. It intentionally excludes UI
+// preferences such as splitter dimensions and timeline zoom; those belong in
+// WorkspaceSettings because they are per-user/per-machine choices.
+struct EditorProject {
+    std::vector<ClipSettings> clipSettings;
+    std::vector<TimelineClipState> timelineClips;
+
+    static EditorProject createDefault(std::size_t assetCount);
+};

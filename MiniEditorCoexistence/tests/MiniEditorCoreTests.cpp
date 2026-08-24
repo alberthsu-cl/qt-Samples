@@ -1,7 +1,10 @@
 #include "EditorSession.h"
+#include "ProjectSerializer.h"
 #include "WorkspaceLayout.h"
 
 #include <exception>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <vector>
@@ -142,6 +145,42 @@ void editorSessionUndoRedoTracksTimelineClipMoves()
             "Timeline clip start must clamp within the editable timeline range.");
 }
 
+void projectDocumentRoundTripsEditState()
+{
+    EditorSession sourceSession(2);
+    sourceSession.selectAsset(1);
+
+    ClipSettings settings = sourceSession.selectedClipSettings();
+    settings.opacityPercent = 55;
+    settings.position = ClipPosition::BottomRight;
+    sourceSession.updateSelectedClipSettings(settings);
+    TimelineClipState timelineClip = sourceSession.selectedTimelineClipState();
+    timelineClip.startFrame = 240;
+    sourceSession.updateSelectedTimelineClipState(timelineClip);
+
+    const std::filesystem::path testPath = std::filesystem::temp_directory_path()
+        / "MiniEditorCoreTests.mini-editor.json";
+    std::wstring errorMessage;
+    require(ProjectSerializer::save(testPath, sourceSession.projectSnapshot(), &errorMessage),
+            "Project serializer must save a valid project.");
+
+    const auto loadedProject = ProjectSerializer::load(testPath, 2, &errorMessage);
+    std::error_code removeError;
+    std::filesystem::remove(testPath, removeError);
+    require(loadedProject.has_value(), "Project serializer must load its saved project.");
+
+    EditorSession destinationSession(2);
+    destinationSession.replaceProject(*loadedProject);
+    destinationSession.selectAsset(1);
+    require(destinationSession.selectedClipSettings().opacityPercent == 55,
+            "Loaded project must restore clip settings.");
+    require(destinationSession.selectedClipSettings().position == ClipPosition::BottomRight,
+            "Loaded project must restore clip position.");
+    require(destinationSession.selectedTimelineClipState().startFrame == 240,
+            "Loaded project must restore timeline position.");
+    require(!destinationSession.canUndo(), "Loading a project must begin with clean edit history.");
+}
+
 void workspaceLayoutProtectsPaneBounds()
 {
     WorkspaceLayout layout;
@@ -179,6 +218,7 @@ int main()
         editorSessionOwnsAndClampsState();
         editorSessionUndoRedoTracksOnlyClipEdits();
         editorSessionUndoRedoTracksTimelineClipMoves();
+        projectDocumentRoundTripsEditState();
         workspaceLayoutProtectsPaneBounds();
         std::cout << "MiniEditorCoreTests passed.\n";
         return 0;

@@ -206,6 +206,20 @@ table documents these shortcuts; `MainFrame::PreTranslateMessage()` performs
 the translation because this sample creates its frame with `CFrameWnd::Create`
 rather than MFC's resource-loading `LoadFrame()` path.
 
+## Phase 15 — Portable project documents
+
+`EditorProject` contains actual editing decisions: each catalog item's clip
+settings and timeline placement. `ProjectSerializer` reads and writes that
+framework-neutral data as a readable `.mini-editor.json` file. It deliberately
+does **not** include workspace preferences such as splitters, selection, or
+zoom; `WorkspaceSettingsStore` continues to retain those separately for the
+current user and machine.
+
+The File menu now supplies New, Open, Save, and Save As commands. `MainFrame`
+only presents MFC file dialogs and messages; the serializer and the session
+know nothing about MFC or Qt. Loading a project clears Undo/Redo history and
+restores every editable clip state in one session notification.
+
 ## Phase 12 — Flicker-free MFC playback painting
 
 `MfcDoubleBufferedPaint` draws MFC preview and timeline content to a

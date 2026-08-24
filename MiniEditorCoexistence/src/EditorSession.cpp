@@ -10,12 +10,25 @@ constexpr int kLastFrame = 299;
 constexpr int kMinimumTimelineZoom = 50;
 constexpr int kMaximumTimelineZoom = 200;
 constexpr int kMaximumTimelineFrame = 600;
+constexpr int kMinimumOpacityPercent = 0;
+constexpr int kMaximumOpacityPercent = 100;
+constexpr int kMinimumScalePercent = 25;
+constexpr int kMaximumScalePercent = 200;
 
 bool hasSameClipSettings(const ClipSettings &left, const ClipSettings &right)
 {
     return left.opacityPercent == right.opacityPercent
         && left.scalePercent == right.scalePercent
         && left.position == right.position;
+}
+
+ClipSettings clampedClipSettings(ClipSettings settings)
+{
+    settings.opacityPercent = std::clamp(settings.opacityPercent,
+                                         kMinimumOpacityPercent, kMaximumOpacityPercent);
+    settings.scalePercent = std::clamp(settings.scalePercent,
+                                       kMinimumScalePercent, kMaximumScalePercent);
+    return settings;
 }
 
 bool hasSameTimelineClipState(const TimelineClipState &left, const TimelineClipState &right)
@@ -65,6 +78,11 @@ const TimelineViewState &EditorSession::timelineViewState() const
     return timelineViewState_;
 }
 
+EditorProject EditorSession::projectSnapshot() const
+{
+    return { clipSettings_, timelineClipStates_ };
+}
+
 void EditorSession::selectAsset(int assetIndex)
 {
     selectedAssetIndex_ = std::clamp(assetIndex, 0,
@@ -75,12 +93,13 @@ void EditorSession::selectAsset(int assetIndex)
 void EditorSession::updateSelectedClipSettings(const ClipSettings &settings)
 {
     const ClipSettings previousSettings = clipSettings_[selectedAssetIndex_];
-    if (hasSameClipSettings(previousSettings, settings))
+    const ClipSettings updatedSettings = clampedClipSettings(settings);
+    if (hasSameClipSettings(previousSettings, updatedSettings))
         return;
 
-    clipSettings_[selectedAssetIndex_] = settings;
+    clipSettings_[selectedAssetIndex_] = updatedSettings;
     undoHistory_.push_back({ HistoryEntryType::ClipSettings, selectedAssetIndex_,
-                             previousSettings, settings, {}, {} });
+                             previousSettings, updatedSettings, {}, {} });
     redoHistory_.clear();
     notifyStateChanged(EditorChange::ClipSettings);
 }
@@ -97,6 +116,26 @@ void EditorSession::updateSelectedTimelineClipState(const TimelineClipState &sta
                              {}, {}, previousState, updatedState });
     redoHistory_.clear();
     notifyStateChanged(EditorChange::TimelineClip);
+}
+
+void EditorSession::replaceProject(const EditorProject &project)
+{
+    // The demo media catalog is fixed, so a project must have one state entry
+    // per catalog asset. Rejecting a mismatch keeps every indexed view safe.
+    if (project.clipSettings.size() != clipSettings_.size()
+        || project.timelineClips.size() != timelineClipStates_.size()) {
+        return;
+    }
+
+    for (std::size_t index = 0; index < clipSettings_.size(); ++index) {
+        clipSettings_[index] = clampedClipSettings(project.clipSettings[index]);
+        timelineClipStates_[index] = clampedTimelineClipState(project.timelineClips[index]);
+    }
+    undoHistory_.clear();
+    redoHistory_.clear();
+    playbackState_.isPlaying = false;
+    playbackState_.currentFrame = kFirstFrame;
+    notifyStateChanged(EditorChange::All);
 }
 
 bool EditorSession::canUndo() const

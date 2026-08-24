@@ -24,6 +24,10 @@ endif()
 add_executable(MiniEditorCoexistence WIN32
     src/DemoProject.h
     src/ProjectState.h
+    src/EditorProject.h
+    src/EditorProject.cpp
+    src/ProjectSerializer.h
+    src/ProjectSerializer.cpp
     src/EditorSession.h
     src/EditorSession.cpp
     src/WorkspaceSettings.h
@@ -57,6 +61,10 @@ target_include_directories(MiniEditorCoexistence PRIVATE
 source_group("DataModel" FILES
     src/DemoProject.h
     src/ProjectState.h
+    src/EditorProject.h
+    src/EditorProject.cpp
+    src/ProjectSerializer.h
+    src/ProjectSerializer.cpp
     src/EditorSession.h
     src/EditorSession.cpp
     src/WorkspaceSettings.h
@@ -73,6 +81,10 @@ source_group("Layout" FILES
 if(BUILD_TESTING)
     add_executable(MiniEditorCoreTests
         tests/MiniEditorCoreTests.cpp
+        src/EditorProject.h
+        src/EditorProject.cpp
+        src/ProjectSerializer.h
+        src/ProjectSerializer.cpp
         src/EditorSession.h
         src/EditorSession.cpp
         src/WorkspaceLayout.h

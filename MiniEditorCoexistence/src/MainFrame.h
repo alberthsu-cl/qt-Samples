@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EditorSession.h"
+#include "ProjectSerializer.h"
 #include "WorkspaceLayout.h"
 #include "WorkspaceSettings.h"
 
@@ -23,6 +24,8 @@
 #include <afxext.h>
 #include <afxwin.h>
 
+#include <filesystem>
+
 class MainFrame final : public CFrameWnd
 {
     DECLARE_DYNCREATE(MainFrame)
@@ -43,6 +46,10 @@ protected:
     afx_msg void OnUpdateEditRedo(CCmdUI *commandUi);
     afx_msg void OnTimer(UINT_PTR timerId);
     afx_msg void OnFileExit();
+    afx_msg void OnFileNew();
+    afx_msg void OnFileOpen();
+    afx_msg void OnFileSave();
+    afx_msg void OnFileSaveAs();
     BOOL PreTranslateMessage(MSG *message) override;
 
     DECLARE_MESSAGE_MAP()
@@ -58,6 +65,9 @@ private:
     void updateStatusText();
     void restoreWorkspaceSettings();
     void saveWorkspaceSettings() const;
+    bool saveProject(bool chooseFilePath);
+    bool openProject(const std::filesystem::path &path);
+    void updateWindowTitle();
 
     CStatusBar statusBar_;
 #if MINI_EDITOR_USE_QT
@@ -82,5 +92,6 @@ private:
     EditorSession editorSession_;
     EditorSession::ObserverId editorSessionObserverId_ = 0;
     WorkspaceLayout workspaceLayout_;
+    std::filesystem::path projectFilePath_;
     bool isWorkspaceReady_ = false;
 };

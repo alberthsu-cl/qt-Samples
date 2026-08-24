@@ -1,5 +1,6 @@
 #pragma once
 
+#include "EditorProject.h"
 #include "ProjectState.h"
 
 #include <cstddef>
@@ -45,10 +46,12 @@ public:
     const TimelineClipState &selectedTimelineClipState() const;
     const PlaybackState &playbackState() const;
     const TimelineViewState &timelineViewState() const;
+    EditorProject projectSnapshot() const;
 
     void selectAsset(int assetIndex);
     void updateSelectedClipSettings(const ClipSettings &settings);
     void updateSelectedTimelineClipState(const TimelineClipState &state);
+    void replaceProject(const EditorProject &project);
     bool canUndo() const;
     bool canRedo() const;
     bool undo();
