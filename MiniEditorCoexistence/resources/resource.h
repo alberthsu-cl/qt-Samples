@@ -3,7 +3,6 @@
 #define IDR_MAINFRAME           101
 
 #define ID_FILE_EXIT            32771
-
 #define IDC_MEDIA_LIBRARY       1001
 #define IDC_PREVIEW             1002
 #define IDC_PROPERTIES          1003

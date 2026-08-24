@@ -27,7 +27,6 @@ constexpr bool includesChange(EditorChange changes, EditorChange requestedChange
 {
     return (static_cast<unsigned int>(changes) & static_cast<unsigned int>(requestedChange)) != 0;
 }
-#include <vector>
 
 // Framework-neutral editor state and commands. It knows no MFC window and no
 // Qt object. UI frameworks may request changes, but this session owns the
@@ -47,6 +46,10 @@ public:
 
     void selectAsset(int assetIndex);
     void updateSelectedClipSettings(const ClipSettings &settings);
+    bool canUndo() const;
+    bool canRedo() const;
+    bool undo();
+    bool redo();
     void handlePlaybackCommand(PlaybackCommand command);
     void advancePlaybackFrame();
     void seekTimeline(int frame);
@@ -61,12 +64,20 @@ public:
     void removeObserver(ObserverId observerId);
 
 private:
+    struct ClipSettingsHistoryEntry {
+        int assetIndex;
+        ClipSettings before;
+        ClipSettings after;
+    };
+
     void notifyStateChanged(EditorChange changes);
 
     std::vector<ClipSettings> clipSettings_;
     int selectedAssetIndex_ = 0;
     PlaybackState playbackState_;
     TimelineViewState timelineViewState_;
+    std::vector<ClipSettingsHistoryEntry> undoHistory_;
+    std::vector<ClipSettingsHistoryEntry> redoHistory_;
     struct Observer {
         ObserverId id;
         StateChangedHandler handler;

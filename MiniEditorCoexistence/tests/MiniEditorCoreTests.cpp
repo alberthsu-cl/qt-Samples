@@ -74,6 +74,44 @@ void editorSessionOwnsAndClampsState()
     require(notifications.size() == 7, "Removed observer must no longer receive notifications.");
 }
 
+void editorSessionUndoRedoTracksOnlyClipEdits()
+{
+    EditorSession session(2);
+    session.selectAsset(1);
+    require(!session.canUndo(), "Selection alone must not create undo history.");
+
+    ClipSettings editedSettings = session.selectedClipSettings();
+    editedSettings.opacityPercent = 40;
+    editedSettings.scalePercent = 140;
+    session.updateSelectedClipSettings(editedSettings);
+    require(session.canUndo(), "A clip-settings edit must become undoable.");
+    require(!session.canRedo(), "A new edit must clear redo history.");
+
+    session.selectAsset(0);
+    require(session.undo(), "Undo must restore the previous clip settings.");
+    require(session.selectedAssetIndex() == 1,
+            "Undo must select the asset that owns the restored edit.");
+    require(session.selectedClipSettings().opacityPercent == 100,
+            "Undo must restore the original opacity.");
+    require(session.selectedClipSettings().scalePercent == 100,
+            "Undo must restore the original scale.");
+    require(session.canRedo(), "Undo must make the command redoable.");
+
+    require(session.redo(), "Redo must reapply the clip settings.");
+    require(session.selectedClipSettings().opacityPercent == 40,
+            "Redo must restore the edited opacity.");
+    require(session.selectedClipSettings().scalePercent == 140,
+            "Redo must restore the edited scale.");
+
+    TimelineViewState timelineViewState;
+    timelineViewState.zoomPercent = 150;
+    session.updateTimelineViewState(timelineViewState);
+    require(session.canUndo(), "Timeline-view changes must not alter clip edit history.");
+    require(session.undo(), "The clip edit must remain undoable after a view change.");
+    require(session.selectedClipSettings().opacityPercent == 100,
+            "Undo must still target the clip edit, not timeline view state.");
+}
+
 void workspaceLayoutProtectsPaneBounds()
 {
     WorkspaceLayout layout;
@@ -109,6 +147,7 @@ int main()
 {
     try {
         editorSessionOwnsAndClampsState();
+        editorSessionUndoRedoTracksOnlyClipEdits();
         workspaceLayoutProtectsPaneBounds();
         std::cout << "MiniEditorCoreTests passed.\n";
         return 0;

@@ -183,6 +183,15 @@ test executable, then runs CTest for the active Debug/Release configuration.
 and Qt views. For example, a playback timer tick updates the preview, timeline
 canvas, transport, and status bar—not the media library or properties panel.
 
+## Phase 13 — Framework-neutral Undo/Redo
+
+`EditorSession` records only `ClipSettings` edits (opacity, scale, and
+position) in undo/redo history. Playback, selection, timeline view, and
+workspace layout are deliberately excluded because they are transient UI
+state, not project-edit decisions. The MFC Edit menu invokes the same
+framework-neutral `undo()` and `redo()` operations, and enables each action
+only when the matching history stack has an entry.
+
 ## Phase 12 — Flicker-free MFC playback painting
 
 `MfcDoubleBufferedPaint` draws MFC preview and timeline content to a

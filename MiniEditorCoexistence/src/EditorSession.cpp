@@ -10,6 +10,13 @@ constexpr int kLastFrame = 299;
 constexpr int kMinimumTimelineZoom = 50;
 constexpr int kMaximumTimelineZoom = 200;
 
+bool hasSameClipSettings(const ClipSettings &left, const ClipSettings &right)
+{
+    return left.opacityPercent == right.opacityPercent
+        && left.scalePercent == right.scalePercent
+        && left.position == right.position;
+}
+
 } // namespace
 
 EditorSession::EditorSession(std::size_t assetCount)
@@ -46,8 +53,52 @@ void EditorSession::selectAsset(int assetIndex)
 
 void EditorSession::updateSelectedClipSettings(const ClipSettings &settings)
 {
+    const ClipSettings previousSettings = clipSettings_[selectedAssetIndex_];
+    if (hasSameClipSettings(previousSettings, settings))
+        return;
+
     clipSettings_[selectedAssetIndex_] = settings;
+    undoHistory_.push_back({ selectedAssetIndex_, previousSettings, settings });
+    redoHistory_.clear();
     notifyStateChanged(EditorChange::ClipSettings);
+}
+
+bool EditorSession::canUndo() const
+{
+    return !undoHistory_.empty();
+}
+
+bool EditorSession::canRedo() const
+{
+    return !redoHistory_.empty();
+}
+
+bool EditorSession::undo()
+{
+    if (!canUndo())
+        return false;
+
+    const ClipSettingsHistoryEntry entry = undoHistory_.back();
+    undoHistory_.pop_back();
+    clipSettings_[entry.assetIndex] = entry.before;
+    selectedAssetIndex_ = entry.assetIndex;
+    redoHistory_.push_back(entry);
+    notifyStateChanged(EditorChange::Selection | EditorChange::ClipSettings);
+    return true;
+}
+
+bool EditorSession::redo()
+{
+    if (!canRedo())
+        return false;
+
+    const ClipSettingsHistoryEntry entry = redoHistory_.back();
+    redoHistory_.pop_back();
+    clipSettings_[entry.assetIndex] = entry.after;
+    selectedAssetIndex_ = entry.assetIndex;
+    undoHistory_.push_back(entry);
+    notifyStateChanged(EditorChange::Selection | EditorChange::ClipSettings);
+    return true;
 }
 
 void EditorSession::handlePlaybackCommand(PlaybackCommand command)

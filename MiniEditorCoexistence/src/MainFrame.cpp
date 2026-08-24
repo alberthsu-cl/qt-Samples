@@ -152,6 +152,26 @@ void MainFrame::OnPlaybackCommand(UINT commandId)
     }
 }
 
+void MainFrame::OnEditUndo()
+{
+    editorSession_.undo();
+}
+
+void MainFrame::OnEditRedo()
+{
+    editorSession_.redo();
+}
+
+void MainFrame::OnUpdateEditUndo(CCmdUI *commandUi)
+{
+    commandUi->Enable(editorSession_.canUndo());
+}
+
+void MainFrame::OnUpdateEditRedo(CCmdUI *commandUi)
+{
+    commandUi->Enable(editorSession_.canRedo());
+}
+
 void MainFrame::OnTimer(UINT_PTR timerId)
 {
     if (timerId == kPlaybackTimerId && editorSession_.playbackState().isPlaying) {
@@ -376,6 +396,10 @@ BEGIN_MESSAGE_MAP(MainFrame, CFrameWnd)
                      &MainFrame::OnSelectMediaAsset)
     ON_COMMAND_RANGE(ID_PLAYBACK_TOGGLE, ID_PLAYBACK_STEP_FORWARD,
                      &MainFrame::OnPlaybackCommand)
+    ON_COMMAND(ID_EDIT_UNDO, &MainFrame::OnEditUndo)
+    ON_COMMAND(ID_EDIT_REDO, &MainFrame::OnEditRedo)
+    ON_UPDATE_COMMAND_UI(ID_EDIT_UNDO, &MainFrame::OnUpdateEditUndo)
+    ON_UPDATE_COMMAND_UI(ID_EDIT_REDO, &MainFrame::OnUpdateEditRedo)
     ON_WM_TIMER()
     ON_COMMAND(ID_FILE_EXIT, &MainFrame::OnFileExit)
 END_MESSAGE_MAP()

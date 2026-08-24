@@ -37,6 +37,10 @@ protected:
     afx_msg void OnGetMinMaxInfo(MINMAXINFO *minMaxInfo);
     afx_msg void OnSelectMediaAsset(UINT commandId);
     afx_msg void OnPlaybackCommand(UINT commandId);
+    afx_msg void OnEditUndo();
+    afx_msg void OnEditRedo();
+    afx_msg void OnUpdateEditUndo(CCmdUI *commandUi);
+    afx_msg void OnUpdateEditRedo(CCmdUI *commandUi);
     afx_msg void OnTimer(UINT_PTR timerId);
     afx_msg void OnFileExit();
 

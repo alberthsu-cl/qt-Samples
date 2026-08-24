@@ -9,8 +9,8 @@ BEGIN
     END
     POPUP "&Edit"
     BEGIN
-        MENUITEM "Undo\tCtrl+Z", 32780, GRAYED
-        MENUITEM "Redo\tCtrl+Y", 32781, GRAYED
+        MENUITEM "&Undo", ID_EDIT_UNDO
+        MENUITEM "&Redo", ID_EDIT_REDO
     END
     POPUP "&Playback"
     BEGIN
