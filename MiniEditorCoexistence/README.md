@@ -253,6 +253,11 @@ placed multiple times. The current compatibility UI still uses its older
 single-clip adapter; the next step will connect media-library drag/drop to
 `TimelineModel` and then remove that adapter.
 
+`TimelineClip` now carries `TimelineTrackType`. Dropped video and image assets
+go to V1, while audio assets go to A1; both lanes remain empty until a clip is
+dropped. The model test verifies that the same timeline can contain both track
+types.
+
 The Qt media library now provides a drag source, and the Qt timeline accepts
 the asset MIME type and inserts a clip at the drop frame. `EditorSession` owns
 the model and marks the project dirty when an insertion occurs. Serialization

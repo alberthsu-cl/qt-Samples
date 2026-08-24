@@ -191,12 +191,14 @@ void timelineModelStartsEmptyAndOwnsIndependentClipIds()
     TimelineModel timeline;
     require(timeline.clips().empty(), "A new timeline must start empty.");
 
-    const int firstClipId = timeline.addClip(2);
-    const int secondClipId = timeline.addClip(2, { 180, 90 });
+    const int firstClipId = timeline.addClip(2, TimelineTrackType::Video);
+    const int secondClipId = timeline.addClip(3, TimelineTrackType::Audio, { 180, 90 });
     require(firstClipId != secondClipId, "Each timeline placement needs a unique ID.");
     require(timeline.clips().size() == 2, "Timeline must retain multiple placements.");
     require(timeline.findClip(firstClipId)->mediaAssetIndex == 2,
             "A timeline clip must reference its source media asset.");
+    require(timeline.findClip(secondClipId)->trackType == TimelineTrackType::Audio,
+            "Audio placements must target the audio track.");
 
     require(timeline.moveClip(secondClipId, { 240, 120 }),
             "Timeline must move an existing clip by ID.");

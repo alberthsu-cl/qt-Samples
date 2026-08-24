@@ -49,7 +49,7 @@ public:
     const TimelineViewState &timelineViewState() const;
     EditorProject projectSnapshot() const;
     const TimelineModel &timelineModel() const;
-    int addTimelineClip(int mediaAssetIndex, int startFrame);
+    int addTimelineClip(int mediaAssetIndex, TimelineTrackType trackType, int startFrame);
     bool isProjectDirty() const;
 
     void selectAsset(int assetIndex);

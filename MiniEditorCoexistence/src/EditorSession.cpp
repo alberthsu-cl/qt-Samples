@@ -88,11 +88,12 @@ const TimelineModel &EditorSession::timelineModel() const
     return timelineModel_;
 }
 
-int EditorSession::addTimelineClip(int mediaAssetIndex, int startFrame)
+int EditorSession::addTimelineClip(int mediaAssetIndex, TimelineTrackType trackType,
+                                   int startFrame)
 {
     TimelineClipState state;
     state.startFrame = std::clamp(startFrame, 0, kMaximumTimelineFrame - state.durationFrames);
-    const int clipId = timelineModel_.addClip(mediaAssetIndex, state);
+    const int clipId = timelineModel_.addClip(mediaAssetIndex, trackType, state);
     projectDirty_ = true;
     notifyStateChanged(EditorChange::TimelineClip);
     return clipId;

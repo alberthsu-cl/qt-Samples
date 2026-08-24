@@ -7,10 +7,11 @@ const std::vector<TimelineClip> &TimelineModel::clips() const
     return clips_;
 }
 
-int TimelineModel::addClip(int mediaAssetIndex, const TimelineClipState &state)
+int TimelineModel::addClip(int mediaAssetIndex, TimelineTrackType trackType,
+                           const TimelineClipState &state)
 {
     const int clipId = nextClipId_++;
-    clips_.push_back({ clipId, mediaAssetIndex, state });
+    clips_.push_back({ clipId, mediaAssetIndex, trackType, state });
     return clipId;
 }
 

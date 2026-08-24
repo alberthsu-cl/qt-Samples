@@ -117,7 +117,9 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
             / kTimelineFramesPerScaleUnit;
         const int clipWidth = std::max(1, clip.state.durationFrames * pixels
             / kTimelineFramesPerScaleUnit);
-        const QRect clipRect(left, kRulerHeight + 5, clipWidth, kTrackHeight - 10);
+        const int trackTop = clip.trackType == TimelineTrackType::Audio
+            ? kRulerHeight + kTrackHeight + 8 : kRulerHeight;
+        const QRect clipRect(left, trackTop + 5, clipWidth, kTrackHeight - 10);
         painter.fillRect(clipRect, assetColor);
         painter.setPen(QColor(180, 220, 255));
         painter.drawRect(clipRect.adjusted(0, 0, -1, -1));
@@ -136,12 +138,7 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
                          Qt::AlignCenter, QStringLiteral("Drag media here to begin editing"));
     }
 
-    const QRect clipRect = timelineClipRect();
-
-    if (viewState_.isAudioTrackVisible)
-        painter.fillRect(clipRect.left(), kRulerHeight + kTrackHeight + 24,
-                         clipRect.width(), kTrackHeight - 16, QColor(38, 114, 176));
-    else
+    if (!viewState_.isAudioTrackVisible)
         painter.drawText(QRect(kTimelineLeft, kRulerHeight + kTrackHeight + 8,
                                width() - kTimelineLeft - 12, kTrackHeight),
                          Qt::AlignVCenter, QStringLiteral("Audio track hidden"));

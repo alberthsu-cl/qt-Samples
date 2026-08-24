@@ -5,11 +5,17 @@
 #include <cstddef>
 #include <vector>
 
+enum class TimelineTrackType {
+    Video,
+    Audio
+};
+
 // One placement of a media asset on the timeline. A source asset may appear
 // more than once, so a timeline clip has its own identity and timing.
 struct TimelineClip {
     int id = 0;
     int mediaAssetIndex = 0;
+    TimelineTrackType trackType = TimelineTrackType::Video;
     TimelineClipState state;
 };
 
@@ -21,6 +27,7 @@ public:
     const std::vector<TimelineClip> &clips() const;
 
     int addClip(int mediaAssetIndex,
+                TimelineTrackType trackType,
                 const TimelineClipState &state = {});
     bool moveClip(int clipId, const TimelineClipState &state);
     bool removeClip(int clipId);

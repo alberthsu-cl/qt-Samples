@@ -4,6 +4,7 @@
 #include "resource.h"
 
 #include <algorithm>
+#include <cwchar>
 #include <filesystem>
 
 IMPLEMENT_DYNCREATE(MainFrame, CFrameWnd)
@@ -76,7 +77,11 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     });
     timelineCanvasHost_.setMediaAssetDroppedHandler(
         [this](int mediaAssetIndex, int frame) {
-            editorSession_.addTimelineClip(mediaAssetIndex, frame);
+            const bool isAudio = wcscmp(demoAssets()[mediaAssetIndex].kind, L"Audio") == 0;
+            editorSession_.addTimelineClip(mediaAssetIndex,
+                                           isAudio ? TimelineTrackType::Audio
+                                                   : TimelineTrackType::Video,
+                                           frame);
         });
     if (!mediaLibraryHost_.create(GetSafeHwnd()))
         return -1;
