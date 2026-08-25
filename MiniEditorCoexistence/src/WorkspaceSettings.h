@@ -8,9 +8,9 @@
 // User-specific workspace preferences. This is deliberately separate from a
 // portable video-editor project file: it describes the user's UI workspace.
 struct WorkspaceSettings {
-    int mediaLibraryWidth = 304;
-    int propertiesWidth = 250;
-    int timelineHeight = 220;
+    int mediaLibraryWidth = 340;
+    int propertiesWidth = 310;
+    int timelineHeight = 270;
     int selectedAssetIndex = 0;
     TimelineViewState timelineViewState;
 };

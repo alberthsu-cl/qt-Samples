@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ProjectState.h"
+#include "TimelineAssetPresentation.h"
 #include "TimelineModel.h"
 
 #include <afxwin.h>
@@ -10,6 +11,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 
 class QtTimelineCanvas;
 class QScrollArea;
@@ -21,9 +23,8 @@ public:
     using TimelineClipEditedHandler = std::function<void(int clipId,
                                                          const TimelineClipState &state)>;
     using MediaAssetDroppedHandler = std::function<void(int mediaAssetId, int frame)>;
-    using AssetPresentationResolver = std::function<bool(int mediaAssetId,
-                                                          QString *displayName,
-                                                          QColor *color)>;
+    using AssetPresentationResolver =
+        std::function<std::optional<TimelineAssetPresentation>(int mediaAssetId)>;
     using TimelineClipDeletedHandler = std::function<void(int clipId)>;
     using TimelineClipSelectedHandler = std::function<void(int clipId)>;
 

@@ -5,10 +5,12 @@
 
 #include <QComboBox>
 #include <QAbstractItemView>
+#include <QDrag>
 #include <QHBoxLayout>
 #include <QItemSelectionModel>
 #include <QLineEdit>
 #include <QListView>
+#include <QMimeData>
 #include <QPushButton>
 #include <QPainter>
 #include <QPen>
@@ -18,6 +20,39 @@
 #include <QVBoxLayout>
 
 namespace {
+
+constexpr int kDragPixmapWidth = 84;
+
+class MediaAssetListView final : public QListView
+{
+public:
+    using QListView::QListView;
+
+protected:
+    void startDrag(Qt::DropActions supportedActions) override
+    {
+        const QModelIndex index = currentIndex();
+        if (!index.isValid())
+            return;
+
+        QMimeData *mimeData = model()->mimeData(QModelIndexList{ index });
+        if (mimeData == nullptr)
+            return;
+
+        QDrag drag(this);
+        drag.setMimeData(mimeData);
+
+        // Put the pointer on the thumbnail's left edge. The same pointer X is
+        // used as the new timeline clip's start, so the drag image and the
+        // insertion preview communicate one consistent placement rule.
+        const QRect itemRect = visualRect(index);
+        const QPixmap dragPixmap = viewport()->grab(itemRect).scaledToWidth(
+            kDragPixmapWidth, Qt::SmoothTransformation);
+        drag.setPixmap(dragPixmap);
+        drag.setHotSpot(QPoint(0, dragPixmap.height() / 2));
+        drag.exec(supportedActions, Qt::CopyAction);
+    }
+};
 
 class MediaAssetDelegate final : public QStyledItemDelegate
 {
@@ -71,7 +106,7 @@ public:
 QtMediaLibraryPanel::QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidget *parent)
     : QWidget(parent)
     , assetModel_(new MediaAssetModel(mediaLibrary, this))
-    , assetView_(new QListView(this))
+    , assetView_(new MediaAssetListView(this))
 {
     setStyleSheet(QStringLiteral(
         "QtMediaLibraryPanel { background: #23252b; }"

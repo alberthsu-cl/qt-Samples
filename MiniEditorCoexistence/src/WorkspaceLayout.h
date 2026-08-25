@@ -2,9 +2,11 @@
 
 // Framework-neutral persisted dimensions for the editor workspace.
 struct WorkspaceLayoutState {
-    int mediaLibraryWidth = 304;
-    int propertiesWidth = 250;
-    int timelineHeight = 220;
+    // These defaults leave room for two media cards, complete property
+    // editors, and both timeline tracks plus the horizontal scroll bar.
+    int mediaLibraryWidth = 340;
+    int propertiesWidth = 310;
+    int timelineHeight = 270;
 };
 
 // Framework-neutral child bounds in the MFC frame's client coordinates.

@@ -4,6 +4,8 @@
 #include <QMimeData>
 #include <QPainter>
 #include <QDragEnterEvent>
+#include <QDragLeaveEvent>
+#include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QKeyEvent>
 
@@ -159,13 +161,14 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
         TimelineClip clip = sourceClip;
         if (isDraggingClip_ && clip.id == dragClipId_)
             clip.state = dragPreviewState_;
-        QString displayName;
-        QColor assetColor;
-        if (!assetPresentationResolver_
-            || !assetPresentationResolver_(clip.mediaAssetId, &displayName, &assetColor)) {
+        if (!assetPresentationResolver_)
             return;
-        }
-        assetColor = assetColor.darker(100);
+        const std::optional<TimelineAssetPresentation> presentation =
+            assetPresentationResolver_(clip.mediaAssetId);
+        if (!presentation)
+            return;
+
+        const QColor assetColor = presentation->color.darker(100);
         const int pixels = pixelsPerScaleUnit(viewState_);
         const int left = kTimelineLeft + clip.state.startFrame * pixels
             / kTimelineFramesPerScaleUnit;
@@ -185,7 +188,7 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
         painter.setPen(Qt::white);
         painter.drawText(clipRect.adjusted(10, 0, -10, 0),
                          Qt::AlignCenter | Qt::TextSingleLine,
-                         displayName);
+                         presentation->displayName);
     };
     if (!timelineClips_.empty()) {
         for (const TimelineClip &clip : timelineClips_)
@@ -201,6 +204,40 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
         painter.drawText(QRect(kTimelineLeft, kRulerHeight + kTrackHeight + 8,
                                width() - kTimelineLeft - 12, kTrackHeight),
                          Qt::AlignVCenter, QStringLiteral("Audio track hidden"));
+
+    if (isMediaDropPreviewVisible_) {
+        const int pixels = pixelsPerScaleUnit(viewState_);
+        const int left = kTimelineLeft + mediaDropStartFrame_ * pixels
+            / kTimelineFramesPerScaleUnit;
+        const int previewWidth = std::max(
+            1, mediaDropPresentation_.durationFrames * pixels
+                / kTimelineFramesPerScaleUnit);
+        const int trackTop = mediaDropPresentation_.trackType == TimelineTrackType::Audio
+            ? kRulerHeight + kTrackHeight + 8 : kRulerHeight;
+        const QRect previewRect(left, trackTop + 5,
+                                previewWidth, kTrackHeight - 10);
+
+        QColor previewColor = mediaDropPresentation_.color;
+        previewColor.setAlpha(150);
+        painter.fillRect(previewRect, previewColor);
+        painter.setPen(QPen(QColor(108, 190, 255), 2, Qt::DashLine));
+        painter.drawRect(previewRect.adjusted(0, 0, -1, -1));
+
+        painter.setPen(Qt::white);
+        painter.drawText(previewRect.adjusted(8, 0, -8, 0),
+                         Qt::AlignCenter | Qt::TextSingleLine,
+                         mediaDropPresentation_.displayName);
+
+        // The guide and label make the placement rule unambiguous: this
+        // left edge is the exact frame at which the new clip will start.
+        painter.fillRect(left - 1, 0, 3, height(), QColor(108, 190, 255));
+        const QString startLabel = QStringLiteral("Start %1")
+            .arg(timeLabelForFrame(mediaDropStartFrame_));
+        const QRect labelRect(left + 5, 2, 82, 22);
+        painter.fillRect(labelRect, QColor(18, 20, 24, 230));
+        painter.setPen(QColor(220, 235, 250));
+        painter.drawText(labelRect, Qt::AlignCenter, startLabel);
+    }
 
     const int playheadX = kTimelineLeft + playbackState_.currentFrame
         * pixelsPerScaleUnit(viewState_) / kTimelineFramesPerScaleUnit;
@@ -264,21 +301,82 @@ void QtTimelineCanvas::keyPressEvent(QKeyEvent *event)
 
 void QtTimelineCanvas::dragEnterEvent(QDragEnterEvent *event)
 {
-    if (event->mimeData()->hasFormat(QString::fromLatin1(kMediaAssetMimeType)))
+    if (updateMediaDropPreview(event->mimeData(), event->position().toPoint().x()))
         event->acceptProposedAction();
-    else
+    else {
+        clearMediaDropPreview();
         event->ignore();
+    }
+}
+
+void QtTimelineCanvas::dragMoveEvent(QDragMoveEvent *event)
+{
+    if (updateMediaDropPreview(event->mimeData(), event->position().toPoint().x())) {
+        event->setDropAction(Qt::CopyAction);
+        event->accept();
+    } else {
+        clearMediaDropPreview();
+        event->ignore();
+    }
+}
+
+void QtTimelineCanvas::dragLeaveEvent(QDragLeaveEvent *event)
+{
+    clearMediaDropPreview();
+    event->accept();
 }
 
 void QtTimelineCanvas::dropEvent(QDropEvent *event)
 {
-    const QByteArray data = event->mimeData()->data(QString::fromLatin1(kMediaAssetMimeType));
-    bool ok = false;
-    const int mediaAssetId = QString::fromLatin1(data).toInt(&ok);
-    if (ok && mediaAssetDroppedHandler_)
-        mediaAssetDroppedHandler_(mediaAssetId, frameAtTimelineX(event->position().x()));
+    if (!updateMediaDropPreview(event->mimeData(), event->position().toPoint().x())) {
+        event->ignore();
+        return;
+    }
+
+    const int mediaAssetId = mediaDropAssetId_;
+    const int startFrame = mediaDropStartFrame_;
+    clearMediaDropPreview();
+    if (mediaAssetDroppedHandler_)
+        mediaAssetDroppedHandler_(mediaAssetId, startFrame);
     event->setDropAction(Qt::CopyAction);
     event->accept();
+}
+
+bool QtTimelineCanvas::updateMediaDropPreview(const QMimeData *mimeData, int timelineX)
+{
+    if (mimeData == nullptr
+        || !mimeData->hasFormat(QString::fromLatin1(kMediaAssetMimeType))
+        || !assetPresentationResolver_) {
+        return false;
+    }
+
+    bool isValidId = false;
+    const int mediaAssetId = QString::fromLatin1(
+        mimeData->data(QString::fromLatin1(kMediaAssetMimeType))).toInt(&isValidId);
+    if (!isValidId)
+        return false;
+
+    const std::optional<TimelineAssetPresentation> presentation =
+        assetPresentationResolver_(mediaAssetId);
+    if (!presentation || presentation->durationFrames <= 0)
+        return false;
+
+    isMediaDropPreviewVisible_ = true;
+    mediaDropAssetId_ = mediaAssetId;
+    mediaDropStartFrame_ = frameAtTimelineX(timelineX);
+    mediaDropPresentation_ = *presentation;
+    update();
+    return true;
+}
+
+void QtTimelineCanvas::clearMediaDropPreview()
+{
+    if (!isMediaDropPreviewVisible_)
+        return;
+
+    isMediaDropPreviewVisible_ = false;
+    mediaDropAssetId_ = 0;
+    update();
 }
 
 int QtTimelineCanvas::frameAtRulerX(int x) const

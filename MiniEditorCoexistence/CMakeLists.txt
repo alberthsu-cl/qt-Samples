@@ -125,6 +125,7 @@ target_compile_definitions(MiniEditorCoexistence PRIVATE
 
 if(MINI_EDITOR_USE_QT)
     target_sources(MiniEditorCoexistence PRIVATE
+        src/TimelineAssetPresentation.h
         src/MediaAssetModel.h
         src/MediaAssetModel.cpp
         src/QtMediaLibraryPanel.h

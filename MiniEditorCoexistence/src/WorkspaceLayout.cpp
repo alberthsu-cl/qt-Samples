@@ -8,11 +8,11 @@ constexpr int kOuterMargin = 6;
 constexpr int kTransportHeight = 42;
 constexpr int kTimelineToolbarHeight = 44;
 constexpr int kSplitterThickness = 6;
-constexpr int kMinimumMediaLibraryWidth = 180;
-constexpr int kMinimumPropertiesWidth = 190;
+constexpr int kMinimumMediaLibraryWidth = 340;
+constexpr int kMinimumPropertiesWidth = 310;
 constexpr int kMinimumPreviewWidth = 320;
 constexpr int kMinimumTopAreaHeight = 250;
-constexpr int kMinimumTimelineHeight = 140;
+constexpr int kMinimumTimelineHeight = 240;
 
 WorkspaceRect rectFromEdges(int left, int top, int right, int bottom)
 {

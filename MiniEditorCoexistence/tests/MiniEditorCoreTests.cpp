@@ -386,9 +386,13 @@ void workspaceLayoutProtectsPaneBounds()
     WorkspaceLayout layout;
     WorkspaceGeometry geometry = layout.calculate(1500, 900);
 
-    require(geometry.mediaLibrary.width >= 180, "Media library must respect its minimum width.");
-    require(geometry.properties.width >= 190, "Properties must respect its minimum width.");
+    require(geometry.mediaLibrary.width >= 340,
+            "Media library must remain wide enough for two asset cards.");
+    require(geometry.properties.width >= 310,
+            "Properties must keep enough width for complete editors.");
     require(geometry.previewCanvas.width >= 320, "Preview must respect its minimum width.");
+    require(geometry.timeline.height >= 240,
+            "Timeline must remain tall enough to show its complete canvas.");
     require(right(geometry.mediaLibrary) <= geometry.leftSplitter.left,
             "Left splitter must follow the media library.");
     require(right(geometry.previewCanvas) <= geometry.rightSplitter.left,

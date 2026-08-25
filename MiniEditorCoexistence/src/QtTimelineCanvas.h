@@ -1,12 +1,16 @@
 #pragma once
 
 #include "ProjectState.h"
+#include "TimelineAssetPresentation.h"
 #include "TimelineModel.h"
 
 #include <QWidget>
 
 #include <functional>
+#include <optional>
 #include <vector>
+
+class QMimeData;
 
 class QtTimelineCanvas final : public QWidget
 {
@@ -15,9 +19,8 @@ public:
     using TimelineClipEditedHandler = std::function<void(int clipId,
                                                          const TimelineClipState &state)>;
     using MediaAssetDroppedHandler = std::function<void(int mediaAssetId, int frame)>;
-    using AssetPresentationResolver = std::function<bool(int mediaAssetId,
-                                                          QString *displayName,
-                                                          QColor *color)>;
+    using AssetPresentationResolver =
+        std::function<std::optional<TimelineAssetPresentation>(int mediaAssetId)>;
     using TimelineClipDeletedHandler = std::function<void(int clipId)>;
     using TimelineClipSelectedHandler = std::function<void(int clipId)>;
 
@@ -45,6 +48,8 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
+    void dragMoveEvent(QDragMoveEvent *event) override;
+    void dragLeaveEvent(QDragLeaveEvent *event) override;
     void dropEvent(QDropEvent *event) override;
 
 private:
@@ -52,6 +57,8 @@ private:
     int frameAtTimelineX(int x) const;
     QRect timelineClipRect(const TimelineClip &clip) const;
     const TimelineClip *clipAt(const QPoint &point) const;
+    bool updateMediaDropPreview(const QMimeData *mimeData, int timelineX);
+    void clearMediaDropPreview();
 
     int selectedAssetIndex_ = 0;
     ClipSettings clipSettings_;
@@ -71,4 +78,8 @@ private:
     int dragClipId_ = 0;
     int selectedClipId_ = 0;
     TimelineClipState dragPreviewState_;
+    bool isMediaDropPreviewVisible_ = false;
+    int mediaDropAssetId_ = 0;
+    int mediaDropStartFrame_ = 0;
+    TimelineAssetPresentation mediaDropPresentation_;
 };

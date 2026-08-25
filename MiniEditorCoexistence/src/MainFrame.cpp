@@ -113,13 +113,18 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
             synchronizePlaybackDurationForFocus(false);
         });
     timelineCanvasHost_.setAssetPresentationResolver(
-        [this](int mediaAssetId, QString *displayName, QColor *color) {
+        [this](int mediaAssetId) -> std::optional<TimelineAssetPresentation> {
             const LibraryMediaAsset *asset = mediaLibrary_.findAsset(mediaAssetId);
             if (asset == nullptr)
-                return false;
-            *displayName = QString::fromStdWString(asset->displayName);
-            *color = QColor::fromRgb(asset->thumbnailColorRgb);
-            return true;
+                return std::nullopt;
+
+            TimelineAssetPresentation presentation;
+            presentation.displayName = QString::fromStdWString(asset->displayName);
+            presentation.color = QColor::fromRgb(asset->thumbnailColorRgb);
+            presentation.trackType = asset->kind == MediaKind::Audio
+                ? TimelineTrackType::Audio : TimelineTrackType::Video;
+            presentation.durationFrames = asset->timelineDurationFrames;
+            return presentation;
         });
     timelineCanvasHost_.setTimelineClipDeletedHandler(
         [this](int clipId) {
@@ -200,7 +205,7 @@ void MainFrame::OnSize(UINT type, int width, int height)
 void MainFrame::OnGetMinMaxInfo(MINMAXINFO *minMaxInfo)
 {
     CFrameWnd::OnGetMinMaxInfo(minMaxInfo);
-    minMaxInfo->ptMinTrackSize.x = 980;
+    minMaxInfo->ptMinTrackSize.x = 1040;
     minMaxInfo->ptMinTrackSize.y = 680;
 }
 

@@ -283,10 +283,18 @@ Selecting a Qt timeline clip and pressing Delete now removes it through
 `EditorSession`. Insertion, movement, and deletion all participate in the
 same Undo/Redo history and preserve the clip ID when restored.
 
-The Qt media library now provides a drag source, and the Qt timeline accepts
-the asset MIME type and inserts a clip at the drop frame. `EditorSession` owns
-the model and marks the project dirty when an insertion occurs. Serialization
-of these new placements is the next sub-step.
+The Qt media library provides a drag source, and the Qt timeline accepts its
+asset MIME type. During a drag, the pointer sits on the thumbnail's left edge
+and the timeline paints a duration-sized ghost clip, a blue insertion guide,
+and the proposed start time. These all identify the exact `startFrame` that
+will be stored when the clip is dropped. `EditorSession` owns the insertion,
+Undo/Redo history, dirty state, and serialized placement.
+
+The default workspace reserves enough width for two media-library cards and
+complete Properties editors. The timeline also reserves enough height for its
+toolbar, both tracks, and the horizontal scroll bar. Persisted splitter values
+are still restored, but the layout policy clamps older narrow values to these
+usable minimums.
 
 An empty Qt timeline now shows a drag-and-drop hint instead of drawing the
 legacy default asset. The pure-MFC fallback intentionally remains unchanged
