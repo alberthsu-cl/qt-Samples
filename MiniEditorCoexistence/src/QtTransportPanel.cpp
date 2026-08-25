@@ -3,7 +3,10 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QSignalBlocker>
+#include <QSlider>
 #include <QToolButton>
+
+#include <algorithm>
 
 namespace {
 
@@ -28,6 +31,7 @@ QtTransportPanel::QtTransportPanel(QWidget *parent)
                                                QStringLiteral("Next frame"), this))
     , stopButton_(createTransportButton(QStringLiteral("Stop"),
                                         QStringLiteral("Stop playback"), this))
+    , positionSlider_(new QSlider(Qt::Horizontal, this))
     , timecodeLabel_(new QLabel(this))
 {
     setStyleSheet(QStringLiteral(
@@ -35,6 +39,10 @@ QtTransportPanel::QtTransportPanel(QWidget *parent)
         "QToolButton { background: #30343d; color: #e6e8ed; "
         "border: 1px solid #525865; padding: 3px; }"
         "QToolButton:hover { background: #3c5572; }"
+        "QSlider::groove:horizontal { height: 5px; background: #4a4f5a; }"
+        "QSlider::sub-page:horizontal { background: #2f8ee5; }"
+        "QSlider::handle:horizontal { width: 13px; margin: -5px 0; "
+        "background: #e6e8ed; border-radius: 6px; }"
         "QLabel { background: #101114; color: #e6e8ed; padding: 6px; }"));
 
     playPauseButton_->setCheckable(true);
@@ -48,7 +56,7 @@ QtTransportPanel::QtTransportPanel(QWidget *parent)
     layout->addWidget(playPauseButton_);
     layout->addWidget(stepForwardButton_);
     layout->addWidget(stopButton_);
-    layout->addStretch();
+    layout->addWidget(positionSlider_, 1);
     layout->addWidget(timecodeLabel_);
 
     connect(stepBackwardButton_, &QToolButton::clicked, this,
@@ -59,6 +67,8 @@ QtTransportPanel::QtTransportPanel(QWidget *parent)
             [this] { emit playbackCommandRequested(static_cast<int>(PlaybackCommand::StepForward)); });
     connect(stopButton_, &QToolButton::clicked, this,
             [this] { emit playbackCommandRequested(static_cast<int>(PlaybackCommand::Stop)); });
+    connect(positionSlider_, &QSlider::sliderMoved, this,
+            &QtTransportPanel::playbackPositionRequested);
 
     setPlaybackState({});
 }
@@ -68,9 +78,12 @@ void QtTransportPanel::setPlaybackState(const PlaybackState &state)
     // MFC synchronizes the true playback state. Blocking clicked/toggled keeps
     // this view update from becoming a false command back to the MFC owner.
     const QSignalBlocker signalBlocker(playPauseButton_);
+    const QSignalBlocker sliderBlocker(positionSlider_);
     playPauseButton_->setChecked(state.isPlaying);
     playPauseButton_->setText(state.isPlaying ? QStringLiteral("Pause")
                                                : QStringLiteral("Play"));
+    positionSlider_->setRange(0, std::max(0, state.durationFrames - 1));
+    positionSlider_->setValue(state.currentFrame);
     timecodeLabel_->setText(timecodeText(state));
 }
 

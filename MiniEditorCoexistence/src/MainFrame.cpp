@@ -96,7 +96,8 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     timelineCanvasHost_.setSeekHandler([this](int frame) { editorSession_.seekTimeline(frame); });
     timelineCanvasHost_.setTimelineClipEditedHandler(
         [this](int clipId, const TimelineClipState &state) {
-            editorSession_.moveTimelineClip(clipId, state);
+            if (editorSession_.moveTimelineClip(clipId, state))
+                synchronizePlaybackDurationForFocus(false);
     });
     timelineCanvasHost_.setMediaAssetDroppedHandler(
         [this](int mediaAssetId, int frame) {
@@ -108,8 +109,8 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
             editorSession_.addTimelineClip(mediaAssetId,
                                            isAudio ? TimelineTrackType::Audio
                                                    : TimelineTrackType::Video,
-                                           frame,
-                                           asset->timelineDurationFrames);
+                                           frame, asset->timelineDurationFrames);
+            synchronizePlaybackDurationForFocus(false);
         });
     timelineCanvasHost_.setAssetPresentationResolver(
         [this](int mediaAssetId, QString *displayName, QColor *color) {
@@ -121,7 +122,10 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
             return true;
         });
     timelineCanvasHost_.setTimelineClipDeletedHandler(
-        [this](int clipId) { editorSession_.removeTimelineClip(clipId); });
+        [this](int clipId) {
+            if (editorSession_.removeTimelineClip(clipId))
+                synchronizePlaybackDurationForFocus(false);
+        });
     timelineCanvasHost_.setTimelineClipSelectedHandler(
         [this](int clipId) {
             const TimelineClip *clip = editorSession_.timelineModel().findClip(clipId);
@@ -133,7 +137,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
             if (iterator != assets.end())
                 editorSession_.selectAsset(static_cast<int>(iterator - assets.begin()));
             editorSession_.selectTimelineClip(clipId);
-            editorSession_.setPlaybackDuration(editorSession_.timelineModel().durationFrames(), true);
+            synchronizePlaybackDurationForFocus(true);
         });
     if (!mediaLibraryHost_.create(GetSafeHwnd(), mediaLibrary_))
         return -1;
@@ -148,9 +152,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     // and clip settings, then redraws the remaining MFC panes from that state.
     mediaLibraryHost_.setAssetSelectedHandler([this](int assetIndex) {
         editorSession_.selectAsset(assetIndex);
-        if (assetIndex >= 0 && assetIndex < static_cast<int>(mediaLibrary_.assets().size()))
-            editorSession_.setPlaybackDuration(
-                mediaLibrary_.assets()[assetIndex].timelineDurationFrames, true);
+        synchronizePlaybackDurationForFocus(true);
     });
     mediaLibraryHost_.setImportHandler([this] { importMediaFile(); });
     mediaLibraryHost_.setRemoveHandler(
@@ -161,6 +163,8 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     transportHost_.setPlaybackCommandHandler([this](PlaybackCommand command) {
         handlePlaybackCommand(command);
     });
+    transportHost_.setPlaybackPositionHandler(
+        [this](int frame) { editorSession_.seekTimeline(frame); });
     timelineToolbarHost_.setViewStateEditedHandler([this](const TimelineViewState &state) {
         editorSession_.updateTimelineViewState(state);
     });
@@ -457,7 +461,8 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     if (timelineViewChanged)
         timelineCanvasHost_.setViewState(timelineViewState);
     if (playbackChanged) {
-        timelineCanvasHost_.setPlaybackState(playbackState);
+        if (editorSession_.selectedTimelineClipId() != 0)
+            timelineCanvasHost_.setPlaybackState(playbackState);
         transportHost_.setPlaybackState(playbackState);
     }
 #else
@@ -510,6 +515,21 @@ PreviewState MainFrame::currentPreviewState() const
     preview.thumbnailColorRgb = asset->thumbnailColorRgb;
     preview.settings = visibleClip->settings;
     return preview;
+}
+
+void MainFrame::synchronizePlaybackDurationForFocus(bool resetToBeginning)
+{
+    if (editorSession_.selectedTimelineClipId() != 0) {
+        editorSession_.setPlaybackDuration(
+            editorSession_.timelineModel().contentDurationFrames(), resetToBeginning);
+        return;
+    }
+
+    const int assetIndex = editorSession_.selectedAssetIndex();
+    if (assetIndex >= 0 && assetIndex < static_cast<int>(mediaLibrary_.assets().size())) {
+        editorSession_.setPlaybackDuration(
+            mediaLibrary_.assets()[assetIndex].timelineDurationFrames, resetToBeginning);
+    }
 }
 
 void MainFrame::moveLeftSplitter(int parentX)
@@ -591,7 +611,9 @@ void MainFrame::importMediaFile()
     }
 
     editorSession_.addMediaAsset();
+#if MINI_EDITOR_USE_QT
     mediaLibraryHost_.refreshAssets();
+#endif
 }
 
 void MainFrame::removeMediaAsset(int assetIndex, int assetId)
@@ -610,8 +632,11 @@ void MainFrame::removeMediaAsset(int assetIndex, int assetId)
         return;
     }
 
-    if (mediaLibrary_.removeAsset(assetId) && editorSession_.removeMediaAsset(assetIndex))
+    if (mediaLibrary_.removeAsset(assetId) && editorSession_.removeMediaAsset(assetIndex)) {
+#if MINI_EDITOR_USE_QT
         mediaLibraryHost_.refreshAssets();
+#endif
+    }
 }
 
 bool MainFrame::saveProject(bool chooseFilePath)

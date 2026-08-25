@@ -7,6 +7,7 @@
 
 class QLabel;
 class QToolButton;
+class QSlider;
 
 // Qt replacement for only the transport controls under an existing MFC
 // preview surface. It is intentionally unaware of playback implementation.
@@ -21,6 +22,7 @@ public:
 
 signals:
     void playbackCommandRequested(int commandValue);
+    void playbackPositionRequested(int frame);
 
 private:
     static QString timecodeText(const PlaybackState &state);
@@ -29,5 +31,6 @@ private:
     QToolButton *playPauseButton_ = nullptr;
     QToolButton *stepForwardButton_ = nullptr;
     QToolButton *stopButton_ = nullptr;
+    QSlider *positionSlider_ = nullptr;
     QLabel *timecodeLabel_ = nullptr;
 };

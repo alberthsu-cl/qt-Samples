@@ -213,6 +213,8 @@ void timelineModelStartsEmptyAndOwnsIndependentClipIds()
 {
     TimelineModel timeline;
     require(timeline.clips().empty(), "A new timeline must start empty.");
+    require(timeline.contentDurationFrames() == 0,
+            "An empty timeline must have no playable content duration.");
 
     const int firstClipId = timeline.addClip(2, TimelineTrackType::Video);
     const int secondClipId = timeline.addClip(3, TimelineTrackType::Audio, { 180, 90 });
@@ -224,6 +226,8 @@ void timelineModelStartsEmptyAndOwnsIndependentClipIds()
             "Audio placements must target the audio track.");
     require(timeline.durationFrames() == 600,
             "A new timeline must retain its minimum duration.");
+    require(timeline.contentDurationFrames() == 270,
+            "Playable duration must end at the final media item, not the canvas minimum.");
 
     require(timeline.moveClip(secondClipId, { 240, 120 }),
             "Timeline must move an existing clip by ID.");
@@ -235,6 +239,8 @@ void timelineModelStartsEmptyAndOwnsIndependentClipIds()
             "Timeline must allow a clip beyond the initial duration.");
     require(timeline.durationFrames() == 820,
             "Timeline duration must extend to the furthest clip end.");
+    require(timeline.contentDurationFrames() == 820,
+            "Playable duration must follow the final media item after editing.");
     require(timeline.removeClip(firstClipId), "Timeline must remove a clip by ID.");
     require(timeline.clips().size() == 1, "Removing one clip must preserve the other.");
     timeline.clear();

@@ -37,6 +37,11 @@ bool QtTransportHost::create(void *mfcParentWindowHandle)
                                  static_cast<PlaybackCommand>(commandValue));
                          }
                      });
+    QObject::connect(panel_.get(), &QtTransportPanel::playbackPositionRequested,
+                     panel_.get(), [this](int frame) {
+                         if (playbackPositionHandler_)
+                             playbackPositionHandler_(frame);
+                     });
     panel_->show();
     return true;
 }
@@ -61,4 +66,9 @@ void QtTransportHost::setPlaybackState(const PlaybackState &state)
 void QtTransportHost::setPlaybackCommandHandler(PlaybackCommandHandler handler)
 {
     playbackCommandHandler_ = std::move(handler);
+}
+
+void QtTransportHost::setPlaybackPositionHandler(PlaybackPositionHandler handler)
+{
+    playbackPositionHandler_ = std::move(handler);
 }

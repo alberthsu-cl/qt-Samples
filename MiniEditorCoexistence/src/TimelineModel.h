@@ -30,6 +30,7 @@ public:
     static constexpr int kMinimumDurationFrames = 600;
 
     const std::vector<TimelineClip> &clips() const;
+    int contentDurationFrames() const;
     int durationFrames() const;
 
     int addClip(int mediaAssetId,

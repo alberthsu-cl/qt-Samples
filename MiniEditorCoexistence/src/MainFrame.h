@@ -75,6 +75,7 @@ private:
     bool confirmSaveBeforeDestructiveAction();
     void updateWindowTitle();
     PreviewState currentPreviewState() const;
+    void synchronizePlaybackDurationForFocus(bool resetToBeginning);
     void importMediaFile();
     void removeMediaAsset(int assetIndex, int assetId);
 
