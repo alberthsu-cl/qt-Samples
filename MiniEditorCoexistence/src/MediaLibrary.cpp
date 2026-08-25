@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cwctype>
+#include <unordered_set>
 
 namespace {
 
@@ -39,6 +40,23 @@ int MediaLibrary::addKnownAsset(const std::filesystem::path &path, MediaKind kin
     assets_.push_back({ assetId, path, path.filename().wstring(), kind,
                         std::max(1, timelineDurationFrames), thumbnailColorRgb });
     return assetId;
+}
+
+bool MediaLibrary::replaceAssets(const std::vector<LibraryMediaAsset> &assets)
+{
+    int largestId = 0;
+    std::unordered_set<int> ids;
+    for (const LibraryMediaAsset &asset : assets) {
+        if (asset.id <= 0 || asset.displayName.empty() || asset.timelineDurationFrames <= 0
+            || !ids.insert(asset.id).second) {
+            return false;
+        }
+        largestId = std::max(largestId, asset.id);
+    }
+
+    assets_ = assets;
+    nextAssetId_ = largestId + 1;
+    return true;
 }
 
 std::optional<int> MediaLibrary::addFile(const std::filesystem::path &path)

@@ -562,8 +562,10 @@ bool MainFrame::saveProject(bool chooseFilePath)
         projectFilePath_ = std::filesystem::path(static_cast<LPCTSTR>(dialog.GetPathName()));
     }
 
+    EditorProject project = editorSession_.projectSnapshot();
+    project.mediaAssets = mediaLibrary_.assets();
     std::wstring errorMessage;
-    if (ProjectSerializer::save(projectFilePath_, editorSession_.projectSnapshot(), &errorMessage)) {
+    if (ProjectSerializer::save(projectFilePath_, project, &errorMessage)) {
         editorSession_.markProjectSaved();
         updateWindowTitle();
         return true;
@@ -584,6 +586,16 @@ bool MainFrame::openProject(const std::filesystem::path &path)
         return false;
     }
 
+    if (!project->mediaAssets.empty()) {
+        if (!mediaLibrary_.replaceAssets(project->mediaAssets)) {
+            AfxMessageBox(_T("The project media library is invalid."), MB_ICONERROR | MB_OK);
+            return false;
+        }
+        builtInMediaAssetCount_ = std::min(6, static_cast<int>(mediaLibrary_.assets().size()));
+#if MINI_EDITOR_USE_QT
+        mediaLibraryHost_.refreshAssets();
+#endif
+    }
     editorSession_.replaceProject(*project);
     projectFilePath_ = path;
     updateWindowTitle();

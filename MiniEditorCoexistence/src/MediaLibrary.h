@@ -30,6 +30,7 @@ public:
     const LibraryMediaAsset *findAsset(int assetId) const;
     int addKnownAsset(const std::filesystem::path &path, MediaKind kind,
                       int timelineDurationFrames, std::uint32_t thumbnailColorRgb);
+    bool replaceAssets(const std::vector<LibraryMediaAsset> &assets);
     std::optional<int> addFile(const std::filesystem::path &path);
     bool removeAsset(int assetId);
 

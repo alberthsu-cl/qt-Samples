@@ -167,14 +167,22 @@ void projectDocumentRoundTripsEditState()
 
     const std::filesystem::path testPath = std::filesystem::temp_directory_path()
         / "MiniEditorCoreTests.mini-editor.json";
+    EditorProject sourceProject = sourceSession.projectSnapshot();
+    sourceProject.mediaAssets = {
+        { 1, L"D:/media/first.mp4", L"first.mp4", MediaKind::Video, 300, 0x5078A0 },
+        { 2, L"D:/media/second.mp3", L"second.mp3", MediaKind::Audio, 4170, 0x2878B4 }
+    };
     std::wstring errorMessage;
-    require(ProjectSerializer::save(testPath, sourceSession.projectSnapshot(), &errorMessage),
+    require(ProjectSerializer::save(testPath, sourceProject, &errorMessage),
             "Project serializer must save a valid project.");
 
     const auto loadedProject = ProjectSerializer::load(testPath, 2, &errorMessage);
     std::error_code removeError;
     std::filesystem::remove(testPath, removeError);
     require(loadedProject.has_value(), "Project serializer must load its saved project.");
+    require(loadedProject->mediaAssets.size() == 2
+                && loadedProject->mediaAssets[1].kind == MediaKind::Audio,
+            "Version 4 must restore the project media library.");
 
     EditorSession destinationSession(2);
     destinationSession.replaceProject(*loadedProject);

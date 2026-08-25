@@ -92,7 +92,7 @@ const TimelineViewState &EditorSession::timelineViewState() const
 
 EditorProject EditorSession::projectSnapshot() const
 {
-    return { clipSettings_, timelineClipStates_, timelineModel_.clips() };
+    return { {}, clipSettings_, timelineClipStates_, timelineModel_.clips() };
 }
 
 const TimelineModel &EditorSession::timelineModel() const
@@ -227,24 +227,25 @@ void EditorSession::updateSelectedTimelineClipState(const TimelineClipState &sta
 
 void EditorSession::replaceProject(const EditorProject &project)
 {
-    // The demo media catalog is fixed, so a project must have one state entry
-    // per catalog asset. Rejecting a mismatch keeps every indexed view safe.
-    if (project.clipSettings.size() != clipSettings_.size()
-        || project.timelineClips.size() != timelineClipStates_.size()) {
+    if (project.clipSettings.empty()
+        || project.clipSettings.size() != project.timelineClips.size()) {
         return;
     }
 
-    for (std::size_t index = 0; index < clipSettings_.size(); ++index) {
+    clipSettings_.resize(project.clipSettings.size());
+    timelineClipStates_.resize(project.timelineClips.size());
+    for (std::size_t index = 0; index < project.clipSettings.size(); ++index) {
         clipSettings_[index] = clampedClipSettings(project.clipSettings[index]);
         timelineClipStates_[index] = clampedTimelineClipState(project.timelineClips[index]);
     }
     timelineModel_.clear();
     for (const TimelineClip &clip : project.timelineItems) {
-        if (findDemoAsset(clip.mediaAssetId) == nullptr
-            || !timelineModel_.restoreClip(clip)) {
+        if (!timelineModel_.restoreClip(clip)) {
             return;
         }
     }
+    selectedAssetIndex_ = std::clamp(selectedAssetIndex_, 0,
+                                     static_cast<int>(clipSettings_.size()) - 1);
     projectDirty_ = false;
     undoHistory_.clear();
     redoHistory_.clear();

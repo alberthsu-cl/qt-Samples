@@ -3,10 +3,41 @@
 #include <fstream>
 #include <exception>
 #include <regex>
+#include <algorithm>
+
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
 
 namespace {
 
-constexpr int kCurrentFormatVersion = 3;
+constexpr int kCurrentFormatVersion = 4;
+
+std::string utf8FromWide(const std::wstring &value)
+{
+    if (value.empty())
+        return {};
+    const int size = ::WideCharToMultiByte(CP_UTF8, 0, value.data(),
+                                           static_cast<int>(value.size()),
+                                           nullptr, 0, nullptr, nullptr);
+    std::string result(size, '\0');
+    ::WideCharToMultiByte(CP_UTF8, 0, value.data(), static_cast<int>(value.size()),
+                          result.data(), size, nullptr, nullptr);
+    return result;
+}
+
+std::wstring wideFromUtf8(const std::string &value)
+{
+    if (value.empty())
+        return {};
+    const int size = ::MultiByteToWideChar(CP_UTF8, 0, value.data(),
+                                           static_cast<int>(value.size()), nullptr, 0);
+    std::wstring result(size, L'\0');
+    ::MultiByteToWideChar(CP_UTF8, 0, value.data(), static_cast<int>(value.size()),
+                          result.data(), size);
+    return result;
+}
 
 void setError(std::wstring *errorMessage, const wchar_t *message)
 {
@@ -56,6 +87,24 @@ std::optional<TimelineTrackType> trackFromName(const std::string &name)
     return std::nullopt;
 }
 
+const char *mediaKindName(MediaKind kind)
+{
+    switch (kind) {
+    case MediaKind::Video: return "Video";
+    case MediaKind::Audio: return "Audio";
+    case MediaKind::Image: return "Image";
+    }
+    return "Video";
+}
+
+std::optional<MediaKind> mediaKindFromName(const std::string &name)
+{
+    if (name == "Video") return MediaKind::Video;
+    if (name == "Audio") return MediaKind::Audio;
+    if (name == "Image") return MediaKind::Image;
+    return std::nullopt;
+}
+
 std::optional<int> integerValue(const std::string &object, const char *key)
 {
     const std::regex expression(std::string("\\\"") + key +
@@ -88,7 +137,9 @@ bool ProjectSerializer::save(const std::filesystem::path &path,
                              const EditorProject &project,
                              std::wstring *errorMessage)
 {
-    if (project.clipSettings.size() != project.timelineClips.size()) {
+    if (project.mediaAssets.empty()
+        || project.clipSettings.size() != project.timelineClips.size()
+        || project.mediaAssets.size() != project.clipSettings.size()) {
         setError(errorMessage, L"The project has mismatched clip data.");
         return false;
     }
@@ -101,6 +152,18 @@ bool ProjectSerializer::save(const std::filesystem::path &path,
 
     output << "{\n"
            << "  \"formatVersion\": " << kCurrentFormatVersion << ",\n"
+           << "  \"mediaAssets\": [\n";
+    for (std::size_t index = 0; index < project.mediaAssets.size(); ++index) {
+        const LibraryMediaAsset &asset = project.mediaAssets[index];
+        output << "    { \"id\": " << asset.id
+               << ", \"filePath\": \"" << asset.filePath.generic_string()
+               << "\", \"displayName\": \"" << utf8FromWide(asset.displayName)
+               << "\", \"kind\": \"" << mediaKindName(asset.kind)
+               << "\", \"durationFrames\": " << asset.timelineDurationFrames
+               << ", \"thumbnailColorRgb\": " << asset.thumbnailColorRgb << " }"
+               << (index + 1 == project.mediaAssets.size() ? "\n" : ",\n");
+    }
+    output << "  ],\n"
            << "  \"assetSettings\": [\n";
     for (std::size_t index = 0; index < project.clipSettings.size(); ++index) {
         const ClipSettings &settings = project.clipSettings[index];
@@ -151,8 +214,36 @@ std::optional<EditorProject> ProjectSerializer::load(const std::filesystem::path
         return std::nullopt;
     }
 
-    const std::regex clipExpression("\\{\\s*\\\"opacityPercent\\\"[^}]*\\}");
     EditorProject project;
+    if (*formatVersion == 4) {
+        const std::regex mediaExpression("\\{\\s*\\\"id\\\"[^}]*\\\"filePath\\\"[^}]*\\}");
+        for (std::sregex_iterator iterator(json.begin(), json.end(), mediaExpression), end;
+             iterator != end; ++iterator) {
+            const std::string object = iterator->str();
+            const auto id = integerValue(object, "id");
+            const auto filePath = stringValue(object, "filePath");
+            const auto displayName = stringValue(object, "displayName");
+            const auto kindName = stringValue(object, "kind");
+            const auto durationFrames = integerValue(object, "durationFrames");
+            const auto color = integerValue(object, "thumbnailColorRgb");
+            const auto kind = kindName ? mediaKindFromName(*kindName) : std::nullopt;
+            if (!id || *id <= 0 || !filePath || !displayName || !kind || !durationFrames
+                || *durationFrames <= 0 || !color || *color < 0) {
+                setError(errorMessage, L"A media asset in the project file is invalid.");
+                return std::nullopt;
+            }
+            project.mediaAssets.push_back({ *id, std::filesystem::path(*filePath),
+                                            wideFromUtf8(*displayName),
+                                            *kind, *durationFrames,
+                                            static_cast<std::uint32_t>(*color) });
+        }
+        if (project.mediaAssets.empty()) {
+            setError(errorMessage, L"The project has no media assets.");
+            return std::nullopt;
+        }
+    }
+
+    const std::regex clipExpression("\\{\\s*\\\"opacityPercent\\\"[^}]*\\}");
     for (std::sregex_iterator iterator(json.begin(), json.end(), clipExpression), end;
          iterator != end; ++iterator) {
         const std::string clipObject = iterator->str();
@@ -172,7 +263,9 @@ std::optional<EditorProject> ProjectSerializer::load(const std::filesystem::path
         project.timelineClips.push_back({ *startFrame, *durationFrames });
     }
 
-    if (project.clipSettings.size() != expectedAssetCount) {
+    const std::size_t requiredAssetCount = *formatVersion == 4
+        ? project.mediaAssets.size() : expectedAssetCount;
+    if (project.clipSettings.size() != requiredAssetCount) {
         setError(errorMessage, L"This project does not match the sample media catalog.");
         return std::nullopt;
     }
@@ -182,7 +275,7 @@ std::optional<EditorProject> ProjectSerializer::load(const std::filesystem::path
     if (*formatVersion == 1)
         return project;
 
-    const std::regex timelineClipExpression("\\{\\s*\\\"id\\\"[^}]*\\}");
+    const std::regex timelineClipExpression("\\{\\s*\\\"id\\\"[^}]*\\\"trackType\\\"[^}]*\\}");
     for (std::sregex_iterator iterator(json.begin(), json.end(), timelineClipExpression), end;
          iterator != end; ++iterator) {
         const std::string clipObject = iterator->str();
@@ -206,7 +299,11 @@ std::optional<EditorProject> ProjectSerializer::load(const std::filesystem::path
         }
 
         const int mediaAssetId = *formatVersion == 2 ? *assetReference + 1 : *assetReference;
-        if (mediaAssetId <= 0 || mediaAssetId > static_cast<int>(expectedAssetCount)) {
+        const bool hasAsset = *formatVersion == 4
+            ? std::any_of(project.mediaAssets.begin(), project.mediaAssets.end(),
+                [mediaAssetId](const LibraryMediaAsset &asset) { return asset.id == mediaAssetId; })
+            : mediaAssetId > 0 && mediaAssetId <= static_cast<int>(expectedAssetCount);
+        if (!hasAsset) {
             setError(errorMessage, L"A timeline clip references an unknown media asset.");
             return std::nullopt;
         }
