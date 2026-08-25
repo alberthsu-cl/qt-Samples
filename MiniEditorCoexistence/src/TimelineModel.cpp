@@ -15,11 +15,11 @@ int TimelineModel::durationFrames() const
     return duration;
 }
 
-int TimelineModel::addClip(int mediaAssetIndex, TimelineTrackType trackType,
+int TimelineModel::addClip(int mediaAssetId, TimelineTrackType trackType,
                            const TimelineClipState &state)
 {
     const int clipId = nextClipId_++;
-    clips_.push_back({ clipId, mediaAssetIndex, trackType, state });
+    clips_.push_back({ clipId, mediaAssetId, trackType, state });
     return clipId;
 }
 

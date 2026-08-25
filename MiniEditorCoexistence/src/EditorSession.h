@@ -49,7 +49,7 @@ public:
     const TimelineViewState &timelineViewState() const;
     EditorProject projectSnapshot() const;
     const TimelineModel &timelineModel() const;
-    int addTimelineClip(int mediaAssetIndex, TimelineTrackType trackType, int startFrame,
+    int addTimelineClip(int mediaAssetId, TimelineTrackType trackType, int startFrame,
                         int durationFrames = TimelineClipState{}.durationFrames);
     bool moveTimelineClip(int clipId, const TimelineClipState &state);
     bool removeTimelineClip(int clipId);

@@ -6,7 +6,7 @@
 #include <QMimeData>
 
 namespace {
-constexpr char kMediaAssetMimeType[] = "application/x-mini-editor-media-index";
+constexpr char kMediaAssetMimeType[] = "application/x-mini-editor-media-id";
 }
 
 MediaAssetModel::MediaAssetModel(QObject *parent)
@@ -32,6 +32,8 @@ QVariant MediaAssetModel::data(const QModelIndex &index, int role) const
         return QString::fromWCharArray(asset.name);
     case AssetIndexRole:
         return index.row();
+    case AssetIdRole:
+        return asset.id;
     case AssetKindRole:
         return QString::fromWCharArray(asset.kind);
     case AssetDurationRole:
@@ -65,6 +67,6 @@ QMimeData *MediaAssetModel::mimeData(const QModelIndexList &indexes) const
 
     auto *mimeData = new QMimeData;
     mimeData->setData(QString::fromLatin1(kMediaAssetMimeType),
-                      QByteArray::number(indexes.front().row()));
+                      QByteArray::number(indexes.front().data(AssetIdRole).toInt()));
     return mimeData;
 }

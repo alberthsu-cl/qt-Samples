@@ -77,13 +77,17 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
             editorSession_.moveTimelineClip(clipId, state);
     });
     timelineCanvasHost_.setMediaAssetDroppedHandler(
-        [this](int mediaAssetIndex, int frame) {
-            const bool isAudio = wcscmp(demoAssets()[mediaAssetIndex].kind, L"Audio") == 0;
-            editorSession_.addTimelineClip(mediaAssetIndex,
+        [this](int mediaAssetId, int frame) {
+            const MediaAsset *asset = findDemoAsset(mediaAssetId);
+            if (asset == nullptr)
+                return;
+
+            const bool isAudio = wcscmp(asset->kind, L"Audio") == 0;
+            editorSession_.addTimelineClip(mediaAssetId,
                                            isAudio ? TimelineTrackType::Audio
                                                    : TimelineTrackType::Video,
                                            frame,
-                                           demoAssets()[mediaAssetIndex].timelineDurationFrames);
+                                           asset->timelineDurationFrames);
         });
     timelineCanvasHost_.setTimelineClipDeletedHandler(
         [this](int clipId) { editorSession_.removeTimelineClip(clipId); });

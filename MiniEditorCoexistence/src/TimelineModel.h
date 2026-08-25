@@ -14,7 +14,7 @@ enum class TimelineTrackType {
 // more than once, so a timeline clip has its own identity and timing.
 struct TimelineClip {
     int id = 0;
-    int mediaAssetIndex = 0;
+    int mediaAssetId = 0;
     TimelineTrackType trackType = TimelineTrackType::Video;
     TimelineClipState state;
 };
@@ -29,7 +29,7 @@ public:
     const std::vector<TimelineClip> &clips() const;
     int durationFrames() const;
 
-    int addClip(int mediaAssetIndex,
+    int addClip(int mediaAssetId,
                 TimelineTrackType trackType,
                 const TimelineClipState &state = {});
     bool restoreClip(const TimelineClip &clip);

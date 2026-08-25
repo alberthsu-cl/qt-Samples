@@ -11,6 +11,7 @@ class MediaAssetModel final : public QAbstractListModel
 public:
     enum Role {
         AssetIndexRole = Qt::UserRole + 1,
+        AssetIdRole,
         AssetKindRole,
         AssetDurationRole,
         ThumbnailColorRole

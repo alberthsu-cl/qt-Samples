@@ -161,9 +161,9 @@ void projectDocumentRoundTripsEditState()
     timelineClip.startFrame = 240;
     sourceSession.updateSelectedTimelineClipState(timelineClip);
     const int insertedTimelineClipId = sourceSession.addTimelineClip(
-        0, TimelineTrackType::Video, 120, 300);
+        1, TimelineTrackType::Video, 120, 300);
     const int insertedAudioClipId = sourceSession.addTimelineClip(
-        1, TimelineTrackType::Audio, 500, 4170);
+        2, TimelineTrackType::Audio, 500, 4170);
 
     const std::filesystem::path testPath = std::filesystem::temp_directory_path()
         / "MiniEditorCoreTests.mini-editor.json";
@@ -210,7 +210,7 @@ void timelineModelStartsEmptyAndOwnsIndependentClipIds()
     const int secondClipId = timeline.addClip(3, TimelineTrackType::Audio, { 180, 90 });
     require(firstClipId != secondClipId, "Each timeline placement needs a unique ID.");
     require(timeline.clips().size() == 2, "Timeline must retain multiple placements.");
-    require(timeline.findClip(firstClipId)->mediaAssetIndex == 2,
+    require(timeline.findClip(firstClipId)->mediaAssetId == 2,
             "A timeline clip must reference its source media asset.");
     require(timeline.findClip(secondClipId)->trackType == TimelineTrackType::Audio,
             "Audio placements must target the audio track.");
@@ -236,7 +236,7 @@ void timelineModelStartsEmptyAndOwnsIndependentClipIds()
 void editorSessionUndoRedoTracksModelClipMoves()
 {
     EditorSession session(2);
-    const int clipId = session.addTimelineClip(0, TimelineTrackType::Video, 0);
+    const int clipId = session.addTimelineClip(1, TimelineTrackType::Video, 0);
     require(session.moveTimelineClip(clipId, { 150, 180 }),
             "Moving a model clip must succeed through EditorSession.");
     require(session.canUndo(), "A model clip move must become undoable.");
@@ -253,7 +253,7 @@ void editorSessionUndoRedoTracksModelClipMoves()
 void editorSessionUndoRedoTracksLibraryInsertion()
 {
     EditorSession session(2);
-    const int clipId = session.addTimelineClip(1, TimelineTrackType::Video, 60);
+    const int clipId = session.addTimelineClip(2, TimelineTrackType::Video, 60);
     require(clipId > 0, "Adding a library item must create a timeline clip.");
     require(session.timelineModel().clips().size() == 1,
             "The inserted clip must appear in the timeline model.");
@@ -268,7 +268,7 @@ void editorSessionUndoRedoTracksLibraryInsertion()
 void editorSessionUsesRequestedTimelineClipDuration()
 {
     EditorSession session(2);
-    const int clipId = session.addTimelineClip(0, TimelineTrackType::Audio, 0, 4170);
+    const int clipId = session.addTimelineClip(1, TimelineTrackType::Audio, 0, 4170);
     require(session.timelineModel().findClip(clipId)->state.durationFrames == 4170,
             "Session must retain an asset's timeline duration.");
     require(session.timelineModel().durationFrames() == 4170,
@@ -284,7 +284,7 @@ void editorSessionUsesRequestedTimelineClipDuration()
 void editorSessionUndoRedoTracksClipDeletion()
 {
     EditorSession session(2);
-    const int clipId = session.addTimelineClip(0, TimelineTrackType::Video, 30);
+    const int clipId = session.addTimelineClip(1, TimelineTrackType::Video, 30);
     require(session.removeTimelineClip(clipId), "Deleting a timeline clip must succeed.");
     require(session.timelineModel().clips().empty(),
             "Deleting a timeline clip must remove it from the model.");

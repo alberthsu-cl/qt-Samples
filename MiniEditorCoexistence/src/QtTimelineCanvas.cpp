@@ -21,7 +21,7 @@ constexpr int kTimelineFramesPerScaleUnit = 300;
 constexpr int kTimelineMaximumFrame = 600;
 constexpr int kTimelinePixelsAt100Percent = 334;
 constexpr int kFramesPerSecond = 30;
-constexpr char kMediaAssetMimeType[] = "application/x-mini-editor-media-index";
+constexpr char kMediaAssetMimeType[] = "application/x-mini-editor-media-id";
 
 int pixelsPerScaleUnit(const TimelineViewState &state)
 {
@@ -143,9 +143,10 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
         TimelineClip clip = sourceClip;
         if (isDraggingClip_ && clip.id == dragClipId_)
             clip.state = dragPreviewState_;
-        const auto &asset = demoAssets()[std::clamp(clip.mediaAssetIndex, 0,
-                                                     static_cast<int>(demoAssets().size()) - 1)];
-        const QColor assetColor = QColor::fromRgb(asset.thumbnailColor).darker(100);
+        const MediaAsset *asset = findDemoAsset(clip.mediaAssetId);
+        if (asset == nullptr)
+            return;
+        const QColor assetColor = QColor::fromRgb(asset->thumbnailColor).darker(100);
         const int pixels = pixelsPerScaleUnit(viewState_);
         const int left = kTimelineLeft + clip.state.startFrame * pixels
             / kTimelineFramesPerScaleUnit;
@@ -160,7 +161,7 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
         painter.setPen(Qt::white);
         painter.drawText(clipRect.adjusted(10, 0, -10, 0),
                          Qt::AlignCenter | Qt::TextSingleLine,
-                         QString::fromWCharArray(asset.name));
+                         QString::fromWCharArray(asset->name));
     };
     if (!timelineClips_.empty()) {
         for (const TimelineClip &clip : timelineClips_)
@@ -247,9 +248,9 @@ void QtTimelineCanvas::dropEvent(QDropEvent *event)
 {
     const QByteArray data = event->mimeData()->data(QString::fromLatin1(kMediaAssetMimeType));
     bool ok = false;
-    const int mediaAssetIndex = QString::fromLatin1(data).toInt(&ok);
+    const int mediaAssetId = QString::fromLatin1(data).toInt(&ok);
     if (ok && mediaAssetDroppedHandler_)
-        mediaAssetDroppedHandler_(mediaAssetIndex, frameAtTimelineX(event->position().x()));
+        mediaAssetDroppedHandler_(mediaAssetId, frameAtTimelineX(event->position().x()));
     event->setDropAction(Qt::CopyAction);
     event->accept();
 }

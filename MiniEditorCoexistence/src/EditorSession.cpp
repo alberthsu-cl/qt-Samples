@@ -1,5 +1,7 @@
 #include "EditorSession.h"
 
+#include "DemoProject.h"
+
 #include <algorithm>
 #include <utility>
 
@@ -98,13 +100,13 @@ const TimelineModel &EditorSession::timelineModel() const
     return timelineModel_;
 }
 
-int EditorSession::addTimelineClip(int mediaAssetIndex, TimelineTrackType trackType,
+int EditorSession::addTimelineClip(int mediaAssetId, TimelineTrackType trackType,
                                    int startFrame, int durationFrames)
 {
     TimelineClipState state;
     state.startFrame = std::max(0, startFrame);
     state.durationFrames = std::max(1, durationFrames);
-    const int clipId = timelineModel_.addClip(mediaAssetIndex, trackType, state);
+    const int clipId = timelineModel_.addClip(mediaAssetId, trackType, state);
     const TimelineClip *addedClip = timelineModel_.findClip(clipId);
     if (addedClip == nullptr)
         return 0;
@@ -211,8 +213,7 @@ void EditorSession::replaceProject(const EditorProject &project)
     }
     timelineModel_.clear();
     for (const TimelineClip &clip : project.timelineItems) {
-        if (clip.mediaAssetIndex < 0
-            || clip.mediaAssetIndex >= static_cast<int>(clipSettings_.size())
+        if (findDemoAsset(clip.mediaAssetId) == nullptr
             || !timelineModel_.restoreClip(clip)) {
             return;
         }
