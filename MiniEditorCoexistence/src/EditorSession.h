@@ -49,10 +49,12 @@ public:
     const TimelineViewState &timelineViewState() const;
     EditorProject projectSnapshot() const;
     const TimelineModel &timelineModel() const;
+    int selectedTimelineClipId() const;
     int addTimelineClip(int mediaAssetId, TimelineTrackType trackType, int startFrame,
                         int durationFrames = TimelineClipState{}.durationFrames);
     bool moveTimelineClip(int clipId, const TimelineClipState &state);
     bool removeTimelineClip(int clipId);
+    void selectTimelineClip(int clipId);
     void addMediaAsset();
     bool removeMediaAsset(int assetIndex);
     bool isProjectDirty() const;
@@ -84,6 +86,7 @@ private:
         ClipSettings,
         TimelineClip,
         TimelineModelMove,
+        TimelineModelSettings,
         TimelineModelAdd,
         TimelineModelRemove
     };
@@ -105,6 +108,7 @@ private:
     std::vector<TimelineClipState> timelineClipStates_;
     TimelineModel timelineModel_;
     int selectedAssetIndex_ = 0;
+    int selectedTimelineClipId_ = 0;
     PlaybackState playbackState_;
     TimelineViewState timelineViewState_;
     bool projectDirty_ = false;

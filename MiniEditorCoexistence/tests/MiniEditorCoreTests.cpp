@@ -164,6 +164,8 @@ void projectDocumentRoundTripsEditState()
         1, TimelineTrackType::Video, 120, 300);
     const int insertedAudioClipId = sourceSession.addTimelineClip(
         2, TimelineTrackType::Audio, 500, 4170);
+    sourceSession.selectTimelineClip(insertedTimelineClipId);
+    sourceSession.updateSelectedClipSettings(settings);
 
     const std::filesystem::path testPath = std::filesystem::temp_directory_path()
         / "MiniEditorCoreTests.mini-editor.json";
@@ -182,17 +184,15 @@ void projectDocumentRoundTripsEditState()
     require(loadedProject.has_value(), "Project serializer must load its saved project.");
     require(loadedProject->mediaAssets.size() == 2
                 && loadedProject->mediaAssets[1].kind == MediaKind::Audio,
-            "Version 4 must restore the project media library.");
+            "Version 5 must restore the project media library.");
 
     EditorSession destinationSession(2);
     destinationSession.replaceProject(*loadedProject);
-    destinationSession.selectAsset(1);
+    destinationSession.selectTimelineClip(insertedTimelineClipId);
     require(destinationSession.selectedClipSettings().opacityPercent == 55,
-            "Loaded project must restore clip settings.");
+            "Loaded project must restore timeline placement settings.");
     require(destinationSession.selectedClipSettings().position == ClipPosition::BottomRight,
             "Loaded project must restore clip position.");
-    require(destinationSession.selectedTimelineClipState().startFrame == 240,
-            "Loaded project must restore timeline position.");
     const TimelineClip *loadedTimelineClip =
         destinationSession.timelineModel().findClip(insertedTimelineClipId);
     require(loadedTimelineClip != nullptr && loadedTimelineClip->state.startFrame == 120,
@@ -304,6 +304,26 @@ void editorSessionUndoRedoTracksClipDeletion()
             "Redo must remove the deleted clip again.");
 }
 
+void focusedTimelineClipOwnsIndependentPlacementSettings()
+{
+    EditorSession session(1);
+    const int firstClipId = session.addTimelineClip(1, TimelineTrackType::Video, 0);
+    const int secondClipId = session.addTimelineClip(1, TimelineTrackType::Video, 300);
+
+    session.selectTimelineClip(firstClipId);
+    session.updateSelectedClipSettings({ 45, 150, ClipPosition::TopLeft });
+    require(session.timelineModel().findClip(firstClipId)->settings.opacityPercent == 45,
+            "Properties edits must update the focused timeline placement.");
+    require(session.timelineModel().findClip(secondClipId)->settings.opacityPercent == 100,
+            "Two placements of one source asset must keep independent settings.");
+    require(session.undo(), "Timeline placement settings must be undoable.");
+    require(session.timelineModel().findClip(firstClipId)->settings.opacityPercent == 100,
+            "Undo must restore the focused placement settings.");
+    require(session.redo(), "Timeline placement settings must be redoable.");
+    require(session.timelineModel().findClip(firstClipId)->settings.scalePercent == 150,
+            "Redo must restore the focused placement settings.");
+}
+
 void mediaLibraryOwnsStableSourceAssetIds()
 {
     MediaLibrary library;
@@ -371,6 +391,7 @@ int main()
         editorSessionUndoRedoTracksLibraryInsertion();
         editorSessionUsesRequestedTimelineClipDuration();
         editorSessionUndoRedoTracksClipDeletion();
+        focusedTimelineClipOwnsIndependentPlacementSettings();
         mediaLibraryOwnsStableSourceAssetIds();
         workspaceLayoutProtectsPaneBounds();
         std::cout << "MiniEditorCoreTests passed.\n";

@@ -133,6 +133,13 @@ void QtMediaLibraryPanel::refreshAssets()
     assetModel_->refresh();
 }
 
+void QtMediaLibraryPanel::clearSelection()
+{
+    const QSignalBlocker signalBlocker(assetView_->selectionModel());
+    assetView_->clearSelection();
+    assetView_->setCurrentIndex({});
+}
+
 void QtMediaLibraryPanel::setSelectedAssetIndex(int assetIndex)
 {
     const QModelIndex index = assetModel_->index(assetIndex, 0);

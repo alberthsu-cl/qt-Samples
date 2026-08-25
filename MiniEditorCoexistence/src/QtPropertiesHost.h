@@ -26,6 +26,7 @@ public:
     void resize(const CRect &bounds);
     void setSelectedAsset(const wchar_t *name, const wchar_t *kind,
                           const ClipSettings &settings);
+    void setEditingEnabled(bool enabled);
     void setClipSettingsEditedHandler(ClipSettingsEditedHandler handler);
 
 private:

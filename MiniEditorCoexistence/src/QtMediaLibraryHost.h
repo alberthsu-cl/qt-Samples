@@ -26,6 +26,7 @@ public:
     void resize(const CRect &bounds);
     void setSelectedAssetIndex(int assetIndex);
     void refreshAssets();
+    void clearSelection();
     void setAssetSelectedHandler(AssetSelectedHandler handler);
     void setImportHandler(ImportHandler handler);
     void setRemoveHandler(RemoveHandler handler);

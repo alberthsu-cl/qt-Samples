@@ -97,6 +97,12 @@ void QtTimelineCanvas::setTimelineClips(const std::vector<TimelineClip> &clips)
     update();
 }
 
+void QtTimelineCanvas::setSelectedClipId(int clipId)
+{
+    selectedClipId_ = clipId;
+    update();
+}
+
 void QtTimelineCanvas::setTimelineDuration(int durationFrames)
 {
     timelineDurationFrames_ = std::max(600, durationFrames);
@@ -121,6 +127,11 @@ void QtTimelineCanvas::setAssetPresentationResolver(AssetPresentationResolver re
 void QtTimelineCanvas::setTimelineClipDeletedHandler(TimelineClipDeletedHandler handler)
 {
     timelineClipDeletedHandler_ = std::move(handler);
+}
+
+void QtTimelineCanvas::setTimelineClipSelectedHandler(TimelineClipSelectedHandler handler)
+{
+    timelineClipSelectedHandler_ = std::move(handler);
 }
 
 void QtTimelineCanvas::paintEvent(QPaintEvent *)
@@ -164,8 +175,13 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
             ? kRulerHeight + kTrackHeight + 8 : kRulerHeight;
         const QRect clipRect(left, trackTop + 5, clipWidth, kTrackHeight - 10);
         painter.fillRect(clipRect, assetColor);
-        painter.setPen(QColor(180, 220, 255));
-        painter.drawRect(clipRect.adjusted(0, 0, -1, -1));
+        const bool selected = clip.id == selectedClipId_;
+        painter.setPen(QPen(selected ? QColor(255, 196, 72) : QColor(180, 220, 255),
+                            selected ? 3 : 1));
+        painter.drawRect(clipRect.adjusted(selected ? 1 : 0,
+                                           selected ? 1 : 0,
+                                           selected ? -2 : -1,
+                                           selected ? -2 : -1));
         painter.setPen(Qt::white);
         painter.drawText(clipRect.adjusted(10, 0, -10, 0),
                          Qt::AlignCenter | Qt::TextSingleLine,
@@ -198,6 +214,8 @@ void QtTimelineCanvas::mousePressEvent(QMouseEvent *event)
         seekHandler_(frameAtRulerX(point.x()));
     } else if (const TimelineClip *clip = clipAt(point)) {
         selectedClipId_ = clip->id;
+        if (timelineClipSelectedHandler_)
+            timelineClipSelectedHandler_(clip->id);
         isDraggingClip_ = true;
         dragClipId_ = clip->id;
         dragPreviewState_ = clip->state;

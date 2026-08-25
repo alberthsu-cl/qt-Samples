@@ -137,9 +137,7 @@ bool ProjectSerializer::save(const std::filesystem::path &path,
                              const EditorProject &project,
                              std::wstring *errorMessage)
 {
-    if (project.mediaAssets.empty()
-        || project.clipSettings.size() != project.timelineClips.size()
-        || project.mediaAssets.size() != project.clipSettings.size()) {
+    if (project.mediaAssets.empty()) {
         setError(errorMessage, L"The project has mismatched clip data.");
         return false;
     }
@@ -162,18 +160,6 @@ bool ProjectSerializer::save(const std::filesystem::path &path,
                << "\", \"durationFrames\": " << asset.timelineDurationFrames
                << ", \"thumbnailColorRgb\": " << asset.thumbnailColorRgb << " }"
                << (index + 1 == project.mediaAssets.size() ? "\n" : ",\n");
-    }
-    output << "  ],\n"
-           << "  \"assetSettings\": [\n";
-    for (std::size_t index = 0; index < project.clipSettings.size(); ++index) {
-        const ClipSettings &settings = project.clipSettings[index];
-        const TimelineClipState &timelineClip = project.timelineClips[index];
-        output << "    { \"opacityPercent\": " << settings.opacityPercent
-               << ", \"scalePercent\": " << settings.scalePercent
-               << ", \"position\": \"" << positionName(settings.position)
-               << "\", \"startFrame\": " << timelineClip.startFrame
-               << ", \"durationFrames\": " << timelineClip.durationFrames << " }";
-        output << (index + 1 == project.clipSettings.size() ? "\n" : ",\n");
     }
     output << "  ],\n"
            << "  \"timelineClips\": [\n";
@@ -266,6 +252,12 @@ std::optional<EditorProject> ProjectSerializer::load(const std::filesystem::path
         project.timelineClips.push_back({ *startFrame, *durationFrames });
     }
 
+    if (*formatVersion == 5) {
+        // These defaults support source preview while placement settings live
+        // exclusively on TimelineClip in the v5 document.
+        project.clipSettings.resize(project.mediaAssets.size());
+        project.timelineClips.resize(project.mediaAssets.size());
+    }
     const std::size_t requiredAssetCount = *formatVersion >= 4
         ? project.mediaAssets.size() : expectedAssetCount;
     if (project.clipSettings.size() != requiredAssetCount) {
@@ -325,6 +317,23 @@ std::optional<EditorProject> ProjectSerializer::load(const std::filesystem::path
         }
         project.timelineItems.push_back({ *id, mediaAssetId, *trackType,
                                           { *startFrame, *durationFrames }, settings });
+    }
+
+    // Version 4 stored placement settings once per source asset. During
+    // migration, copy those settings into every timeline placement that
+    // references the asset. Version 5 then persists each placement independently.
+    if (*formatVersion == 4) {
+        for (TimelineClip &clip : project.timelineItems) {
+            const auto asset = std::find_if(project.mediaAssets.begin(), project.mediaAssets.end(),
+                [&clip](const LibraryMediaAsset &candidate) {
+                    return candidate.id == clip.mediaAssetId;
+                });
+            if (asset == project.mediaAssets.end())
+                continue;
+            const std::size_t index = static_cast<std::size_t>(asset - project.mediaAssets.begin());
+            if (index < project.clipSettings.size())
+                clip.settings = project.clipSettings[index];
+        }
     }
 
     return project;

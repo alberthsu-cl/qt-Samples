@@ -62,6 +62,12 @@ void QtPropertiesHost::setSelectedAsset(const wchar_t *name, const wchar_t *kind
         panel_->setSelectedAsset(name, kind, settings);
 }
 
+void QtPropertiesHost::setEditingEnabled(bool enabled)
+{
+    if (panel_)
+        panel_->setEditingEnabled(enabled);
+}
+
 void QtPropertiesHost::setClipSettingsEditedHandler(ClipSettingsEditedHandler handler)
 {
     clipSettingsEditedHandler_ = std::move(handler);

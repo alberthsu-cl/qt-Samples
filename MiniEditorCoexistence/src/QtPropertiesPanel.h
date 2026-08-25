@@ -20,6 +20,7 @@ public:
 
     void setSelectedAsset(const wchar_t *name, const wchar_t *kind,
                           const ClipSettings &settings);
+    void setEditingEnabled(bool enabled);
 
 signals:
     void clipSettingsEdited(int opacityPercent, int scalePercent, int positionValue);

@@ -17,6 +17,7 @@ public:
 
     void setSelectedAssetIndex(int assetIndex);
     void refreshAssets();
+    void clearSelection();
 
 signals:
     void assetSelected(int assetIndex);

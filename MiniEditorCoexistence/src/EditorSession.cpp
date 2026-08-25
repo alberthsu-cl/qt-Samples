@@ -72,6 +72,8 @@ int EditorSession::selectedAssetIndex() const
 
 const ClipSettings &EditorSession::selectedClipSettings() const
 {
+    if (const TimelineClip *clip = timelineModel_.findClip(selectedTimelineClipId_))
+        return clip->settings;
     return clipSettings_[selectedAssetIndex_];
 }
 
@@ -98,6 +100,11 @@ EditorProject EditorSession::projectSnapshot() const
 const TimelineModel &EditorSession::timelineModel() const
 {
     return timelineModel_;
+}
+
+int EditorSession::selectedTimelineClipId() const
+{
+    return selectedTimelineClipId_;
 }
 
 int EditorSession::addTimelineClip(int mediaAssetId, TimelineTrackType trackType,
@@ -149,11 +156,21 @@ bool EditorSession::removeTimelineClip(int clipId)
         return false;
 
     projectDirty_ = true;
+    if (selectedTimelineClipId_ == clipId)
+        selectedTimelineClipId_ = 0;
     undoHistory_.push_back({ HistoryEntryType::TimelineModelRemove, selectedAssetIndex_,
                              {}, {}, {}, {}, clipId, removedClip });
     redoHistory_.clear();
     notifyStateChanged(EditorChange::TimelineClip);
     return true;
+}
+
+void EditorSession::selectTimelineClip(int clipId)
+{
+    if (timelineModel_.findClip(clipId) == nullptr)
+        return;
+    selectedTimelineClipId_ = clipId;
+    notifyStateChanged(EditorChange::Selection);
 }
 
 void EditorSession::addMediaAsset()
@@ -192,11 +209,27 @@ void EditorSession::selectAsset(int assetIndex)
 {
     selectedAssetIndex_ = std::clamp(assetIndex, 0,
                                      static_cast<int>(clipSettings_.size()) - 1);
+    selectedTimelineClipId_ = 0;
     notifyStateChanged(EditorChange::Selection);
 }
 
 void EditorSession::updateSelectedClipSettings(const ClipSettings &settings)
 {
+    if (const TimelineClip *clip = timelineModel_.findClip(selectedTimelineClipId_)) {
+        const ClipSettings previousSettings = clip->settings;
+        const ClipSettings updatedSettings = clampedClipSettings(settings);
+        if (hasSameClipSettings(previousSettings, updatedSettings))
+            return;
+        timelineModel_.updateClipSettings(selectedTimelineClipId_, updatedSettings);
+        projectDirty_ = true;
+        undoHistory_.push_back({ HistoryEntryType::TimelineModelSettings,
+                                 selectedAssetIndex_, previousSettings, updatedSettings,
+                                 {}, {}, selectedTimelineClipId_ });
+        redoHistory_.clear();
+        notifyStateChanged(EditorChange::ClipSettings | EditorChange::TimelineClip);
+        return;
+    }
+
     const ClipSettings previousSettings = clipSettings_[selectedAssetIndex_];
     const ClipSettings updatedSettings = clampedClipSettings(settings);
     if (hasSameClipSettings(previousSettings, updatedSettings))
@@ -286,6 +319,10 @@ bool EditorSession::undo()
     } else if (entry.type == HistoryEntryType::TimelineModelMove) {
         timelineModel_.moveClip(entry.timelineClipId, entry.timelineClipBefore);
         changes = changes | EditorChange::TimelineClip;
+    } else if (entry.type == HistoryEntryType::TimelineModelSettings) {
+        timelineModel_.updateClipSettings(entry.timelineClipId, entry.clipSettingsBefore);
+        selectedTimelineClipId_ = entry.timelineClipId;
+        changes = changes | EditorChange::ClipSettings | EditorChange::TimelineClip;
     } else if (entry.type == HistoryEntryType::TimelineModelAdd) {
         timelineModel_.removeClip(entry.timelineClipId);
         changes = changes | EditorChange::TimelineClip;
@@ -317,6 +354,10 @@ bool EditorSession::redo()
     } else if (entry.type == HistoryEntryType::TimelineModelMove) {
         timelineModel_.moveClip(entry.timelineClipId, entry.timelineClipAfter);
         changes = changes | EditorChange::TimelineClip;
+    } else if (entry.type == HistoryEntryType::TimelineModelSettings) {
+        timelineModel_.updateClipSettings(entry.timelineClipId, entry.clipSettingsAfter);
+        selectedTimelineClipId_ = entry.timelineClipId;
+        changes = changes | EditorChange::ClipSettings | EditorChange::TimelineClip;
     } else if (entry.type == HistoryEntryType::TimelineModelAdd) {
         timelineModel_.restoreClip(entry.timelineClip);
         changes = changes | EditorChange::TimelineClip;

@@ -122,6 +122,18 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         });
     timelineCanvasHost_.setTimelineClipDeletedHandler(
         [this](int clipId) { editorSession_.removeTimelineClip(clipId); });
+    timelineCanvasHost_.setTimelineClipSelectedHandler(
+        [this](int clipId) {
+            const TimelineClip *clip = editorSession_.timelineModel().findClip(clipId);
+            if (clip == nullptr)
+                return;
+            const auto &assets = mediaLibrary_.assets();
+            const auto iterator = std::find_if(assets.begin(), assets.end(),
+                [clip](const LibraryMediaAsset &asset) { return asset.id == clip->mediaAssetId; });
+            if (iterator != assets.end())
+                editorSession_.selectAsset(static_cast<int>(iterator - assets.begin()));
+            editorSession_.selectTimelineClip(clipId);
+        });
     if (!mediaLibraryHost_.create(GetSafeHwnd(), mediaLibrary_))
         return -1;
     if (!propertiesHost_.create(GetSafeHwnd()))
@@ -387,12 +399,18 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     const bool timelineClipChanged = includesChange(changes, EditorChange::TimelineClip);
 
 #if MINI_EDITOR_USE_QT
-    if (selectionChanged)
-        mediaLibraryHost_.setSelectedAssetIndex(selectedAssetIndex);
+    if (selectionChanged) {
+        if (editorSession_.selectedTimelineClipId() != 0)
+            mediaLibraryHost_.clearSelection();
+        else
+            mediaLibraryHost_.setSelectedAssetIndex(selectedAssetIndex);
+        timelineCanvasHost_.setSelectedClipId(editorSession_.selectedTimelineClipId());
+    }
     if (selectionChanged || clipSettingsChanged) {
         // QtPropertiesPanel uses QSignalBlocker while it receives this state,
         // so an editor-to-view refresh never loops back as a user request.
         propertiesHost_.setSelectedAsset(asset.displayName.c_str(), mediaKindName(asset.kind), settings);
+        propertiesHost_.setEditingEnabled(editorSession_.selectedTimelineClipId() != 0);
     }
     if (timelineViewChanged)
         timelineToolbarHost_.setViewState(timelineViewState);

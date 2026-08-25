@@ -56,6 +56,12 @@ void QtMediaLibraryHost::refreshAssets()
         panel_->refreshAssets();
 }
 
+void QtMediaLibraryHost::clearSelection()
+{
+    if (panel_)
+        panel_->clearSelection();
+}
+
 void QtMediaLibraryHost::resize(const CRect &bounds)
 {
     if (!panel_)

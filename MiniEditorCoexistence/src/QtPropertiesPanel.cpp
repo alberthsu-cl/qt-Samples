@@ -118,6 +118,18 @@ void QtPropertiesPanel::setSelectedAsset(const wchar_t *name, const wchar_t *kin
         static_cast<int>(settings.position)));
 }
 
+void QtPropertiesPanel::setEditingEnabled(bool enabled)
+{
+    opacitySlider_->setEnabled(enabled);
+    opacitySpinBox_->setEnabled(enabled);
+    scaleSlider_->setEnabled(enabled);
+    scaleSpinBox_->setEnabled(enabled);
+    positionComboBox_->setEnabled(enabled);
+    setToolTip(enabled
+        ? QString()
+        : QStringLiteral("Select a timeline clip to edit placement properties."));
+}
+
 void QtPropertiesPanel::emitCurrentSettings()
 {
     emit clipSettingsEdited(opacitySpinBox_->value(),

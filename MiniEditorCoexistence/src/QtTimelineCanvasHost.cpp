@@ -97,6 +97,12 @@ void QtTimelineCanvasHost::setTimelineClips(const std::vector<TimelineClip> &cli
         canvas_->setTimelineClips(clips);
 }
 
+void QtTimelineCanvasHost::setSelectedClipId(int clipId)
+{
+    if (canvas_)
+        canvas_->setSelectedClipId(clipId);
+}
+
 void QtTimelineCanvasHost::setTimelineDuration(int durationFrames)
 {
     if (canvas_)
@@ -119,4 +125,10 @@ void QtTimelineCanvasHost::setTimelineClipDeletedHandler(TimelineClipDeletedHand
 {
     if (canvas_)
         canvas_->setTimelineClipDeletedHandler(std::move(handler));
+}
+
+void QtTimelineCanvasHost::setTimelineClipSelectedHandler(TimelineClipSelectedHandler handler)
+{
+    if (canvas_)
+        canvas_->setTimelineClipSelectedHandler(std::move(handler));
 }

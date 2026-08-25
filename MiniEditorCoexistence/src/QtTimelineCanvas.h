@@ -19,6 +19,7 @@ public:
                                                           QString *displayName,
                                                           QColor *color)>;
     using TimelineClipDeletedHandler = std::function<void(int clipId)>;
+    using TimelineClipSelectedHandler = std::function<void(int clipId)>;
 
     explicit QtTimelineCanvas(QWidget *parent = nullptr);
 
@@ -30,10 +31,12 @@ public:
     void setSeekHandler(SeekHandler handler);
     void setTimelineClipEditedHandler(TimelineClipEditedHandler handler);
     void setTimelineClips(const std::vector<TimelineClip> &clips);
+    void setSelectedClipId(int clipId);
     void setTimelineDuration(int durationFrames);
     void setMediaAssetDroppedHandler(MediaAssetDroppedHandler handler);
     void setAssetPresentationResolver(AssetPresentationResolver resolver);
     void setTimelineClipDeletedHandler(TimelineClipDeletedHandler handler);
+    void setTimelineClipSelectedHandler(TimelineClipSelectedHandler handler);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -60,6 +63,7 @@ private:
     MediaAssetDroppedHandler mediaAssetDroppedHandler_;
     AssetPresentationResolver assetPresentationResolver_;
     TimelineClipDeletedHandler timelineClipDeletedHandler_;
+    TimelineClipSelectedHandler timelineClipSelectedHandler_;
     std::vector<TimelineClip> timelineClips_;
     int timelineDurationFrames_ = 600;
     bool isDraggingClip_ = false;
