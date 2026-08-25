@@ -15,6 +15,9 @@ public:
     using TimelineClipEditedHandler = std::function<void(int clipId,
                                                          const TimelineClipState &state)>;
     using MediaAssetDroppedHandler = std::function<void(int mediaAssetId, int frame)>;
+    using AssetPresentationResolver = std::function<bool(int mediaAssetId,
+                                                          QString *displayName,
+                                                          QColor *color)>;
     using TimelineClipDeletedHandler = std::function<void(int clipId)>;
 
     explicit QtTimelineCanvas(QWidget *parent = nullptr);
@@ -29,6 +32,7 @@ public:
     void setTimelineClips(const std::vector<TimelineClip> &clips);
     void setTimelineDuration(int durationFrames);
     void setMediaAssetDroppedHandler(MediaAssetDroppedHandler handler);
+    void setAssetPresentationResolver(AssetPresentationResolver resolver);
     void setTimelineClipDeletedHandler(TimelineClipDeletedHandler handler);
 
 protected:
@@ -54,6 +58,7 @@ private:
     SeekHandler seekHandler_;
     TimelineClipEditedHandler timelineClipEditedHandler_;
     MediaAssetDroppedHandler mediaAssetDroppedHandler_;
+    AssetPresentationResolver assetPresentationResolver_;
     TimelineClipDeletedHandler timelineClipDeletedHandler_;
     std::vector<TimelineClip> timelineClips_;
     int timelineDurationFrames_ = 600;

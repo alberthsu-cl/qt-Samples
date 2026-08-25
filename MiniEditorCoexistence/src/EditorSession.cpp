@@ -156,6 +156,33 @@ bool EditorSession::removeTimelineClip(int clipId)
     return true;
 }
 
+void EditorSession::addMediaAsset()
+{
+    clipSettings_.push_back({});
+    timelineClipStates_.push_back({});
+    selectedAssetIndex_ = static_cast<int>(clipSettings_.size()) - 1;
+    projectDirty_ = true;
+    undoHistory_.clear();
+    redoHistory_.clear();
+    notifyStateChanged(EditorChange::All);
+}
+
+bool EditorSession::removeMediaAsset(int assetIndex)
+{
+    if (assetIndex < 0 || assetIndex >= static_cast<int>(clipSettings_.size()))
+        return false;
+
+    clipSettings_.erase(clipSettings_.begin() + assetIndex);
+    timelineClipStates_.erase(timelineClipStates_.begin() + assetIndex);
+    selectedAssetIndex_ = std::clamp(selectedAssetIndex_, 0,
+                                     static_cast<int>(clipSettings_.size()) - 1);
+    projectDirty_ = true;
+    undoHistory_.clear();
+    redoHistory_.clear();
+    notifyStateChanged(EditorChange::All);
+    return true;
+}
+
 bool EditorSession::isProjectDirty() const
 {
     return projectDirty_;

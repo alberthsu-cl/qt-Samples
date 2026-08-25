@@ -35,6 +35,16 @@ bool QtMediaLibraryHost::create(void *mfcParentWindowHandle, const MediaLibrary 
                          if (assetSelectedHandler_)
                              assetSelectedHandler_(assetIndex);
                      });
+    QObject::connect(panel_.get(), &QtMediaLibraryPanel::importRequested,
+                     panel_.get(), [this] {
+                         if (importHandler_)
+                             importHandler_();
+                     });
+    QObject::connect(panel_.get(), &QtMediaLibraryPanel::removeRequested,
+                     panel_.get(), [this](int assetIndex, int assetId) {
+                         if (removeHandler_)
+                             removeHandler_(assetIndex, assetId);
+                     });
 
     panel_->show();
     return true;
@@ -66,4 +76,14 @@ void QtMediaLibraryHost::setSelectedAssetIndex(int assetIndex)
 void QtMediaLibraryHost::setAssetSelectedHandler(AssetSelectedHandler handler)
 {
     assetSelectedHandler_ = std::move(handler);
+}
+
+void QtMediaLibraryHost::setImportHandler(ImportHandler handler)
+{
+    importHandler_ = std::move(handler);
+}
+
+void QtMediaLibraryHost::setRemoveHandler(RemoveHandler handler)
+{
+    removeHandler_ = std::move(handler);
 }

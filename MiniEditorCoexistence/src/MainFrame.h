@@ -74,6 +74,8 @@ private:
     bool openProject(const std::filesystem::path &path);
     bool confirmSaveBeforeDestructiveAction();
     void updateWindowTitle();
+    void importMediaFile();
+    void removeMediaAsset(int assetIndex, int assetId);
 
     CStatusBar statusBar_;
 #if MINI_EDITOR_USE_QT
@@ -97,6 +99,7 @@ private:
     MfcWorkspaceSplitter rightSplitter_;
     MfcWorkspaceSplitter timelineSplitter_;
     MediaLibrary mediaLibrary_;
+    int builtInMediaAssetCount_ = 0;
     EditorSession editorSession_;
     EditorSession::ObserverId editorSessionObserverId_ = 0;
     WorkspaceLayout workspaceLayout_;

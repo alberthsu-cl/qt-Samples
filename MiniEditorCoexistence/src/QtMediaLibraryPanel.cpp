@@ -9,6 +9,7 @@
 #include <QItemSelectionModel>
 #include <QLineEdit>
 #include <QListView>
+#include <QPushButton>
 #include <QPainter>
 #include <QPen>
 #include <QStyledItemDelegate>
@@ -91,6 +92,11 @@ QtMediaLibraryPanel::QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidg
     headerLayout->addWidget(categorySelector, 1);
     headerLayout->addWidget(searchBox, 1);
 
+    auto *importButton = new QPushButton(QStringLiteral("Import"), this);
+    auto *removeButton = new QPushButton(QStringLiteral("Remove"), this);
+    headerLayout->addWidget(importButton);
+    headerLayout->addWidget(removeButton);
+
     assetView_->setModel(assetModel_);
     assetView_->setItemDelegate(new MediaAssetDelegate(assetView_));
     assetView_->setViewMode(QListView::IconMode);
@@ -113,6 +119,13 @@ QtMediaLibraryPanel::QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidg
                 if (current.isValid())
                     emit assetSelected(current.data(MediaAssetModel::AssetIndexRole).toInt());
             });
+    connect(importButton, &QPushButton::clicked, this, &QtMediaLibraryPanel::importRequested);
+    connect(removeButton, &QPushButton::clicked, this, [this] {
+        const QModelIndex current = assetView_->currentIndex();
+        if (!current.isValid())
+            return;
+        emit removeRequested(current.row(), current.data(MediaAssetModel::AssetIdRole).toInt());
+    });
 }
 
 void QtMediaLibraryPanel::refreshAssets()

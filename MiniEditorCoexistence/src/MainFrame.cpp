@@ -14,6 +14,16 @@ namespace {
 constexpr UINT kStatusBarIndicators[] = { ID_SEPARATOR };
 constexpr UINT_PTR kPlaybackTimerId = 1;
 
+const wchar_t *mediaKindName(MediaKind kind)
+{
+    switch (kind) {
+    case MediaKind::Video: return L"Video";
+    case MediaKind::Audio: return L"Audio";
+    case MediaKind::Image: return L"Image";
+    }
+    return L"Media";
+}
+
 CRect toClientRect(const WorkspaceRect &rect)
 {
     return CRect(rect.left, rect.top, rect.left + rect.width, rect.top + rect.height);
@@ -35,6 +45,7 @@ MainFrame::MainFrame()
             | static_cast<std::uint32_t>(GetBValue(asset.thumbnailColor));
         mediaLibrary_.addKnownAsset(asset.name, kind, asset.timelineDurationFrames, color);
     }
+    builtInMediaAssetCount_ = static_cast<int>(mediaLibrary_.assets().size());
 }
 
 MainFrame::~MainFrame()
@@ -89,16 +100,25 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     });
     timelineCanvasHost_.setMediaAssetDroppedHandler(
         [this](int mediaAssetId, int frame) {
-            const MediaAsset *asset = findDemoAsset(mediaAssetId);
+            const LibraryMediaAsset *asset = mediaLibrary_.findAsset(mediaAssetId);
             if (asset == nullptr)
                 return;
 
-            const bool isAudio = wcscmp(asset->kind, L"Audio") == 0;
+            const bool isAudio = asset->kind == MediaKind::Audio;
             editorSession_.addTimelineClip(mediaAssetId,
                                            isAudio ? TimelineTrackType::Audio
                                                    : TimelineTrackType::Video,
                                            frame,
                                            asset->timelineDurationFrames);
+        });
+    timelineCanvasHost_.setAssetPresentationResolver(
+        [this](int mediaAssetId, QString *displayName, QColor *color) {
+            const LibraryMediaAsset *asset = mediaLibrary_.findAsset(mediaAssetId);
+            if (asset == nullptr)
+                return false;
+            *displayName = QString::fromStdWString(asset->displayName);
+            *color = QColor::fromRgb(asset->thumbnailColorRgb);
+            return true;
         });
     timelineCanvasHost_.setTimelineClipDeletedHandler(
         [this](int clipId) { editorSession_.removeTimelineClip(clipId); });
@@ -116,6 +136,9 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     mediaLibraryHost_.setAssetSelectedHandler([this](int assetIndex) {
         editorSession_.selectAsset(assetIndex);
     });
+    mediaLibraryHost_.setImportHandler([this] { importMediaFile(); });
+    mediaLibraryHost_.setRemoveHandler(
+        [this](int assetIndex, int assetId) { removeMediaAsset(assetIndex, assetId); });
     propertiesHost_.setClipSettingsEditedHandler([this](const ClipSettings &settings) {
         editorSession_.updateSelectedClipSettings(settings);
     });
@@ -352,7 +375,7 @@ void MainFrame::handlePlaybackCommand(PlaybackCommand command)
 void MainFrame::refreshEditorViews(EditorChange changes)
 {
     const int selectedAssetIndex = editorSession_.selectedAssetIndex();
-    const auto &asset = demoAssets()[selectedAssetIndex];
+    const LibraryMediaAsset &asset = mediaLibrary_.assets()[selectedAssetIndex];
     const ClipSettings &settings = editorSession_.selectedClipSettings();
     const PlaybackState &playbackState = editorSession_.playbackState();
     const TimelineViewState &timelineViewState = editorSession_.timelineViewState();
@@ -369,7 +392,7 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     if (selectionChanged || clipSettingsChanged) {
         // QtPropertiesPanel uses QSignalBlocker while it receives this state,
         // so an editor-to-view refresh never loops back as a user request.
-        propertiesHost_.setSelectedAsset(asset.name, asset.kind, settings);
+        propertiesHost_.setSelectedAsset(asset.displayName.c_str(), mediaKindName(asset.kind), settings);
     }
     if (timelineViewChanged)
         timelineToolbarHost_.setViewState(timelineViewState);
@@ -383,7 +406,8 @@ void MainFrame::refreshEditorViews(EditorChange changes)
 #endif
 
     if (selectionChanged) {
-        previewCanvas_.setSelectedAssetIndex(selectedAssetIndex);
+        previewCanvas_.setSelectedAssetIndex(std::min(selectedAssetIndex,
+                                                       builtInMediaAssetCount_ - 1));
 #if MINI_EDITOR_USE_QT
         timelineCanvasHost_.setSelectedAssetIndex(selectedAssetIndex);
 #else
@@ -451,11 +475,11 @@ void MainFrame::moveTimelineSplitter(int parentY)
 
 void MainFrame::updateStatusText()
 {
-    const auto &asset = demoAssets()[editorSession_.selectedAssetIndex()];
+    const LibraryMediaAsset &asset = mediaLibrary_.assets()[editorSession_.selectedAssetIndex()];
     CString statusText;
     const ClipSettings &settings = editorSession_.selectedClipSettings();
     statusText.Format(_T("Selected: %s (%s) | Opacity %d%% | Scale %d%% | %s | Frame %d"),
-                      asset.name, asset.kind, settings.opacityPercent,
+                      asset.displayName.c_str(), mediaKindName(asset.kind), settings.opacityPercent,
                       settings.scalePercent, clipPositionDisplayName(settings.position),
                       editorSession_.playbackState().currentFrame);
     statusBar_.SetPaneText(0, statusText);
@@ -486,6 +510,44 @@ void MainFrame::saveWorkspaceSettings() const
     settings.selectedAssetIndex = editorSession_.selectedAssetIndex();
     settings.timelineViewState = editorSession_.timelineViewState();
     WorkspaceSettingsStore::save(settings);
+}
+
+void MainFrame::importMediaFile()
+{
+    CFileDialog dialog(TRUE, nullptr, nullptr, OFN_FILEMUSTEXIST | OFN_HIDEREADONLY,
+        L"Media files (*.mp4;*.mov;*.mkv;*.avi;*.mp3;*.wav;*.m4a;*.aac;*.jpg;*.jpeg;*.png;*.bmp)|*.mp4;*.mov;*.mkv;*.avi;*.mp3;*.wav;*.m4a;*.aac;*.jpg;*.jpeg;*.png;*.bmp||",
+        this);
+    if (dialog.DoModal() != IDOK)
+        return;
+
+    if (!mediaLibrary_.addFile(static_cast<LPCTSTR>(dialog.GetPathName()))) {
+        AfxMessageBox(_T("That file type is not supported by this sample."),
+                      MB_ICONWARNING | MB_OK);
+        return;
+    }
+
+    editorSession_.addMediaAsset();
+    mediaLibraryHost_.refreshAssets();
+}
+
+void MainFrame::removeMediaAsset(int assetIndex, int assetId)
+{
+    if (assetIndex < builtInMediaAssetCount_) {
+        AfxMessageBox(_T("Built-in sample media cannot be removed."), MB_ICONINFORMATION | MB_OK);
+        return;
+    }
+
+    const bool usedByTimeline = std::any_of(editorSession_.timelineModel().clips().begin(),
+                                            editorSession_.timelineModel().clips().end(),
+        [assetId](const TimelineClip &clip) { return clip.mediaAssetId == assetId; });
+    if (usedByTimeline) {
+        AfxMessageBox(_T("Remove this asset's timeline clips before removing it from the library."),
+                      MB_ICONWARNING | MB_OK);
+        return;
+    }
+
+    if (mediaLibrary_.removeAsset(assetId) && editorSession_.removeMediaAsset(assetIndex))
+        mediaLibraryHost_.refreshAssets();
 }
 
 bool MainFrame::saveProject(bool chooseFilePath)

@@ -53,6 +53,8 @@ public:
                         int durationFrames = TimelineClipState{}.durationFrames);
     bool moveTimelineClip(int clipId, const TimelineClipState &state);
     bool removeTimelineClip(int clipId);
+    void addMediaAsset();
+    bool removeMediaAsset(int assetIndex);
     bool isProjectDirty() const;
 
     void selectAsset(int assetIndex);

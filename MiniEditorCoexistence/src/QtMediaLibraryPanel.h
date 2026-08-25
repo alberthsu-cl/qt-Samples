@@ -20,6 +20,8 @@ public:
 
 signals:
     void assetSelected(int assetIndex);
+    void importRequested();
+    void removeRequested(int assetIndex, int assetId);
 
 private:
     MediaAssetModel *assetModel_ = nullptr;

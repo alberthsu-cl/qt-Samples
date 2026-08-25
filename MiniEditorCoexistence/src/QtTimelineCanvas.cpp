@@ -1,7 +1,5 @@
 #include "QtTimelineCanvas.h"
 
-#include "DemoProject.h"
-
 #include <QMouseEvent>
 #include <QMimeData>
 #include <QPainter>
@@ -50,8 +48,9 @@ QtTimelineCanvas::QtTimelineCanvas(QWidget *parent)
 
 void QtTimelineCanvas::setSelectedAssetIndex(int selectedAssetIndex)
 {
-    selectedAssetIndex_ = std::clamp(selectedAssetIndex, 0,
-                                     static_cast<int>(demoAssets().size()) - 1);
+    // The current timeline renderer resolves clips by stable media ID. Keep
+    // this legacy selection value only for compatibility with the host API.
+    selectedAssetIndex_ = std::max(0, selectedAssetIndex);
     update();
 }
 
@@ -113,6 +112,12 @@ void QtTimelineCanvas::setMediaAssetDroppedHandler(MediaAssetDroppedHandler hand
     mediaAssetDroppedHandler_ = std::move(handler);
 }
 
+void QtTimelineCanvas::setAssetPresentationResolver(AssetPresentationResolver resolver)
+{
+    assetPresentationResolver_ = std::move(resolver);
+    update();
+}
+
 void QtTimelineCanvas::setTimelineClipDeletedHandler(TimelineClipDeletedHandler handler)
 {
     timelineClipDeletedHandler_ = std::move(handler);
@@ -143,10 +148,13 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
         TimelineClip clip = sourceClip;
         if (isDraggingClip_ && clip.id == dragClipId_)
             clip.state = dragPreviewState_;
-        const MediaAsset *asset = findDemoAsset(clip.mediaAssetId);
-        if (asset == nullptr)
+        QString displayName;
+        QColor assetColor;
+        if (!assetPresentationResolver_
+            || !assetPresentationResolver_(clip.mediaAssetId, &displayName, &assetColor)) {
             return;
-        const QColor assetColor = QColor::fromRgb(asset->thumbnailColor).darker(100);
+        }
+        assetColor = assetColor.darker(100);
         const int pixels = pixelsPerScaleUnit(viewState_);
         const int left = kTimelineLeft + clip.state.startFrame * pixels
             / kTimelineFramesPerScaleUnit;
@@ -161,7 +169,7 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
         painter.setPen(Qt::white);
         painter.drawText(clipRect.adjusted(10, 0, -10, 0),
                          Qt::AlignCenter | Qt::TextSingleLine,
-                         QString::fromWCharArray(asset->name));
+                         displayName);
     };
     if (!timelineClips_.empty()) {
         for (const TimelineClip &clip : timelineClips_)
