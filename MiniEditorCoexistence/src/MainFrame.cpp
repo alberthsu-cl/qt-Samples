@@ -504,10 +504,23 @@ PreviewState MainFrame::currentPreviewState() const
         return preview;
     }
 
-    // One video track exists in this learning sample. If clips overlap, the
-    // most recently inserted placement is treated as the visible top item.
-    const TimelineClip *visibleClip =
-        editorSession_.timelineModel().visibleVideoClipAt(playback.currentFrame);
+    const TimelineModel &timeline = editorSession_.timelineModel();
+    const TimelineClip *visibleClip = nullptr;
+
+    // While stopped, Properties is an editor for the focused placement. Show
+    // that video clip directly so opacity, scale, and position changes appear
+    // immediately even when the timeline playhead is currently elsewhere.
+    const TimelineClip *selectedClip = timeline.findClip(
+        editorSession_.selectedTimelineClipId());
+    if (!playback.isPlaying && selectedClip != nullptr
+        && selectedClip->trackType == TimelineTrackType::Video) {
+        visibleClip = selectedClip;
+    } else {
+        // During playback the playhead owns the preview. If clips overlap,
+        // the most recently inserted placement is the visible top item.
+        visibleClip = timeline.visibleVideoClipAt(playback.currentFrame);
+    }
+
     if (visibleClip == nullptr)
         return preview;
 

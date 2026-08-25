@@ -409,9 +409,13 @@ QRect QtTimelineCanvas::timelineClipRect(const TimelineClip &clip) const
 
 const TimelineClip *QtTimelineCanvas::clipAt(const QPoint &point) const
 {
-    for (const TimelineClip &clip : timelineClips_) {
-        if (timelineClipRect(clip).contains(point))
-            return &clip;
+    // Clips are painted in insertion order, so a later clip visually covers
+    // an earlier clip where they overlap. Hit-test in the opposite direction
+    // to select the same clip the user can actually see on top.
+    for (auto iterator = timelineClips_.rbegin(); iterator != timelineClips_.rend();
+         ++iterator) {
+        if (timelineClipRect(*iterator).contains(point))
+            return &*iterator;
     }
     return nullptr;
 }

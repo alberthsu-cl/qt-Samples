@@ -296,6 +296,11 @@ toolbar, both tracks, and the horizontal scroll bar. Persisted splitter values
 are still restored, but the layout policy clamps older narrow values to these
 usable minimums.
 
+When timeline playback is stopped, Preview shows the focused video placement,
+so Properties changes are visible immediately even if the playhead is outside
+that clip. During playback, Preview returns to playhead-based clip resolution
+and follows the complete timeline sequence.
+
 An empty Qt timeline now shows a drag-and-drop hint instead of drawing the
 legacy default asset. The pure-MFC fallback intentionally remains unchanged
 until it is migrated to the new timeline model.

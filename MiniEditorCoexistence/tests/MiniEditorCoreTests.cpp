@@ -328,6 +328,13 @@ void focusedTimelineClipOwnsIndependentPlacementSettings()
     require(session.redo(), "Timeline placement settings must be redoable.");
     require(session.timelineModel().findClip(firstClipId)->settings.scalePercent == 150,
             "Redo must restore the focused placement settings.");
+
+    session.selectTimelineClip(secondClipId);
+    session.updateSelectedClipSettings({ 70, 80, ClipPosition::BottomRight });
+    require(session.timelineModel().findClip(secondClipId)->settings.opacityPercent == 70,
+            "Properties edits must also update a later focused placement.");
+    require(session.timelineModel().findClip(firstClipId)->settings.opacityPercent == 45,
+            "Editing a later placement must not modify the first placement.");
 }
 
 void playbackStopsAtFocusedPreviewDuration()
@@ -355,6 +362,18 @@ void timelineSlotResolutionReturnsNothingForGaps()
             "Timeline preview must be empty when the playhead is in a gap.");
     require(timeline.visibleVideoClipAt(120)->id == secondId,
             "Timeline preview must switch to the next active media slot.");
+}
+
+void overlappingTimelineClipsUseLastClipAsTopmost()
+{
+    TimelineModel timeline;
+    const int firstId = timeline.addClip(1, TimelineTrackType::Video, { 0, 180 });
+    const int secondId = timeline.addClip(2, TimelineTrackType::Video, { 90, 180 });
+
+    require(timeline.visibleVideoClipAt(89)->id == firstId,
+            "The first clip must remain visible before the overlap.");
+    require(timeline.visibleVideoClipAt(90)->id == secondId,
+            "The later painted clip must be topmost throughout an overlap.");
 }
 
 void mediaLibraryOwnsStableSourceAssetIds()
@@ -431,6 +450,7 @@ int main()
         focusedTimelineClipOwnsIndependentPlacementSettings();
         playbackStopsAtFocusedPreviewDuration();
         timelineSlotResolutionReturnsNothingForGaps();
+        overlappingTimelineClipsUseLastClipAsTopmost();
         mediaLibraryOwnsStableSourceAssetIds();
         workspaceLayoutProtectsPaneBounds();
         std::cout << "MiniEditorCoreTests passed.\n";
