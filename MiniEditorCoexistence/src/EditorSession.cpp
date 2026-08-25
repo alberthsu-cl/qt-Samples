@@ -8,7 +8,6 @@
 namespace {
 
 constexpr int kFirstFrame = 0;
-constexpr int kLastFrame = 299;
 constexpr int kMinimumTimelineZoom = 50;
 constexpr int kMaximumTimelineZoom = 200;
 constexpr int kMaximumTimelineFrame = 600;
@@ -388,7 +387,8 @@ void EditorSession::handlePlaybackCommand(PlaybackCommand command)
         break;
     case PlaybackCommand::StepForward:
         playbackState_.isPlaying = false;
-        playbackState_.currentFrame = std::min(kLastFrame, playbackState_.currentFrame + 1);
+        playbackState_.currentFrame = std::min(playbackState_.durationFrames - 1,
+                                               playbackState_.currentFrame + 1);
         break;
     }
 
@@ -400,13 +400,27 @@ void EditorSession::advancePlaybackFrame()
     if (!playbackState_.isPlaying)
         return;
 
-    playbackState_.currentFrame = (playbackState_.currentFrame + 1) % (kLastFrame + 1);
+    ++playbackState_.currentFrame;
+    if (playbackState_.currentFrame >= playbackState_.durationFrames) {
+        playbackState_.currentFrame = std::max(0, playbackState_.durationFrames - 1);
+        playbackState_.isPlaying = false;
+    }
     notifyStateChanged(EditorChange::Playback);
 }
 
 void EditorSession::seekTimeline(int frame)
 {
-    playbackState_.currentFrame = std::clamp(frame, kFirstFrame, kLastFrame);
+    playbackState_.currentFrame = std::clamp(frame, kFirstFrame,
+                                             std::max(0, playbackState_.durationFrames - 1));
+    notifyStateChanged(EditorChange::Playback);
+}
+
+void EditorSession::setPlaybackDuration(int durationFrames, bool resetToBeginning)
+{
+    playbackState_.durationFrames = std::max(1, durationFrames);
+    playbackState_.isPlaying = false;
+    playbackState_.currentFrame = resetToBeginning
+        ? 0 : std::min(playbackState_.currentFrame, playbackState_.durationFrames - 1);
     notifyStateChanged(EditorChange::Playback);
 }
 

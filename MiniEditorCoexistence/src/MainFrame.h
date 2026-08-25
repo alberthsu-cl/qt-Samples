@@ -74,6 +74,7 @@ private:
     bool openProject(const std::filesystem::path &path);
     bool confirmSaveBeforeDestructiveAction();
     void updateWindowTitle();
+    PreviewState currentPreviewState() const;
     void importMediaFile();
     void removeMediaAsset(int assetIndex, int assetId);
 

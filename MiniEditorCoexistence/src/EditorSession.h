@@ -71,6 +71,7 @@ public:
     void handlePlaybackCommand(PlaybackCommand command);
     void advancePlaybackFrame();
     void seekTimeline(int frame);
+    void setPlaybackDuration(int durationFrames, bool resetToBeginning);
     void updateTimelineViewState(const TimelineViewState &state);
     void fitTimeline();
 

@@ -1,12 +1,8 @@
 #include "MfcPreviewCanvas.h"
 
-#include "DemoProject.h"
-
 #include <algorithm>
 
 namespace {
-
-constexpr int kVideoDurationFrames = 300;
 
 CString timecodeText(const PlaybackState &state)
 {
@@ -24,7 +20,7 @@ CString timecodeText(const PlaybackState &state)
 CString durationText(const PlaybackState &state)
 {
     PlaybackState durationState = state;
-    durationState.currentFrame = kVideoDurationFrames;
+    durationState.currentFrame = state.durationFrames;
     return timecodeText(durationState);
 }
 
@@ -35,6 +31,13 @@ bool MfcPreviewCanvas::Create(CWnd *parent, UINT controlId)
     return createPane(parent, controlId);
 }
 
+void MfcPreviewCanvas::setPreviewState(const PreviewState &state)
+{
+    previewState_ = state;
+    if (::IsWindow(GetSafeHwnd()))
+        Invalidate(FALSE);
+}
+
 CString MfcPreviewCanvas::paneTitle() const
 {
     return _T("Preview Canvas (MFC)");
@@ -42,8 +45,7 @@ CString MfcPreviewCanvas::paneTitle() const
 
 void MfcPreviewCanvas::drawContent(CDC &deviceContext, const CRect &clientRect) const
 {
-    const auto &asset = demoAssets()[selectedAssetIndex()];
-    const ClipSettings &settings = clipSettings();
+    const ClipSettings &settings = previewState_.settings;
     const CRect availableRect(20, EditorUi::kHeaderHeight + 18,
                               clientRect.right - 20, clientRect.bottom - 12);
     const int availableWidth = availableRect.Width();
@@ -77,16 +79,23 @@ void MfcPreviewCanvas::drawContent(CDC &deviceContext, const CRect &clientRect) 
     }
 
     const CRect videoRect(videoLeft, videoTop, videoLeft + videoWidth, videoTop + videoHeight);
-    const COLORREF fadedThumbnailColor = RGB(
-        GetRValue(asset.thumbnailColor) * settings.opacityPercent / 100,
-        GetGValue(asset.thumbnailColor) * settings.opacityPercent / 100,
-        GetBValue(asset.thumbnailColor) * settings.opacityPercent / 100);
-
     deviceContext.FillSolidRect(availableRect, EditorUi::kCanvasBackground);
+    if (!previewState_.hasMedia) {
+        drawText(deviceContext, _T("No media at this timeline position"), availableRect,
+                 EditorUi::kSecondaryText, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        return;
+    }
+
+    const BYTE red = static_cast<BYTE>((previewState_.thumbnailColorRgb >> 16) & 0xff);
+    const BYTE green = static_cast<BYTE>((previewState_.thumbnailColorRgb >> 8) & 0xff);
+    const BYTE blue = static_cast<BYTE>(previewState_.thumbnailColorRgb & 0xff);
+    const COLORREF fadedThumbnailColor = RGB(red * settings.opacityPercent / 100,
+                                             green * settings.opacityPercent / 100,
+                                             blue * settings.opacityPercent / 100);
     deviceContext.FillSolidRect(videoRect, fadedThumbnailColor);
     deviceContext.Draw3dRect(videoRect, RGB(220, 220, 220), RGB(220, 220, 220));
 
-    drawText(deviceContext, asset.name,
+    drawText(deviceContext, previewState_.displayName.c_str(),
              CRect(videoRect.left + 12, videoRect.bottom - 38,
                    videoRect.right - 12, videoRect.bottom - 12),
              RGB(255, 255, 255), DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);

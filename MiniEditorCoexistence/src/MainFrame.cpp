@@ -133,6 +133,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
             if (iterator != assets.end())
                 editorSession_.selectAsset(static_cast<int>(iterator - assets.begin()));
             editorSession_.selectTimelineClip(clipId);
+            editorSession_.setPlaybackDuration(editorSession_.timelineModel().durationFrames(), true);
         });
     if (!mediaLibraryHost_.create(GetSafeHwnd(), mediaLibrary_))
         return -1;
@@ -147,6 +148,9 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     // and clip settings, then redraws the remaining MFC panes from that state.
     mediaLibraryHost_.setAssetSelectedHandler([this](int assetIndex) {
         editorSession_.selectAsset(assetIndex);
+        if (assetIndex >= 0 && assetIndex < static_cast<int>(mediaLibrary_.assets().size()))
+            editorSession_.setPlaybackDuration(
+                mediaLibrary_.assets()[assetIndex].timelineDurationFrames, true);
     });
     mediaLibraryHost_.setImportHandler([this] { importMediaFile(); });
     mediaLibraryHost_.setRemoveHandler(
@@ -245,6 +249,8 @@ void MainFrame::OnTimer(UINT_PTR timerId)
         // This is a deliberately simple MFC timer. In a production editor the
         // media engine would report its clock/playhead instead.
         editorSession_.advancePlaybackFrame();
+        if (!editorSession_.playbackState().isPlaying)
+            KillTimer(kPlaybackTimerId);
         return;
     }
 
@@ -460,10 +466,50 @@ void MainFrame::refreshEditorViews(EditorChange changes)
         transportBar_.setPlaybackState(playbackState);
     }
 #endif
+    if (selectionChanged || clipSettingsChanged || playbackChanged || timelineClipChanged)
+        previewCanvas_.setPreviewState(currentPreviewState());
     if (selectionChanged || clipSettingsChanged || playbackChanged)
         updateStatusText();
     if (clipSettingsChanged || timelineClipChanged)
         updateWindowTitle();
+}
+
+PreviewState MainFrame::currentPreviewState() const
+{
+    PreviewState preview;
+    const PlaybackState &playback = editorSession_.playbackState();
+    const bool timelineMode = editorSession_.selectedTimelineClipId() != 0;
+    preview.mode = timelineMode ? PreviewMode::Timeline : PreviewMode::Source;
+
+    if (!timelineMode) {
+        const int index = editorSession_.selectedAssetIndex();
+        if (index < 0 || index >= static_cast<int>(mediaLibrary_.assets().size()))
+            return preview;
+        const LibraryMediaAsset &asset = mediaLibrary_.assets()[index];
+        preview.hasMedia = true;
+        preview.mediaAssetId = asset.id;
+        preview.displayName = asset.displayName;
+        preview.thumbnailColorRgb = asset.thumbnailColorRgb;
+        preview.settings = {};
+        return preview;
+    }
+
+    // One video track exists in this learning sample. If clips overlap, the
+    // most recently inserted placement is treated as the visible top item.
+    const TimelineClip *visibleClip =
+        editorSession_.timelineModel().visibleVideoClipAt(playback.currentFrame);
+    if (visibleClip == nullptr)
+        return preview;
+
+    const LibraryMediaAsset *asset = mediaLibrary_.findAsset(visibleClip->mediaAssetId);
+    if (asset == nullptr)
+        return preview;
+    preview.hasMedia = true;
+    preview.mediaAssetId = asset->id;
+    preview.displayName = asset->displayName;
+    preview.thumbnailColorRgb = asset->thumbnailColorRgb;
+    preview.settings = visibleClip->settings;
+    return preview;
 }
 
 void MainFrame::moveLeftSplitter(int parentX)

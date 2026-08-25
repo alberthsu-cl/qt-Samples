@@ -324,6 +324,33 @@ void focusedTimelineClipOwnsIndependentPlacementSettings()
             "Redo must restore the focused placement settings.");
 }
 
+void playbackStopsAtFocusedPreviewDuration()
+{
+    EditorSession session(1);
+    session.setPlaybackDuration(3, true);
+    session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+    session.advancePlaybackFrame();
+    session.advancePlaybackFrame();
+    session.advancePlaybackFrame();
+    require(!session.playbackState().isPlaying,
+            "Preview playback must stop when its focused duration is reached.");
+    require(session.playbackState().currentFrame == 2,
+            "Stopped preview playback must remain on its final valid frame.");
+}
+
+void timelineSlotResolutionReturnsNothingForGaps()
+{
+    TimelineModel timeline;
+    const int firstId = timeline.addClip(1, TimelineTrackType::Video, { 0, 90 });
+    const int secondId = timeline.addClip(2, TimelineTrackType::Video, { 120, 60 });
+    require(timeline.visibleVideoClipAt(89)->id == firstId,
+            "Timeline preview must resolve the first active media slot.");
+    require(timeline.visibleVideoClipAt(90) == nullptr,
+            "Timeline preview must be empty when the playhead is in a gap.");
+    require(timeline.visibleVideoClipAt(120)->id == secondId,
+            "Timeline preview must switch to the next active media slot.");
+}
+
 void mediaLibraryOwnsStableSourceAssetIds()
 {
     MediaLibrary library;
@@ -392,6 +419,8 @@ int main()
         editorSessionUsesRequestedTimelineClipDuration();
         editorSessionUndoRedoTracksClipDeletion();
         focusedTimelineClipOwnsIndependentPlacementSettings();
+        playbackStopsAtFocusedPreviewDuration();
+        timelineSlotResolutionReturnsNothingForGaps();
         mediaLibraryOwnsStableSourceAssetIds();
         workspaceLayoutProtectsPaneBounds();
         std::cout << "MiniEditorCoreTests passed.\n";

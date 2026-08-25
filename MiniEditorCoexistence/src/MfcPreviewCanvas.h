@@ -8,8 +8,12 @@ class MfcPreviewCanvas final : public MfcEditorPaneBase
 {
 public:
     bool Create(CWnd *parent, UINT controlId);
+    void setPreviewState(const PreviewState &state);
 
 protected:
     CString paneTitle() const override;
     void drawContent(CDC &deviceContext, const CRect &clientRect) const override;
+
+private:
+    PreviewState previewState_;
 };

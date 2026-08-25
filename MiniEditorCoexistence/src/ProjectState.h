@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstdint>
+#include <string>
+
 // Framework-neutral editable state for the clip currently selected in the
 // mini editor. Both MFC and Qt use this value type without owning each other.
 enum class ClipPosition {
@@ -22,6 +25,21 @@ struct PlaybackState {
     bool isPlaying = false;
     int currentFrame = 0;
     int framesPerSecond = 30;
+    int durationFrames = 300;
+};
+
+enum class PreviewMode {
+    Source,
+    Timeline
+};
+
+struct PreviewState {
+    PreviewMode mode = PreviewMode::Source;
+    bool hasMedia = false;
+    int mediaAssetId = 0;
+    std::wstring displayName;
+    std::uint32_t thumbnailColorRgb = 0;
+    ClipSettings settings;
 };
 
 enum class PlaybackCommand {
