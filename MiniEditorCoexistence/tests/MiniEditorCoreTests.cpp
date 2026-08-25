@@ -159,6 +159,10 @@ void projectDocumentRoundTripsEditState()
     TimelineClipState timelineClip = sourceSession.selectedTimelineClipState();
     timelineClip.startFrame = 240;
     sourceSession.updateSelectedTimelineClipState(timelineClip);
+    const int insertedTimelineClipId = sourceSession.addTimelineClip(
+        0, TimelineTrackType::Video, 120, 300);
+    const int insertedAudioClipId = sourceSession.addTimelineClip(
+        1, TimelineTrackType::Audio, 500, 4170);
 
     const std::filesystem::path testPath = std::filesystem::temp_directory_path()
         / "MiniEditorCoreTests.mini-editor.json";
@@ -180,6 +184,16 @@ void projectDocumentRoundTripsEditState()
             "Loaded project must restore clip position.");
     require(destinationSession.selectedTimelineClipState().startFrame == 240,
             "Loaded project must restore timeline position.");
+    const TimelineClip *loadedTimelineClip =
+        destinationSession.timelineModel().findClip(insertedTimelineClipId);
+    require(loadedTimelineClip != nullptr && loadedTimelineClip->state.startFrame == 120,
+            "Loaded project must restore timeline clip placement.");
+    const TimelineClip *loadedAudioClip =
+        destinationSession.timelineModel().findClip(insertedAudioClipId);
+    require(loadedAudioClip != nullptr
+                && loadedAudioClip->trackType == TimelineTrackType::Audio
+                && loadedAudioClip->state.durationFrames == 4170,
+            "Loaded project must restore timeline track and duration.");
     require(!destinationSession.canUndo(), "Loading a project must begin with clean edit history.");
     require(!destinationSession.isProjectDirty(), "Loading a project must clear dirty state.");
     destinationSession.markProjectSaved();

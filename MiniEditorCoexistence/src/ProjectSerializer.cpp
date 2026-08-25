@@ -6,7 +6,7 @@
 
 namespace {
 
-constexpr int kCurrentFormatVersion = 1;
+constexpr int kCurrentFormatVersion = 2;
 
 void setError(std::wstring *errorMessage, const wchar_t *message)
 {
@@ -39,6 +39,20 @@ std::optional<ClipPosition> positionFromName(const std::string &name)
         return ClipPosition::BottomLeft;
     if (name == "BottomRight")
         return ClipPosition::BottomRight;
+    return std::nullopt;
+}
+
+const char *trackName(TimelineTrackType trackType)
+{
+    return trackType == TimelineTrackType::Audio ? "Audio" : "Video";
+}
+
+std::optional<TimelineTrackType> trackFromName(const std::string &name)
+{
+    if (name == "Video")
+        return TimelineTrackType::Video;
+    if (name == "Audio")
+        return TimelineTrackType::Audio;
     return std::nullopt;
 }
 
@@ -87,7 +101,7 @@ bool ProjectSerializer::save(const std::filesystem::path &path,
 
     output << "{\n"
            << "  \"formatVersion\": " << kCurrentFormatVersion << ",\n"
-           << "  \"clips\": [\n";
+           << "  \"assetSettings\": [\n";
     for (std::size_t index = 0; index < project.clipSettings.size(); ++index) {
         const ClipSettings &settings = project.clipSettings[index];
         const TimelineClipState &timelineClip = project.timelineClips[index];
@@ -97,6 +111,17 @@ bool ProjectSerializer::save(const std::filesystem::path &path,
                << "\", \"startFrame\": " << timelineClip.startFrame
                << ", \"durationFrames\": " << timelineClip.durationFrames << " }";
         output << (index + 1 == project.clipSettings.size() ? "\n" : ",\n");
+    }
+    output << "  ],\n"
+           << "  \"timelineClips\": [\n";
+    for (std::size_t index = 0; index < project.timelineItems.size(); ++index) {
+        const TimelineClip &clip = project.timelineItems[index];
+        output << "    { \"id\": " << clip.id
+               << ", \"mediaAssetIndex\": " << clip.mediaAssetIndex
+               << ", \"trackType\": \"" << trackName(clip.trackType)
+               << "\", \"startFrame\": " << clip.state.startFrame
+               << ", \"durationFrames\": " << clip.state.durationFrames << " }";
+        output << (index + 1 == project.timelineItems.size() ? "\n" : ",\n");
     }
     output << "  ]\n"
            << "}\n";
@@ -121,7 +146,7 @@ std::optional<EditorProject> ProjectSerializer::load(const std::filesystem::path
     const std::string json((std::istreambuf_iterator<char>(input)),
                            std::istreambuf_iterator<char>());
     const auto formatVersion = integerValue(json, "formatVersion");
-    if (!formatVersion || *formatVersion != kCurrentFormatVersion) {
+    if (!formatVersion || (*formatVersion != 1 && *formatVersion != kCurrentFormatVersion)) {
         setError(errorMessage, L"This is not a supported Mini Editor project file.");
         return std::nullopt;
     }
@@ -150,6 +175,34 @@ std::optional<EditorProject> ProjectSerializer::load(const std::filesystem::path
     if (project.clipSettings.size() != expectedAssetCount) {
         setError(errorMessage, L"This project does not match the sample media catalog.");
         return std::nullopt;
+    }
+
+    // Version 1 predates the independent TimelineModel. Keep old documents
+    // compatible: their real timeline simply starts empty after loading.
+    if (*formatVersion == 1)
+        return project;
+
+    const std::regex timelineClipExpression("\\{\\s*\\\"id\\\"[^}]*\\}");
+    for (std::sregex_iterator iterator(json.begin(), json.end(), timelineClipExpression), end;
+         iterator != end; ++iterator) {
+        const std::string clipObject = iterator->str();
+        const auto id = integerValue(clipObject, "id");
+        const auto mediaAssetIndex = integerValue(clipObject, "mediaAssetIndex");
+        const auto trackTypeName = stringValue(clipObject, "trackType");
+        const auto startFrame = integerValue(clipObject, "startFrame");
+        const auto durationFrames = integerValue(clipObject, "durationFrames");
+        const auto trackType = trackTypeName ? trackFromName(*trackTypeName) : std::nullopt;
+
+        if (!id || *id <= 0 || !mediaAssetIndex || *mediaAssetIndex < 0
+            || *mediaAssetIndex >= static_cast<int>(expectedAssetCount)
+            || !trackType || !startFrame || *startFrame < 0
+            || !durationFrames || *durationFrames <= 0) {
+            setError(errorMessage, L"A timeline clip in the project file is invalid.");
+            return std::nullopt;
+        }
+
+        project.timelineItems.push_back({ *id, *mediaAssetIndex, *trackType,
+                                          { *startFrame, *durationFrames } });
     }
 
     return project;

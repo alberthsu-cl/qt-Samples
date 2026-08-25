@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ProjectState.h"
+#include "TimelineModel.h"
 
 #include <cstddef>
 #include <vector>
@@ -11,6 +12,7 @@
 struct EditorProject {
     std::vector<ClipSettings> clipSettings;
     std::vector<TimelineClipState> timelineClips;
+    std::vector<TimelineClip> timelineItems;
 
     static EditorProject createDefault(std::size_t assetCount);
 };

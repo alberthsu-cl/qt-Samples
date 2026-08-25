@@ -90,7 +90,7 @@ const TimelineViewState &EditorSession::timelineViewState() const
 
 EditorProject EditorSession::projectSnapshot() const
 {
-    return { clipSettings_, timelineClipStates_ };
+    return { clipSettings_, timelineClipStates_, timelineModel_.clips() };
 }
 
 const TimelineModel &EditorSession::timelineModel() const
@@ -210,6 +210,13 @@ void EditorSession::replaceProject(const EditorProject &project)
         timelineClipStates_[index] = clampedTimelineClipState(project.timelineClips[index]);
     }
     timelineModel_.clear();
+    for (const TimelineClip &clip : project.timelineItems) {
+        if (clip.mediaAssetIndex < 0
+            || clip.mediaAssetIndex >= static_cast<int>(clipSettings_.size())
+            || !timelineModel_.restoreClip(clip)) {
+            return;
+        }
+    }
     projectDirty_ = false;
     undoHistory_.clear();
     redoHistory_.clear();
