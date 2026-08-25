@@ -28,6 +28,8 @@ add_executable(MiniEditorCoexistence WIN32
     src/EditorProject.cpp
     src/ProjectSerializer.h
     src/ProjectSerializer.cpp
+    src/MediaLibrary.h
+    src/MediaLibrary.cpp
     src/TimelineModel.h
     src/TimelineModel.cpp
     src/EditorSession.h
@@ -65,6 +67,8 @@ source_group("DataModel" FILES
     src/EditorProject.cpp
     src/ProjectSerializer.h
     src/ProjectSerializer.cpp
+    src/MediaLibrary.h
+    src/MediaLibrary.cpp
     src/TimelineModel.h
     src/TimelineModel.cpp
     src/EditorSession.h
@@ -87,6 +91,8 @@ if(BUILD_TESTING)
         src/EditorProject.cpp
         src/ProjectSerializer.h
         src/ProjectSerializer.cpp
+        src/MediaLibrary.h
+        src/MediaLibrary.cpp
         src/TimelineModel.h
         src/TimelineModel.cpp
         src/EditorSession.h

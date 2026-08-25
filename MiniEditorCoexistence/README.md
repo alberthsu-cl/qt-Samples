@@ -271,6 +271,14 @@ The timeline ruler now derives labels from frame position at 30 FPS and shows
 timecode such as `00:00`, `00:02`, and `00:04`; the old pixel-based placeholder
 numbers were removed.
 
+## Phase 21 — Real media-library foundation
+
+`MediaLibrary` is a framework-neutral source-asset collection with stable IDs.
+It imports supported video, audio, and image file paths, infers their kind,
+assigns sensible default timeline durations, and supports removal without
+changing any other asset ID. Timeline clips will use these stable IDs rather
+than mutable library rows in the next integration step.
+
 Selecting a Qt timeline clip and pressing Delete now removes it through
 `EditorSession`. Insertion, movement, and deletion all participate in the
 same Undo/Redo history and preserve the clip ID when restored.

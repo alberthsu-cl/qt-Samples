@@ -1,5 +1,6 @@
 #include "EditorSession.h"
 #include "ProjectSerializer.h"
+#include "MediaLibrary.h"
 #include "TimelineModel.h"
 #include "WorkspaceLayout.h"
 
@@ -295,6 +296,24 @@ void editorSessionUndoRedoTracksClipDeletion()
             "Redo must remove the deleted clip again.");
 }
 
+void mediaLibraryOwnsStableSourceAssetIds()
+{
+    MediaLibrary library;
+    const auto imageId = library.addFile(L"D:/media/cover.jpg");
+    const auto audioId = library.addFile(L"D:/media/music.mp3");
+    const auto videoId = library.addFile(L"D:/media/clip.mp4");
+    require(imageId && audioId && videoId, "Supported files must be importable.");
+    require(library.findAsset(*imageId)->timelineDurationFrames == 90,
+            "Still images must receive a three-second default duration.");
+    require(library.findAsset(*audioId)->kind == MediaKind::Audio,
+            "Audio extension must infer the audio media kind.");
+    require(!library.addFile(L"D:/media/notes.txt"),
+            "Unsupported files must be rejected by the media library.");
+    require(library.removeAsset(*audioId), "Imported assets must be removable.");
+    require(library.findAsset(*videoId) != nullptr,
+            "Removing one asset must not invalidate another asset ID.");
+}
+
 void workspaceLayoutProtectsPaneBounds()
 {
     WorkspaceLayout layout;
@@ -338,6 +357,7 @@ int main()
         editorSessionUndoRedoTracksLibraryInsertion();
         editorSessionUsesRequestedTimelineClipDuration();
         editorSessionUndoRedoTracksClipDeletion();
+        mediaLibraryOwnsStableSourceAssetIds();
         workspaceLayoutProtectsPaneBounds();
         std::cout << "MiniEditorCoreTests passed.\n";
         return 0;
