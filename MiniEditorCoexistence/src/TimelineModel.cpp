@@ -19,8 +19,18 @@ int TimelineModel::addClip(int mediaAssetId, TimelineTrackType trackType,
                            const TimelineClipState &state)
 {
     const int clipId = nextClipId_++;
-    clips_.push_back({ clipId, mediaAssetId, trackType, state });
+    clips_.push_back({ clipId, mediaAssetId, trackType, state, {} });
     return clipId;
+}
+
+bool TimelineModel::updateClipSettings(int clipId, const ClipSettings &settings)
+{
+    auto iterator = std::find_if(clips_.begin(), clips_.end(),
+        [clipId](const TimelineClip &clip) { return clip.id == clipId; });
+    if (iterator == clips_.end())
+        return false;
+    iterator->settings = settings;
+    return true;
 }
 
 bool TimelineModel::restoreClip(const TimelineClip &clip)

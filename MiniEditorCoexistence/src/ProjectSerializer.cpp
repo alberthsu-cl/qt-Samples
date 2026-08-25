@@ -12,7 +12,7 @@
 
 namespace {
 
-constexpr int kCurrentFormatVersion = 4;
+constexpr int kCurrentFormatVersion = 5;
 
 std::string utf8FromWide(const std::wstring &value)
 {
@@ -183,7 +183,10 @@ bool ProjectSerializer::save(const std::filesystem::path &path,
                << ", \"mediaAssetId\": " << clip.mediaAssetId
                << ", \"trackType\": \"" << trackName(clip.trackType)
                << "\", \"startFrame\": " << clip.state.startFrame
-               << ", \"durationFrames\": " << clip.state.durationFrames << " }";
+               << ", \"durationFrames\": " << clip.state.durationFrames
+               << ", \"opacityPercent\": " << clip.settings.opacityPercent
+               << ", \"scalePercent\": " << clip.settings.scalePercent
+               << ", \"position\": \"" << positionName(clip.settings.position) << "\" }";
         output << (index + 1 == project.timelineItems.size() ? "\n" : ",\n");
     }
     output << "  ]\n"
@@ -215,7 +218,7 @@ std::optional<EditorProject> ProjectSerializer::load(const std::filesystem::path
     }
 
     EditorProject project;
-    if (*formatVersion == 4) {
+    if (*formatVersion >= 4) {
         const std::regex mediaExpression("\\{\\s*\\\"id\\\"[^}]*\\\"filePath\\\"[^}]*\\}");
         for (std::sregex_iterator iterator(json.begin(), json.end(), mediaExpression), end;
              iterator != end; ++iterator) {
@@ -263,7 +266,7 @@ std::optional<EditorProject> ProjectSerializer::load(const std::filesystem::path
         project.timelineClips.push_back({ *startFrame, *durationFrames });
     }
 
-    const std::size_t requiredAssetCount = *formatVersion == 4
+    const std::size_t requiredAssetCount = *formatVersion >= 4
         ? project.mediaAssets.size() : expectedAssetCount;
     if (project.clipSettings.size() != requiredAssetCount) {
         setError(errorMessage, L"This project does not match the sample media catalog.");
@@ -299,7 +302,7 @@ std::optional<EditorProject> ProjectSerializer::load(const std::filesystem::path
         }
 
         const int mediaAssetId = *formatVersion == 2 ? *assetReference + 1 : *assetReference;
-        const bool hasAsset = *formatVersion == 4
+        const bool hasAsset = *formatVersion >= 4
             ? std::any_of(project.mediaAssets.begin(), project.mediaAssets.end(),
                 [mediaAssetId](const LibraryMediaAsset &asset) { return asset.id == mediaAssetId; })
             : mediaAssetId > 0 && mediaAssetId <= static_cast<int>(expectedAssetCount);
@@ -308,8 +311,20 @@ std::optional<EditorProject> ProjectSerializer::load(const std::filesystem::path
             return std::nullopt;
         }
 
+        ClipSettings settings;
+        if (*formatVersion >= 5) {
+            const auto opacity = integerValue(clipObject, "opacityPercent");
+            const auto scale = integerValue(clipObject, "scalePercent");
+            const auto positionNameValue = stringValue(clipObject, "position");
+            const auto position = positionNameValue ? positionFromName(*positionNameValue) : std::nullopt;
+            if (!opacity || !scale || !position) {
+                setError(errorMessage, L"A timeline clip has incomplete placement settings.");
+                return std::nullopt;
+            }
+            settings = { *opacity, *scale, *position };
+        }
         project.timelineItems.push_back({ *id, mediaAssetId, *trackType,
-                                          { *startFrame, *durationFrames } });
+                                          { *startFrame, *durationFrames }, settings });
     }
 
     return project;

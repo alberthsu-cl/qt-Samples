@@ -17,6 +17,9 @@ struct TimelineClip {
     int mediaAssetId = 0;
     TimelineTrackType trackType = TimelineTrackType::Video;
     TimelineClipState state;
+    // Placement properties belong to this timeline instance, never to the
+    // reusable source asset in MediaLibrary.
+    ClipSettings settings;
 };
 
 // Framework-neutral timeline collection. It starts empty; UI code can add
@@ -34,6 +37,7 @@ public:
                 const TimelineClipState &state = {});
     bool restoreClip(const TimelineClip &clip);
     bool moveClip(int clipId, const TimelineClipState &state);
+    bool updateClipSettings(int clipId, const ClipSettings &settings);
     bool removeClip(int clipId);
     void clear();
     const TimelineClip *findClip(int clipId) const;
