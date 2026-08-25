@@ -9,9 +9,9 @@
 QtMediaLibraryHost::QtMediaLibraryHost() = default;
 QtMediaLibraryHost::~QtMediaLibraryHost() = default;
 
-bool QtMediaLibraryHost::create(void *mfcParentWindowHandle)
+bool QtMediaLibraryHost::create(void *mfcParentWindowHandle, const MediaLibrary &mediaLibrary)
 {
-    panel_ = std::make_unique<QtMediaLibraryPanel>();
+    panel_ = std::make_unique<QtMediaLibraryPanel>(mediaLibrary);
     panel_->setWindowFlag(Qt::FramelessWindowHint, true);
     panel_->setAttribute(Qt::WA_NativeWindow);
 
@@ -38,6 +38,12 @@ bool QtMediaLibraryHost::create(void *mfcParentWindowHandle)
 
     panel_->show();
     return true;
+}
+
+void QtMediaLibraryHost::refreshAssets()
+{
+    if (panel_)
+        panel_->refreshAssets();
 }
 
 void QtMediaLibraryHost::resize(const CRect &bounds)

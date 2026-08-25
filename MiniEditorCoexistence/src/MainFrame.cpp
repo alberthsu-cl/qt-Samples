@@ -24,6 +24,17 @@ CRect toClientRect(const WorkspaceRect &rect)
 MainFrame::MainFrame()
     : editorSession_(demoAssets().size())
 {
+    // The sample starts with familiar built-in assets, but the Qt media
+    // library now reads its display data from MediaLibrary rather than from
+    // a hard-coded view model. Imported items will join this same catalog.
+    for (const MediaAsset &asset : demoAssets()) {
+        const MediaKind kind = wcscmp(asset.kind, L"Audio") == 0 ? MediaKind::Audio
+            : wcscmp(asset.kind, L"Image") == 0 ? MediaKind::Image : MediaKind::Video;
+        const std::uint32_t color = (static_cast<std::uint32_t>(GetRValue(asset.thumbnailColor)) << 16)
+            | (static_cast<std::uint32_t>(GetGValue(asset.thumbnailColor)) << 8)
+            | static_cast<std::uint32_t>(GetBValue(asset.thumbnailColor));
+        mediaLibrary_.addKnownAsset(asset.name, kind, asset.timelineDurationFrames, color);
+    }
 }
 
 MainFrame::~MainFrame()
@@ -91,7 +102,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         });
     timelineCanvasHost_.setTimelineClipDeletedHandler(
         [this](int clipId) { editorSession_.removeTimelineClip(clipId); });
-    if (!mediaLibraryHost_.create(GetSafeHwnd()))
+    if (!mediaLibraryHost_.create(GetSafeHwnd(), mediaLibrary_))
         return -1;
     if (!propertiesHost_.create(GetSafeHwnd()))
         return -1;

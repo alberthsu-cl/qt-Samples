@@ -299,10 +299,16 @@ void editorSessionUndoRedoTracksClipDeletion()
 void mediaLibraryOwnsStableSourceAssetIds()
 {
     MediaLibrary library;
+    const int builtInId = library.addKnownAsset(L"D:/media/built-in.mp4", MediaKind::Video,
+                                                300, 0xB6742D);
     const auto imageId = library.addFile(L"D:/media/cover.jpg");
     const auto audioId = library.addFile(L"D:/media/music.mp3");
     const auto videoId = library.addFile(L"D:/media/clip.mp4");
     require(imageId && audioId && videoId, "Supported files must be importable.");
+    require(builtInId == 1 && *imageId == 2,
+            "All catalog entries, built-in or imported, must share one stable ID sequence.");
+    require(library.findAsset(builtInId)->thumbnailColorRgb == 0xB6742D,
+            "A known asset must preserve its supplied presentation color.");
     require(library.findAsset(*imageId)->timelineDurationFrames == 90,
             "Still images must receive a three-second default duration.");
     require(library.findAsset(*audioId)->kind == MediaKind::Audio,

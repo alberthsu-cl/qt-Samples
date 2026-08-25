@@ -31,6 +31,16 @@ const LibraryMediaAsset *MediaLibrary::findAsset(int assetId) const
     return iterator == assets_.end() ? nullptr : &*iterator;
 }
 
+int MediaLibrary::addKnownAsset(const std::filesystem::path &path, MediaKind kind,
+                                int timelineDurationFrames,
+                                std::uint32_t thumbnailColorRgb)
+{
+    const int assetId = nextAssetId_++;
+    assets_.push_back({ assetId, path, path.filename().wstring(), kind,
+                        std::max(1, timelineDurationFrames), thumbnailColorRgb });
+    return assetId;
+}
+
 std::optional<int> MediaLibrary::addFile(const std::filesystem::path &path)
 {
     const auto kind = inferKind(path);
@@ -39,7 +49,7 @@ std::optional<int> MediaLibrary::addFile(const std::filesystem::path &path)
 
     const int assetId = nextAssetId_++;
     assets_.push_back({ assetId, path, path.filename().wstring(), *kind,
-                        defaultDurationFrames(*kind) });
+                        defaultDurationFrames(*kind), 0x5078A0 });
     return assetId;
 }
 

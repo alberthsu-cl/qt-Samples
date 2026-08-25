@@ -1,6 +1,6 @@
 #include "MediaAssetModel.h"
 
-#include "DemoProject.h"
+#include "MediaLibrary.h"
 
 #include <QColor>
 #include <QMimeData>
@@ -9,39 +9,49 @@ namespace {
 constexpr char kMediaAssetMimeType[] = "application/x-mini-editor-media-id";
 }
 
-MediaAssetModel::MediaAssetModel(QObject *parent)
+MediaAssetModel::MediaAssetModel(const MediaLibrary &mediaLibrary, QObject *parent)
     : QAbstractListModel(parent)
+    , mediaLibrary_(mediaLibrary)
 {
+}
+
+void MediaAssetModel::refresh()
+{
+    beginResetModel();
+    endResetModel();
 }
 
 int MediaAssetModel::rowCount(const QModelIndex &parent) const
 {
-    return parent.isValid() ? 0 : static_cast<int>(demoAssets().size());
+    return parent.isValid() ? 0 : static_cast<int>(mediaLibrary_.assets().size());
 }
 
 QVariant MediaAssetModel::data(const QModelIndex &index, int role) const
 {
     if (!index.isValid() || index.row() < 0
-        || index.row() >= static_cast<int>(demoAssets().size())) {
+        || index.row() >= static_cast<int>(mediaLibrary_.assets().size())) {
         return {};
     }
 
-    const auto &asset = demoAssets()[index.row()];
+    const LibraryMediaAsset &asset = mediaLibrary_.assets()[index.row()];
     switch (role) {
     case Qt::DisplayRole:
-        return QString::fromWCharArray(asset.name);
+        return QString::fromStdWString(asset.displayName);
     case AssetIndexRole:
         return index.row();
     case AssetIdRole:
         return asset.id;
     case AssetKindRole:
-        return QString::fromWCharArray(asset.kind);
+        return asset.kind == MediaKind::Audio ? QStringLiteral("Audio")
+            : asset.kind == MediaKind::Image ? QStringLiteral("Image")
+                                             : QStringLiteral("Video");
     case AssetDurationRole:
-        return QString::fromWCharArray(asset.duration);
+        return asset.kind == MediaKind::Image ? QStringLiteral("Still")
+            : QStringLiteral("%1:%2")
+                  .arg(asset.timelineDurationFrames / 1800, 2, 10, QLatin1Char('0'))
+                  .arg((asset.timelineDurationFrames / 30) % 60, 2, 10, QLatin1Char('0'));
     case ThumbnailColorRole:
-        return QColor(GetRValue(asset.thumbnailColor),
-                      GetGValue(asset.thumbnailColor),
-                      GetBValue(asset.thumbnailColor));
+        return QColor::fromRgb(asset.thumbnailColorRgb);
     default:
         return {};
     }

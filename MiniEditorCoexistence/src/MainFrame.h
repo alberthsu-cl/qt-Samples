@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EditorSession.h"
+#include "MediaLibrary.h"
 #include "ProjectSerializer.h"
 #include "WorkspaceLayout.h"
 #include "WorkspaceSettings.h"
@@ -95,6 +96,7 @@ private:
     MfcWorkspaceSplitter leftSplitter_;
     MfcWorkspaceSplitter rightSplitter_;
     MfcWorkspaceSplitter timelineSplitter_;
+    MediaLibrary mediaLibrary_;
     EditorSession editorSession_;
     EditorSession::ObserverId editorSessionObserverId_ = 0;
     WorkspaceLayout workspaceLayout_;

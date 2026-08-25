@@ -1,6 +1,7 @@
 #include "QtMediaLibraryPanel.h"
 
 #include "MediaAssetModel.h"
+#include "MediaLibrary.h"
 
 #include <QComboBox>
 #include <QAbstractItemView>
@@ -66,9 +67,9 @@ public:
 
 } // namespace
 
-QtMediaLibraryPanel::QtMediaLibraryPanel(QWidget *parent)
+QtMediaLibraryPanel::QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidget *parent)
     : QWidget(parent)
-    , assetModel_(new MediaAssetModel(this))
+    , assetModel_(new MediaAssetModel(mediaLibrary, this))
     , assetView_(new QListView(this))
 {
     setStyleSheet(QStringLiteral(
@@ -112,6 +113,11 @@ QtMediaLibraryPanel::QtMediaLibraryPanel(QWidget *parent)
                 if (current.isValid())
                     emit assetSelected(current.data(MediaAssetModel::AssetIndexRole).toInt());
             });
+}
+
+void QtMediaLibraryPanel::refreshAssets()
+{
+    assetModel_->refresh();
 }
 
 void QtMediaLibraryPanel::setSelectedAssetIndex(int assetIndex)
