@@ -55,11 +55,10 @@ void QtPropertiesHost::resize(const CRect &bounds)
                    SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
-void QtPropertiesHost::setSelectedAsset(const wchar_t *name, const wchar_t *kind,
-                                        const ClipSettings &settings)
+void QtPropertiesHost::setClipSettings(const ClipSettings &settings)
 {
     if (panel_)
-        panel_->setSelectedAsset(name, kind, settings);
+        panel_->setClipSettings(settings);
 }
 
 void QtPropertiesHost::setEditingEnabled(bool enabled)

@@ -18,8 +18,7 @@ class QtPropertiesPanel final : public QWidget
 public:
     explicit QtPropertiesPanel(QWidget *parent = nullptr);
 
-    void setSelectedAsset(const wchar_t *name, const wchar_t *kind,
-                          const ClipSettings &settings);
+    void setClipSettings(const ClipSettings &settings);
     void setEditingEnabled(bool enabled);
 
 signals:
@@ -28,8 +27,6 @@ signals:
 private:
     void emitCurrentSettings();
 
-    QLabel *assetNameLabel_ = nullptr;
-    QLabel *assetKindLabel_ = nullptr;
     QSlider *opacitySlider_ = nullptr;
     QSpinBox *opacitySpinBox_ = nullptr;
     QSlider *scaleSlider_ = nullptr;

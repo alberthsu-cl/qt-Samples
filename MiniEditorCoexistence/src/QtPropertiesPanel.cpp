@@ -25,8 +25,6 @@ QWidget *createSliderEditor(QSlider *slider, QSpinBox *spinBox, QWidget *parent)
 
 QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
     : QWidget(parent)
-    , assetNameLabel_(new QLabel(this))
-    , assetKindLabel_(new QLabel(this))
     , opacitySlider_(new QSlider(Qt::Horizontal, this))
     , opacitySpinBox_(new QSpinBox(this))
     , scaleSlider_(new QSlider(Qt::Horizontal, this))
@@ -60,8 +58,6 @@ QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
 
     auto *formLayout = new QFormLayout;
     formLayout->setLabelAlignment(Qt::AlignRight);
-    formLayout->addRow(QStringLiteral("Asset"), assetNameLabel_);
-    formLayout->addRow(QStringLiteral("Type"), assetKindLabel_);
     formLayout->addRow(QStringLiteral("Opacity"),
                        createSliderEditor(opacitySlider_, opacitySpinBox_, this));
     formLayout->addRow(QStringLiteral("Scale"),
@@ -70,7 +66,7 @@ QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(14, 14, 14, 14);
-    layout->addWidget(new QLabel(QStringLiteral("Clip Properties"), this));
+    layout->addWidget(new QLabel(QStringLiteral("Properties"), this));
     layout->addLayout(formLayout);
     layout->addStretch();
 
@@ -97,12 +93,8 @@ QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
             [this](int) { emitCurrentSettings(); });
 }
 
-void QtPropertiesPanel::setSelectedAsset(const wchar_t *name, const wchar_t *kind,
-                                         const ClipSettings &settings)
+void QtPropertiesPanel::setClipSettings(const ClipSettings &settings)
 {
-    assetNameLabel_->setText(QString::fromWCharArray(name));
-    assetKindLabel_->setText(QString::fromWCharArray(kind));
-
     // MFC is applying the stored model state. Suppress each widget's signal so
     // selection changes never look like user edits returning to MFC.
     const QSignalBlocker blockOpacitySlider(opacitySlider_);

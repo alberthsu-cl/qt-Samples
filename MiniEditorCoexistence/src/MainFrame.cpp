@@ -424,7 +424,7 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     if (selectionChanged || clipSettingsChanged) {
         // QtPropertiesPanel uses QSignalBlocker while it receives this state,
         // so an editor-to-view refresh never loops back as a user request.
-        propertiesHost_.setSelectedAsset(asset.displayName.c_str(), mediaKindName(asset.kind), settings);
+        propertiesHost_.setClipSettings(settings);
         propertiesHost_.setEditingEnabled(editorSession_.selectedTimelineClipId() != 0);
     }
     if (timelineViewChanged)
