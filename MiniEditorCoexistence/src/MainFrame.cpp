@@ -96,8 +96,9 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         return -1;
     timelineCanvasHost_.setSeekHandler([this](int frame) { editorSession_.seekTimeline(frame); });
     timelineCanvasHost_.setTimelineClipEditedHandler(
-        [this](int clipId, const TimelineClipState &state) {
-            if (editorSession_.moveTimelineClip(clipId, state))
+        [this](int clipId, const TimelineClipState &state,
+               TimelineClipEditKind editKind) {
+            if (editorSession_.moveTimelineClip(clipId, state, editKind))
                 synchronizePlaybackDurationForFocus(false);
     });
     timelineCanvasHost_.setMediaAssetDroppedHandler(

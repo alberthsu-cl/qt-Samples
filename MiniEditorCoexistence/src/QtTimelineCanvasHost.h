@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ProjectState.h"
+#include "TimelineClipEdit.h"
 #include "TimelineAssetPresentation.h"
 #include "TimelineModel.h"
 
@@ -21,7 +22,8 @@ class QtTimelineCanvasHost final
 public:
     using SeekHandler = std::function<void(int frame)>;
     using TimelineClipEditedHandler = std::function<void(int clipId,
-                                                         const TimelineClipState &state)>;
+                                                         const TimelineClipState &state,
+                                                         TimelineClipEditKind editKind)>;
     using MediaAssetDroppedHandler = std::function<void(int mediaAssetId, int frame)>;
     using AssetPresentationResolver =
         std::function<std::optional<TimelineAssetPresentation>(int mediaAssetId)>;

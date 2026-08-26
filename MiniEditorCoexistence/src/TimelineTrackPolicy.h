@@ -30,6 +30,18 @@ public:
         int ignoredClipId,
         int snapToleranceFrames);
 
+    static int rippleInsertionStart(
+        const std::vector<TimelineClip> &clips,
+        TimelineTrackType trackType,
+        int desiredStartFrame,
+        int snapToleranceFrames);
+
+    static int rippleMoveStart(
+        const std::vector<TimelineClip> &clips,
+        int movedClipId,
+        int desiredStartFrame,
+        int snapToleranceFrames);
+
     static TimelineClipState constrainStartTrim(
         const std::vector<TimelineClip> &clips,
         const TimelineClip &editedClip,

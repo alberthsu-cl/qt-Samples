@@ -60,6 +60,20 @@ TimelineClipState clampedTimelineModelClipState(TimelineClipState state)
     return state;
 }
 
+void shiftFollowingClips(std::vector<TimelineClip> &clips,
+                         TimelineTrackType trackType,
+                         int firstFrame,
+                         int frameDelta,
+                         int ignoredClipId = 0)
+{
+    for (TimelineClip &clip : clips) {
+        if (clip.trackType == trackType && clip.id != ignoredClipId
+            && clip.state.startFrame >= firstFrame) {
+            clip.state.startFrame += frameDelta;
+        }
+    }
+}
+
 } // namespace
 
 EditorSession::EditorSession(std::size_t assetCount)
@@ -115,8 +129,39 @@ int EditorSession::addTimelineClip(int mediaAssetId, TimelineTrackType trackType
 {
     TimelineClipState state;
     state.durationFrames = std::max(1, durationFrames);
-    state.startFrame = TimelineTrackPolicy::nearestAvailableStart(
-        timelineModel_.clips(), trackType, startFrame, state.durationFrames);
+    state.startFrame = timelineViewState_.isRippleEditingEnabled
+        ? TimelineTrackPolicy::rippleInsertionStart(
+              timelineModel_.clips(), trackType, startFrame, 0)
+        : TimelineTrackPolicy::nearestAvailableStart(
+              timelineModel_.clips(), trackType, startFrame, state.durationFrames);
+
+    if (timelineViewState_.isRippleEditingEnabled) {
+        const std::vector<TimelineClip> before = timelineModel_.clips();
+        std::vector<TimelineClip> shifted = before;
+        shiftFollowingClips(shifted, trackType, state.startFrame,
+                            state.durationFrames);
+        if (!timelineModel_.replaceClips(shifted))
+            return 0;
+
+        const int clipId = timelineModel_.addClip(mediaAssetId, trackType, state);
+        if (clipId == 0) {
+            timelineModel_.replaceClips(before);
+            return 0;
+        }
+
+        HistoryEntry entry{};
+        entry.type = HistoryEntryType::TimelineModelBatch;
+        entry.assetIndex = selectedAssetIndex_;
+        entry.timelineClipId = clipId;
+        entry.timelineBefore = before;
+        entry.timelineAfter = timelineModel_.clips();
+        projectDirty_ = true;
+        undoHistory_.push_back(std::move(entry));
+        redoHistory_.clear();
+        notifyStateChanged(EditorChange::TimelineClip);
+        return clipId;
+    }
+
     const int clipId = timelineModel_.addClip(mediaAssetId, trackType, state);
     const TimelineClip *addedClip = timelineModel_.findClip(clipId);
     if (addedClip == nullptr)
@@ -130,7 +175,8 @@ int EditorSession::addTimelineClip(int mediaAssetId, TimelineTrackType trackType
     return clipId;
 }
 
-bool EditorSession::moveTimelineClip(int clipId, const TimelineClipState &state)
+bool EditorSession::moveTimelineClip(int clipId, const TimelineClipState &state,
+                                     TimelineClipEditKind editKind)
 {
     const TimelineClip *clip = timelineModel_.findClip(clipId);
     const TimelineClipState updatedState = clampedTimelineModelClipState(state);
@@ -138,6 +184,82 @@ bool EditorSession::moveTimelineClip(int clipId, const TimelineClipState &state)
         return false;
 
     const TimelineClipState previousState = clip->state;
+    if (timelineViewState_.isRippleEditingEnabled
+        && editKind == TimelineClipEditKind::Move) {
+        const std::vector<TimelineClip> before = timelineModel_.clips();
+        std::vector<TimelineClip> after;
+        after.reserve(before.size());
+        const int previousEnd = previousState.startFrame
+            + previousState.durationFrames;
+        for (const TimelineClip &candidate : before) {
+            if (candidate.id == clipId)
+                continue;
+            TimelineClip remaining = candidate;
+            if (remaining.trackType == clip->trackType
+                && remaining.state.startFrame >= previousEnd) {
+                remaining.state.startFrame -= previousState.durationFrames;
+            }
+            after.push_back(remaining);
+        }
+
+        shiftFollowingClips(after, clip->trackType, updatedState.startFrame,
+                            updatedState.durationFrames);
+        TimelineClip movedClip = *clip;
+        movedClip.state = updatedState;
+        after.push_back(movedClip);
+        if (!timelineModel_.replaceClips(after))
+            return false;
+
+        HistoryEntry entry{};
+        entry.type = HistoryEntryType::TimelineModelBatch;
+        entry.assetIndex = selectedAssetIndex_;
+        entry.timelineClipId = clipId;
+        entry.timelineBefore = before;
+        entry.timelineAfter = timelineModel_.clips();
+        projectDirty_ = true;
+        undoHistory_.push_back(std::move(entry));
+        redoHistory_.clear();
+        notifyStateChanged(EditorChange::TimelineClip);
+        return true;
+    }
+
+    if (timelineViewState_.isRippleEditingEnabled
+        && editKind != TimelineClipEditKind::Move) {
+        const std::vector<TimelineClip> before = timelineModel_.clips();
+        std::vector<TimelineClip> after = before;
+        const auto edited = std::find_if(after.begin(), after.end(),
+            [clipId](const TimelineClip &candidate) {
+                return candidate.id == clipId;
+            });
+        if (edited == after.end())
+            return false;
+
+        TimelineClipState rippleState = updatedState;
+        if (editKind == TimelineClipEditKind::TrimStart)
+            rippleState.startFrame = previousState.startFrame;
+        const int previousEnd = previousState.startFrame
+            + previousState.durationFrames;
+        const int updatedEnd = rippleState.startFrame
+            + rippleState.durationFrames;
+        edited->state = rippleState;
+        shiftFollowingClips(after, edited->trackType, previousEnd,
+                            updatedEnd - previousEnd, clipId);
+        if (!timelineModel_.replaceClips(after))
+            return false;
+
+        HistoryEntry entry{};
+        entry.type = HistoryEntryType::TimelineModelBatch;
+        entry.assetIndex = selectedAssetIndex_;
+        entry.timelineClipId = clipId;
+        entry.timelineBefore = before;
+        entry.timelineAfter = timelineModel_.clips();
+        projectDirty_ = true;
+        undoHistory_.push_back(std::move(entry));
+        redoHistory_.clear();
+        notifyStateChanged(EditorChange::TimelineClip);
+        return true;
+    }
+
     if (!timelineModel_.moveClip(clipId, updatedState))
         return false;
 
@@ -156,6 +278,36 @@ bool EditorSession::removeTimelineClip(int clipId)
         return false;
 
     const TimelineClip removedClip = *clip;
+    if (timelineViewState_.isRippleEditingEnabled) {
+        const std::vector<TimelineClip> before = timelineModel_.clips();
+        std::vector<TimelineClip> after;
+        after.reserve(before.size() - 1);
+        for (const TimelineClip &candidate : before) {
+            if (candidate.id != clipId)
+                after.push_back(candidate);
+        }
+        shiftFollowingClips(after, removedClip.trackType,
+                            removedClip.state.startFrame
+                                + removedClip.state.durationFrames,
+                            -removedClip.state.durationFrames);
+        if (!timelineModel_.replaceClips(after))
+            return false;
+
+        HistoryEntry entry{};
+        entry.type = HistoryEntryType::TimelineModelBatch;
+        entry.assetIndex = selectedAssetIndex_;
+        entry.timelineClipId = clipId;
+        entry.timelineBefore = before;
+        entry.timelineAfter = timelineModel_.clips();
+        projectDirty_ = true;
+        if (selectedTimelineClipId_ == clipId)
+            selectedTimelineClipId_ = 0;
+        undoHistory_.push_back(std::move(entry));
+        redoHistory_.clear();
+        notifyStateChanged(EditorChange::TimelineClip);
+        return true;
+    }
+
     if (!timelineModel_.removeClip(clipId))
         return false;
 
@@ -269,18 +421,17 @@ void EditorSession::replaceProject(const EditorProject &project)
         return;
     }
 
+    TimelineModel restoredTimeline;
+    if (!restoredTimeline.replaceClips(project.timelineItems))
+        return;
+
     clipSettings_.resize(project.clipSettings.size());
     timelineClipStates_.resize(project.timelineClips.size());
     for (std::size_t index = 0; index < project.clipSettings.size(); ++index) {
         clipSettings_[index] = clampedClipSettings(project.clipSettings[index]);
         timelineClipStates_[index] = clampedTimelineClipState(project.timelineClips[index]);
     }
-    timelineModel_.clear();
-    for (const TimelineClip &clip : project.timelineItems) {
-        if (!timelineModel_.restoreClip(clip)) {
-            return;
-        }
-    }
+    timelineModel_ = std::move(restoredTimeline);
     selectedAssetIndex_ = std::clamp(selectedAssetIndex_, 0,
                                      static_cast<int>(clipSettings_.size()) - 1);
     projectDirty_ = false;
@@ -331,6 +482,9 @@ bool EditorSession::undo()
     } else if (entry.type == HistoryEntryType::TimelineModelAdd) {
         timelineModel_.removeClip(entry.timelineClipId);
         changes = changes | EditorChange::TimelineClip;
+    } else if (entry.type == HistoryEntryType::TimelineModelBatch) {
+        timelineModel_.replaceClips(entry.timelineBefore);
+        changes = changes | EditorChange::TimelineClip;
     } else {
         timelineModel_.restoreClip(entry.timelineClip);
         changes = changes | EditorChange::TimelineClip;
@@ -365,6 +519,9 @@ bool EditorSession::redo()
         changes = changes | EditorChange::ClipSettings | EditorChange::TimelineClip;
     } else if (entry.type == HistoryEntryType::TimelineModelAdd) {
         timelineModel_.restoreClip(entry.timelineClip);
+        changes = changes | EditorChange::TimelineClip;
+    } else if (entry.type == HistoryEntryType::TimelineModelBatch) {
+        timelineModel_.replaceClips(entry.timelineAfter);
         changes = changes | EditorChange::TimelineClip;
     } else {
         timelineModel_.removeClip(entry.timelineClipId);

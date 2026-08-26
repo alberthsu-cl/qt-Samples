@@ -274,6 +274,13 @@ The Qt canvas adds an eight-pixel magnetic zone around frame zero and adjacent
 clip edges. The tolerance is converted to frames at the current zoom level, so
 clips move freely inside a gap and snap only when their edges are visually near.
 
+The checkable **Ripple** toolbar mode makes structural edits close or open time
+on only the edited track. Insertion shifts clips at and after the insertion
+point, right/left trim shifts the following clips by the duration change, and
+Delete closes the removed duration. Each multi-clip result is stored as one
+atomic timeline snapshot for Undo/Redo; V1 edits never move A1 clips and vice
+versa. Ripple is a workspace preference rather than portable project content.
+
 `TimelinePlaybackResolver` completes the source-aware path independently of the
 UI frameworks. For each playhead position it resolves the active V1 and A1
 placements and maps timeline time to clip-local and source-media frames. Video

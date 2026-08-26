@@ -543,6 +543,143 @@ void singleTrackPolicyPreventsOverlapAndFindsNearestGap()
             "Redo must restore the same snapped position.");
 }
 
+void rippleEditingShiftsOneTrackAsOneUndoableCommand()
+{
+    EditorSession session(3);
+    TimelineViewState viewState;
+    viewState.isRippleEditingEnabled = true;
+    session.updateTimelineViewState(viewState);
+
+    const int firstId = session.addTimelineClip(
+        1, TimelineTrackType::Video, 0, 100);
+    const int secondId = session.addTimelineClip(
+        2, TimelineTrackType::Video, 100, 100);
+    const int audioId = session.addTimelineClip(
+        3, TimelineTrackType::Audio, 100, 100);
+    const int insertedId = session.addTimelineClip(
+        3, TimelineTrackType::Video, 100, 30);
+
+    require(session.timelineModel().findClip(firstId)->state.startFrame == 0
+                && session.timelineModel().findClip(insertedId)->state.startFrame == 100
+                && session.timelineModel().findClip(secondId)->state.startFrame == 130,
+            "Ripple insertion must open space on V1 at the requested edit boundary.");
+    require(session.timelineModel().findClip(audioId)->state.startFrame == 100,
+            "Ripple insertion on V1 must not move clips on A1.");
+    require(session.undo(), "Ripple insertion must be one undoable command.");
+    require(session.timelineModel().findClip(insertedId) == nullptr
+                && session.timelineModel().findClip(secondId)->state.startFrame == 100,
+            "Undo must remove the insertion and restore all shifted V1 clips.");
+    require(session.redo(), "Ripple insertion must be redoable as one command.");
+
+    require(session.moveTimelineClip(firstId, { 0, 70, 0 },
+                                     TimelineClipEditKind::TrimEnd),
+            "A ripple end trim must succeed.");
+    require(session.timelineModel().findClip(insertedId)->state.startFrame == 70
+                && session.timelineModel().findClip(secondId)->state.startFrame == 100,
+            "Shortening a clip must pull every following V1 clip left.");
+    require(session.timelineModel().findClip(audioId)->state.startFrame == 100,
+            "A V1 trim must leave A1 timing unchanged.");
+    require(session.undo(), "The multi-clip ripple trim must undo atomically.");
+    require(session.timelineModel().findClip(firstId)->state.durationFrames == 100
+                && session.timelineModel().findClip(insertedId)->state.startFrame == 100
+                && session.timelineModel().findClip(secondId)->state.startFrame == 130,
+            "Undo must restore the complete pre-trim timeline snapshot.");
+
+    require(session.moveTimelineClip(firstId, { 0, 70, 0 },
+                                     TimelineClipEditKind::TrimEnd),
+            "A clip must be shorten-able before testing ripple restoration.");
+    require(session.moveTimelineClip(firstId, { 0, 100, 0 },
+                                     TimelineClipEditKind::TrimEnd),
+            "A shortened ripple trim must extend back into its source media.");
+    require(session.timelineModel().findClip(firstId)->state.durationFrames == 100
+                && session.timelineModel().findClip(insertedId)->state.startFrame == 100
+                && session.timelineModel().findClip(secondId)->state.startFrame == 130,
+            "Extending back must push every following clip to its restored position.");
+    require(session.undo(), "Ripple re-extension must undo atomically.");
+    require(session.timelineModel().findClip(firstId)->state.durationFrames == 70
+                && session.timelineModel().findClip(insertedId)->state.startFrame == 70,
+            "Undo must restore the shortened ripple state.");
+    require(session.undo(), "The setup shortening must also remain undoable.");
+
+    require(session.removeTimelineClip(insertedId),
+            "Ripple delete must remove the selected time range.");
+    require(session.timelineModel().findClip(insertedId) == nullptr
+                && session.timelineModel().findClip(secondId)->state.startFrame == 100,
+            "Ripple delete must close time for following clips on the same track.");
+    require(session.timelineModel().findClip(audioId)->state.startFrame == 100,
+            "Ripple delete on V1 must leave A1 timing unchanged.");
+    require(session.undo(), "Ripple delete must undo as one timeline snapshot.");
+    require(session.timelineModel().findClip(insertedId) != nullptr
+                && session.timelineModel().findClip(secondId)->state.startFrame == 130,
+            "Undo must restore the deleted clip and every shifted follower.");
+
+    const int laterId = session.addTimelineClip(
+        2, TimelineTrackType::Video, 230, 50);
+    require(session.moveTimelineClip(secondId, { 150, 80, 20 },
+                                     TimelineClipEditKind::TrimStart),
+            "A ripple start trim must succeed.");
+    require(session.timelineModel().findClip(secondId)->state.startFrame == 130
+                && session.timelineModel().findClip(secondId)->state.durationFrames == 80
+                && session.timelineModel().findClip(secondId)->state.sourceInFrame == 20
+                && session.timelineModel().findClip(laterId)->state.startFrame == 210,
+            "A ripple start trim must preserve the edit point and pull followers left.");
+    require(session.undo(), "A ripple start trim must undo atomically.");
+    require(session.timelineModel().findClip(secondId)->state.durationFrames == 100
+                && session.timelineModel().findClip(laterId)->state.startFrame == 230,
+            "Undo must restore the pre-start-trim timeline.");
+
+    require(TimelineTrackPolicy::rippleInsertionStart(
+                session.timelineModel().clips(), TimelineTrackType::Video,
+                50, 0) == 0,
+            "A ripple drop inside a clip must choose the nearer edit boundary.");
+
+    EditorSession moveSession(4);
+    moveSession.updateTimelineViewState(viewState);
+    const int moveFirstId = moveSession.addTimelineClip(
+        1, TimelineTrackType::Video, 0, 100);
+    const int moveSecondId = moveSession.addTimelineClip(
+        2, TimelineTrackType::Video, 100, 100);
+    const int moveThirdId = moveSession.addTimelineClip(
+        3, TimelineTrackType::Video, 200, 100);
+    const int moveAudioId = moveSession.addTimelineClip(
+        4, TimelineTrackType::Audio, 100, 100);
+
+    require(moveSession.moveTimelineClip(
+                moveThirdId, { 0, 100, 0 }, TimelineClipEditKind::Move),
+            "A whole clip must ripple-move to the left.");
+    require(moveSession.timelineModel().findClip(moveThirdId)->state.startFrame == 0
+                && moveSession.timelineModel().findClip(moveFirstId)->state.startFrame == 100
+                && moveSession.timelineModel().findClip(moveSecondId)->state.startFrame == 200,
+            "A left ripple move must open the destination and shift earlier clips right.");
+    require(moveSession.timelineModel().findClip(moveAudioId)->state.startFrame == 100,
+            "A V1 ripple move must not change A1.");
+    require(moveSession.undo(), "A left ripple move must undo atomically.");
+    require(moveSession.timelineModel().findClip(moveFirstId)->state.startFrame == 0
+                && moveSession.timelineModel().findClip(moveSecondId)->state.startFrame == 100
+                && moveSession.timelineModel().findClip(moveThirdId)->state.startFrame == 200,
+            "Undo must restore every clip affected by a left ripple move.");
+
+    require(moveSession.moveTimelineClip(
+                moveFirstId, { 200, 100, 0 }, TimelineClipEditKind::Move),
+            "A whole clip must ripple-move to the right.");
+    require(moveSession.timelineModel().findClip(moveSecondId)->state.startFrame == 0
+                && moveSession.timelineModel().findClip(moveThirdId)->state.startFrame == 100
+                && moveSession.timelineModel().findClip(moveFirstId)->state.startFrame == 200,
+            "A right ripple move must close the old gap and open the destination.");
+    require(moveSession.undo(), "A right ripple move must undo atomically.");
+    require(moveSession.timelineModel().findClip(moveFirstId)->state.startFrame == 0
+                && moveSession.timelineModel().findClip(moveSecondId)->state.startFrame == 100
+                && moveSession.timelineModel().findClip(moveThirdId)->state.startFrame == 200,
+            "Undo must restore every clip affected by a right ripple move.");
+
+    require(TimelineTrackPolicy::rippleMoveStart(
+                moveSession.timelineModel().clips(), moveThirdId, 0, 0) == 0,
+            "Dragging a later clip left must use the visible left edit boundary.");
+    require(TimelineTrackPolicy::rippleMoveStart(
+                moveSession.timelineModel().clips(), moveFirstId, 300, 0) == 200,
+            "Dragging a clip right must account for closing its original gap.");
+}
+
 void timelineGeometryOwnsFrameworkNeutralCoordinatesAndHitTesting()
 {
     const TimelineGeometry geometry(100, 600);
@@ -613,6 +750,13 @@ void timelineClipTrimmingPreservesValidRangesAndHandleHits()
                 && outwardStartTrim.durationFrames == 250
                 && outwardStartTrim.sourceInFrame == 0,
             "Video start untrim must stop at source frame zero.");
+    const TimelineClipState rippleRestoredStart =
+        TimelineClipEdit::rippleTrimStartTo({ 0, 170, 30 }, -30,
+                                            videoContext);
+    require(rippleRestoredStart.startFrame == -30
+                && rippleRestoredStart.durationFrames == 200
+                && rippleRestoredStart.sourceInFrame == 0,
+            "Ripple start trim must restore source frames even at timeline frame zero.");
 
     const TimelineClipState endTrim = TimelineClipEdit::trimEndTo(
         videoOriginal, 250, videoContext);
@@ -747,6 +891,7 @@ int main()
         pausedPlaybackPreservesItsCurrentFrame();
         timelinePlaybackResolvesTrimmedSourcesGapsAndStillImages();
         singleTrackPolicyPreventsOverlapAndFindsNearestGap();
+        rippleEditingShiftsOneTrackAsOneUndoableCommand();
         timelineGeometryOwnsFrameworkNeutralCoordinatesAndHitTesting();
         timelineClipTrimmingPreservesValidRangesAndHandleHits();
         mediaLibraryOwnsStableSourceAssetIds();

@@ -75,6 +75,7 @@ std::optional<WorkspaceSettings> WorkspaceSettingsStore::load()
     const auto selectedAssetIndex = integerValue(json, "selectedAssetIndex");
     const auto zoomPercent = integerValue(json, "timelineZoomPercent");
     const auto isAudioTrackVisible = booleanValue(json, "isAudioTrackVisible");
+    const auto isRippleEditingEnabled = booleanValue(json, "isRippleEditingEnabled");
 
     // A missing field means an older settings file. Keep its default rather
     // than failing the entire load, which makes future settings evolution safe.
@@ -90,6 +91,8 @@ std::optional<WorkspaceSettings> WorkspaceSettingsStore::load()
         settings.timelineViewState.zoomPercent = *zoomPercent;
     if (isAudioTrackVisible)
         settings.timelineViewState.isAudioTrackVisible = *isAudioTrackVisible;
+    if (isRippleEditingEnabled)
+        settings.timelineViewState.isRippleEditingEnabled = *isRippleEditingEnabled;
 
     return settings;
 }
@@ -110,14 +113,16 @@ bool WorkspaceSettingsStore::save(const WorkspaceSettings &settings)
         return false;
 
     output << "{\n"
-           << "  \"formatVersion\": 1,\n"
+           << "  \"formatVersion\": 2,\n"
            << "  \"mediaLibraryWidth\": " << settings.mediaLibraryWidth << ",\n"
            << "  \"propertiesWidth\": " << settings.propertiesWidth << ",\n"
            << "  \"timelineHeight\": " << settings.timelineHeight << ",\n"
            << "  \"selectedAssetIndex\": " << settings.selectedAssetIndex << ",\n"
            << "  \"timelineZoomPercent\": " << settings.timelineViewState.zoomPercent << ",\n"
            << "  \"isAudioTrackVisible\": "
-           << (settings.timelineViewState.isAudioTrackVisible ? "true" : "false") << "\n"
+           << (settings.timelineViewState.isAudioTrackVisible ? "true" : "false") << ",\n"
+           << "  \"isRippleEditingEnabled\": "
+           << (settings.timelineViewState.isRippleEditingEnabled ? "true" : "false") << "\n"
            << "}\n";
     return static_cast<bool>(output);
 }

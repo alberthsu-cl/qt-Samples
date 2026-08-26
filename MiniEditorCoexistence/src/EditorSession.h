@@ -2,6 +2,7 @@
 
 #include "EditorProject.h"
 #include "ProjectState.h"
+#include "TimelineClipEdit.h"
 #include "TimelineModel.h"
 
 #include <cstddef>
@@ -52,7 +53,8 @@ public:
     int selectedTimelineClipId() const;
     int addTimelineClip(int mediaAssetId, TimelineTrackType trackType, int startFrame,
                         int durationFrames = TimelineClipState{}.durationFrames);
-    bool moveTimelineClip(int clipId, const TimelineClipState &state);
+    bool moveTimelineClip(int clipId, const TimelineClipState &state,
+                          TimelineClipEditKind editKind = TimelineClipEditKind::Move);
     bool removeTimelineClip(int clipId);
     void selectTimelineClip(int clipId);
     void addMediaAsset();
@@ -89,7 +91,8 @@ private:
         TimelineModelMove,
         TimelineModelSettings,
         TimelineModelAdd,
-        TimelineModelRemove
+        TimelineModelRemove,
+        TimelineModelBatch
     };
 
     struct HistoryEntry {
@@ -101,6 +104,8 @@ private:
         TimelineClipState timelineClipAfter;
         int timelineClipId = 0;
         TimelineClip timelineClip;
+        std::vector<TimelineClip> timelineBefore;
+        std::vector<TimelineClip> timelineAfter;
     };
 
     void notifyStateChanged(EditorChange changes);

@@ -19,7 +19,8 @@ public:
     void setViewState(const TimelineViewState &state);
 
 signals:
-    void viewStateEdited(int zoomPercent, bool isAudioTrackVisible);
+    void viewStateEdited(int zoomPercent, bool isAudioTrackVisible,
+                         bool isRippleEditingEnabled);
     void fitTimelineRequested();
 
 private:
@@ -27,4 +28,5 @@ private:
     QLabel *zoomLabel_ = nullptr;
     QToolButton *fitButton_ = nullptr;
     QToolButton *audioTrackButton_ = nullptr;
+    QToolButton *rippleButton_ = nullptr;
 };

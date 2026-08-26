@@ -19,7 +19,8 @@ class QtTimelineCanvas final : public QWidget
 public:
     using SeekHandler = std::function<void(int frame)>;
     using TimelineClipEditedHandler = std::function<void(int clipId,
-                                                         const TimelineClipState &state)>;
+                                                         const TimelineClipState &state,
+                                                         TimelineClipEditKind editKind)>;
     using MediaAssetDroppedHandler = std::function<void(int mediaAssetId, int frame)>;
     using AssetPresentationResolver =
         std::function<std::optional<TimelineAssetPresentation>(int mediaAssetId)>;

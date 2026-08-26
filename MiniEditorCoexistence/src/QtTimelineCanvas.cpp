@@ -164,10 +164,55 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
     painter.drawText(12, videoTrackRect.top() + 38, QStringLiteral("V1"));
     painter.drawText(12, audioTrackRect.top() + 38, QStringLiteral("A1"));
 
-    const auto drawClip = [&painter, this, &timelineGeometry](const TimelineClip &sourceClip) {
+    const auto editedClip = std::find_if(timelineClips_.begin(), timelineClips_.end(),
+        [this](const TimelineClip &clip) { return clip.id == dragClipId_; });
+    TimelineClipState rippleEditedState = dragPreviewState_;
+    int rippleEditFrameDelta = 0;
+    if (viewState_.isRippleEditingEnabled && isEditingClip()
+        && editedClip != timelineClips_.end()
+        && dragRegion_ != TimelineClipHitRegion::Body) {
+        if (dragRegion_ == TimelineClipHitRegion::TrimStart)
+            rippleEditedState.startFrame = dragOriginalState_.startFrame;
+        const int originalEnd = dragOriginalState_.startFrame
+            + dragOriginalState_.durationFrames;
+        rippleEditFrameDelta = rippleEditedState.startFrame
+            + rippleEditedState.durationFrames - originalEnd;
+    }
+
+    const auto drawClip = [&painter, this, &timelineGeometry, editedClip,
+                           rippleEditedState, rippleEditFrameDelta](
+                              const TimelineClip &sourceClip) {
         TimelineClip clip = sourceClip;
-        if (isEditingClip() && clip.id == dragClipId_)
-            clip.state = dragPreviewState_;
+        if (viewState_.isRippleEditingEnabled && isMediaDropPreviewVisible_
+            && clip.trackType == mediaDropPresentation_.trackType
+            && clip.state.startFrame >= mediaDropStartFrame_) {
+            clip.state.startFrame += mediaDropPresentation_.durationFrames;
+        }
+        if (isEditingClip() && clip.id == dragClipId_) {
+            clip.state = viewState_.isRippleEditingEnabled
+                    && dragRegion_ != TimelineClipHitRegion::Body
+                ? rippleEditedState : dragPreviewState_;
+        } else if (viewState_.isRippleEditingEnabled && isEditingClip()
+                   && editedClip != timelineClips_.end()
+                   && dragRegion_ == TimelineClipHitRegion::Body
+                   && clip.trackType == editedClip->trackType) {
+            // Preview the same two operations that the session commits:
+            // first close the moved clip's old gap, then open space at its
+            // new location. Clips on the other track remain untouched.
+            const int originalEnd = dragOriginalState_.startFrame
+                + dragOriginalState_.durationFrames;
+            if (clip.state.startFrame >= originalEnd)
+                clip.state.startFrame -= dragOriginalState_.durationFrames;
+            if (clip.state.startFrame >= dragPreviewState_.startFrame)
+                clip.state.startFrame += dragOriginalState_.durationFrames;
+        } else if (viewState_.isRippleEditingEnabled && isEditingClip()
+                   && editedClip != timelineClips_.end()
+                   && dragRegion_ != TimelineClipHitRegion::Body
+                   && clip.trackType == editedClip->trackType
+                   && clip.state.startFrame >= dragOriginalState_.startFrame
+                       + dragOriginalState_.durationFrames) {
+            clip.state.startFrame += rippleEditFrameDelta;
+        }
         if (!assetPresentationResolver_)
             return;
         const std::optional<TimelineAssetPresentation> presentation =
@@ -234,8 +279,9 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
     }
 
     if (!viewState_.isAudioTrackVisible)
-        painter.drawText(QRect(TimelineGeometry::kTimelineLeft, audioTrackRect.top(),
-                               width() - TimelineGeometry::kTimelineLeft - 12,
+        painter.drawText(QRect(TimelineGeometry::kTimelineLeft + 12,
+                               audioTrackRect.top(),
+                               width() - TimelineGeometry::kTimelineLeft - 24,
                                audioTrackRect.height()),
                          Qt::AlignVCenter, QStringLiteral("Audio track hidden"));
 
@@ -333,9 +379,15 @@ void QtTimelineCanvas::mouseReleaseEvent(QMouseEvent *event)
         const QPoint point = event->position().toPoint();
         updateDragPreview(point.x());
         releaseMouse();
+        const TimelineClipEditKind editKind =
+            dragRegion_ == TimelineClipHitRegion::TrimStart
+                ? TimelineClipEditKind::TrimStart
+                : dragRegion_ == TimelineClipHitRegion::TrimEnd
+                    ? TimelineClipEditKind::TrimEnd
+                    : TimelineClipEditKind::Move;
         dragRegion_ = TimelineClipHitRegion::None;
         if (timelineClipEditedHandler_)
-            timelineClipEditedHandler_(dragClipId_, dragPreviewState_);
+            timelineClipEditedHandler_(dragClipId_, dragPreviewState_, editKind);
         dragClipId_ = 0;
         setMinimumWidth(geometry().contentWidth());
         updateMouseCursor(point);
@@ -421,9 +473,20 @@ bool QtTimelineCanvas::updateMediaDropPreview(const QMimeData *mimeData, int tim
     isMediaDropPreviewVisible_ = true;
     mediaDropAssetId_ = mediaAssetId;
     mediaDropPresentation_ = *presentation;
-    mediaDropStartFrame_ = TimelineTrackPolicy::magneticallySnappedStart(
-        timelineClips_, presentation->trackType, geometry().frameAtX(timelineX),
-        presentation->durationFrames, 0, snapToleranceFrames(viewState_));
+    const int desiredStartFrame = geometry().frameAtX(timelineX);
+    mediaDropStartFrame_ = viewState_.isRippleEditingEnabled
+        ? TimelineTrackPolicy::rippleInsertionStart(
+              timelineClips_, presentation->trackType, desiredStartFrame,
+              snapToleranceFrames(viewState_))
+        : TimelineTrackPolicy::magneticallySnappedStart(
+              timelineClips_, presentation->trackType, desiredStartFrame,
+              presentation->durationFrames, 0, snapToleranceFrames(viewState_));
+    const int previewDuration = viewState_.isRippleEditingEnabled
+        ? timelineDurationFrames_ + presentation->durationFrames
+        : std::max(timelineDurationFrames_,
+                   mediaDropStartFrame_ + presentation->durationFrames);
+    setMinimumWidth(TimelineGeometry(viewState_.zoomPercent, previewDuration)
+                        .contentWidth());
     update();
     return true;
 }
@@ -435,6 +498,7 @@ void QtTimelineCanvas::clearMediaDropPreview()
 
     isMediaDropPreviewVisible_ = false;
     mediaDropAssetId_ = 0;
+    setMinimumWidth(geometry().contentWidth());
     update();
 }
 
@@ -462,8 +526,11 @@ void QtTimelineCanvas::updateDragPreview(int timelineX)
             dragOriginalState_, frame - dragFrameOffset_);
         break;
     case TimelineClipHitRegion::TrimStart:
-        dragPreviewState_ = TimelineClipEdit::trimStartTo(
-            dragOriginalState_, frame, dragTrimContext_);
+        dragPreviewState_ = viewState_.isRippleEditingEnabled
+            ? TimelineClipEdit::rippleTrimStartTo(
+                  dragOriginalState_, frame, dragTrimContext_)
+            : TimelineClipEdit::trimStartTo(
+                  dragOriginalState_, frame, dragTrimContext_);
         break;
     case TimelineClipHitRegion::TrimEnd:
         dragPreviewState_ = TimelineClipEdit::trimEndTo(
@@ -477,15 +544,21 @@ void QtTimelineCanvas::updateDragPreview(int timelineX)
         [this](const TimelineClip &clip) { return clip.id == dragClipId_; });
     if (clipIterator != timelineClips_.end()) {
         if (dragRegion_ == TimelineClipHitRegion::Body) {
-            dragPreviewState_.startFrame = TimelineTrackPolicy::magneticallySnappedStart(
-                timelineClips_, clipIterator->trackType,
-                dragPreviewState_.startFrame, dragPreviewState_.durationFrames,
-                dragClipId_, snapToleranceFrames(viewState_));
-        } else if (dragRegion_ == TimelineClipHitRegion::TrimStart) {
+            dragPreviewState_.startFrame = viewState_.isRippleEditingEnabled
+                ? TimelineTrackPolicy::rippleMoveStart(
+                      timelineClips_, dragClipId_, dragPreviewState_.startFrame,
+                      snapToleranceFrames(viewState_))
+                : TimelineTrackPolicy::magneticallySnappedStart(
+                      timelineClips_, clipIterator->trackType,
+                      dragPreviewState_.startFrame, dragPreviewState_.durationFrames,
+                      dragClipId_, snapToleranceFrames(viewState_));
+        } else if (dragRegion_ == TimelineClipHitRegion::TrimStart
+                   && !viewState_.isRippleEditingEnabled) {
             dragPreviewState_ = TimelineTrackPolicy::constrainStartTrim(
                 timelineClips_, *clipIterator, dragPreviewState_,
                 dragTrimContext_.mediaKind, snapToleranceFrames(viewState_));
-        } else if (dragRegion_ == TimelineClipHitRegion::TrimEnd) {
+        } else if (dragRegion_ == TimelineClipHitRegion::TrimEnd
+                   && !viewState_.isRippleEditingEnabled) {
             const int latestAllowedEnd = dragTrimContext_.mediaKind == MediaKind::Image
                 ? std::numeric_limits<int>::max()
                 : dragOriginalState_.startFrame
@@ -497,8 +570,20 @@ void QtTimelineCanvas::updateDragPreview(int timelineX)
         }
     }
 
-    const int provisionalEnd = dragPreviewState_.startFrame
+    int provisionalEnd = dragPreviewState_.startFrame
         + dragPreviewState_.durationFrames;
+    if (viewState_.isRippleEditingEnabled
+        && dragRegion_ != TimelineClipHitRegion::Body) {
+        const int originalEnd = dragOriginalState_.startFrame
+            + dragOriginalState_.durationFrames;
+        TimelineClipState committedPreview = dragPreviewState_;
+        if (dragRegion_ == TimelineClipHitRegion::TrimStart)
+            committedPreview.startFrame = dragOriginalState_.startFrame;
+        const int rippleDelta = committedPreview.startFrame
+            + committedPreview.durationFrames - originalEnd;
+        provisionalEnd = std::max(provisionalEnd,
+                                  timelineDurationFrames_ + rippleDelta);
+    }
     if (provisionalEnd > timelineDurationFrames_) {
         setMinimumWidth(TimelineGeometry(viewState_.zoomPercent, provisionalEnd)
                             .contentWidth());

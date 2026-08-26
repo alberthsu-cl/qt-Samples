@@ -30,9 +30,11 @@ bool QtTimelineToolbarHost::create(void *mfcParentWindowHandle)
                    SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
 
     QObject::connect(toolbar_.get(), &QtTimelineToolbar::viewStateEdited,
-                     toolbar_.get(), [this](int zoomPercent, bool isAudioTrackVisible) {
+                     toolbar_.get(), [this](int zoomPercent, bool isAudioTrackVisible,
+                                            bool isRippleEditingEnabled) {
                          if (viewStateEditedHandler_)
-                             viewStateEditedHandler_({ zoomPercent, isAudioTrackVisible });
+                             viewStateEditedHandler_({ zoomPercent, isAudioTrackVisible,
+                                                       isRippleEditingEnabled });
                      });
     QObject::connect(toolbar_.get(), &QtTimelineToolbar::fitTimelineRequested,
                      toolbar_.get(), [this] {

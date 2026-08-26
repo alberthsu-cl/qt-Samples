@@ -68,6 +68,7 @@ enum class PlaybackCommand {
 struct TimelineViewState {
     int zoomPercent = 100;
     bool isAudioTrackVisible = true;
+    bool isRippleEditingEnabled = false;
 };
 
 // Project-edit state for one clip on the timeline. Unlike TimelineViewState,

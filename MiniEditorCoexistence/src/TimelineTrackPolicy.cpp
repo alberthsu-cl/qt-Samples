@@ -132,6 +132,74 @@ int TimelineTrackPolicy::magneticallySnappedStart(
     return bestStart;
 }
 
+int TimelineTrackPolicy::rippleInsertionStart(
+    const std::vector<TimelineClip> &clips, TimelineTrackType trackType,
+    int desiredStartFrame, int snapToleranceFrames)
+{
+    const int desired = std::max(0, desiredStartFrame);
+    const int tolerance = std::max(0, snapToleranceFrames);
+    int bestStart = desired;
+    int bestDistance = tolerance + 1;
+    const auto consider = [&](int candidate) {
+        const int distance = std::abs(candidate - desired);
+        if (distance <= tolerance
+            && (distance < bestDistance
+                || (distance == bestDistance && candidate < bestStart))) {
+            bestStart = candidate;
+            bestDistance = distance;
+        }
+    };
+
+    consider(0);
+    for (const OccupiedRange &range : occupiedRanges(clips, trackType, 0)) {
+        // Dropping inside a clip would require splitting it. This learning
+        // sample instead chooses the nearer existing edit boundary.
+        if (desired > range.start && desired < range.end) {
+            const int distanceToStart = desired - range.start;
+            const int distanceToEnd = range.end - desired;
+            return distanceToStart <= distanceToEnd ? range.start : range.end;
+        }
+        consider(range.start);
+        consider(range.end);
+    }
+    return bestStart;
+}
+
+int TimelineTrackPolicy::rippleMoveStart(
+    const std::vector<TimelineClip> &clips, int movedClipId,
+    int desiredStartFrame, int snapToleranceFrames)
+{
+    const auto moved = std::find_if(clips.begin(), clips.end(),
+        [movedClipId](const TimelineClip &clip) {
+            return clip.id == movedClipId;
+        });
+    if (moved == clips.end())
+        return std::max(0, desiredStartFrame);
+
+    std::vector<TimelineClip> collapsed;
+    collapsed.reserve(clips.size() - 1);
+    const int movedEnd = moved->state.startFrame + moved->state.durationFrames;
+    for (const TimelineClip &clip : clips) {
+        if (clip.id == movedClipId)
+            continue;
+        TimelineClip remaining = clip;
+        if (remaining.trackType == moved->trackType
+            && remaining.state.startFrame >= movedEnd) {
+            remaining.state.startFrame -= moved->state.durationFrames;
+        }
+        collapsed.push_back(remaining);
+    }
+
+    // Mouse coordinates come from the original timeline. A destination to
+    // the right moves left by the removed clip duration after its old gap is
+    // closed.
+    int collapsedDesired = std::max(0, desiredStartFrame);
+    if (collapsedDesired > moved->state.startFrame)
+        collapsedDesired = std::max(0, collapsedDesired - moved->state.durationFrames);
+    return rippleInsertionStart(collapsed, moved->trackType, collapsedDesired,
+                                snapToleranceFrames);
+}
+
 TimelineClipState TimelineTrackPolicy::constrainStartTrim(
     const std::vector<TimelineClip> &clips, const TimelineClip &editedClip,
     const TimelineClipState &proposedState, MediaKind mediaKind,

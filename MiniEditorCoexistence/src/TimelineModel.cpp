@@ -2,6 +2,7 @@
 #include "TimelineTrackPolicy.h"
 
 #include <algorithm>
+#include <utility>
 
 const std::vector<TimelineClip> &TimelineModel::clips() const
 {
@@ -75,6 +76,18 @@ bool TimelineModel::removeClip(int clipId)
         return false;
 
     clips_.erase(iterator);
+    return true;
+}
+
+bool TimelineModel::replaceClips(const std::vector<TimelineClip> &clips)
+{
+    TimelineModel replacement;
+    for (const TimelineClip &clip : clips) {
+        if (!replacement.restoreClip(clip))
+            return false;
+    }
+
+    *this = std::move(replacement);
     return true;
 }
 

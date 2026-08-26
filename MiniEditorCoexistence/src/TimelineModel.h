@@ -40,6 +40,7 @@ public:
     bool moveClip(int clipId, const TimelineClipState &state);
     bool updateClipSettings(int clipId, const ClipSettings &settings);
     bool removeClip(int clipId);
+    bool replaceClips(const std::vector<TimelineClip> &clips);
     void clear();
     const TimelineClip *findClip(int clipId) const;
 
