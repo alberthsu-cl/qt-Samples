@@ -276,10 +276,25 @@ clips move freely inside a gap and snap only when their edges are visually near.
 
 The checkable **Ripple** toolbar mode makes structural edits close or open time
 on only the edited track. Insertion shifts clips at and after the insertion
-point, right/left trim shifts the following clips by the duration change, and
-Delete closes the removed duration. Each multi-clip result is stored as one
-atomic timeline snapshot for Undo/Redo; V1 edits never move A1 clips and vice
-versa. Ripple is a workspace preference rather than portable project content.
+point, whole-clip moves close the old gap and open the destination, right/left
+trim shifts following clips by the duration change, and Delete closes the
+removed duration. Each multi-clip result is stored as one atomic timeline
+snapshot for Undo/Redo; V1 edits never move A1 clips and vice versa. Ripple is
+a workspace preference rather than portable project content.
+
+The **Split** toolbar command and **Ctrl+B** divide the focused clip at the red
+timeline cursor. The original ID remains on the left and a stable new ID is
+created on the right. Video/audio advance the right clip's source-in by the
+left duration; still images keep source-in zero. Media identity and placement
+properties are copied, total timeline duration is unchanged, and the complete
+operation—including selection of the right piece—is one Undo/Redo command.
+
+Timeline focus is modeled separately from timeline clip selection. Clicking
+an empty track area or the ruler clears the clip ID but keeps Timeline Preview
+active, clears the media-library highlight, and resets playback to frame zero.
+Deleting the focused clip produces the same state. Playback therefore resolves
+the sequence from its beginning (including a deliberate blank gap) instead of
+falling back to the first source-library asset.
 
 `TimelinePlaybackResolver` completes the source-aware path independently of the
 UI frameworks. For each playhead position it resolves the active V1 and A1

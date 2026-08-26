@@ -45,8 +45,10 @@ protected:
     afx_msg void OnPlaybackCommand(UINT commandId);
     afx_msg void OnEditUndo();
     afx_msg void OnEditRedo();
+    afx_msg void OnEditSplitClip();
     afx_msg void OnUpdateEditUndo(CCmdUI *commandUi);
     afx_msg void OnUpdateEditRedo(CCmdUI *commandUi);
+    afx_msg void OnUpdateEditSplitClip(CCmdUI *commandUi);
     afx_msg void OnTimer(UINT_PTR timerId);
     afx_msg void OnFileExit();
     afx_msg void OnFileNew();
@@ -78,6 +80,8 @@ private:
     void synchronizePlaybackDurationForFocus(bool resetToBeginning);
     void importMediaFile();
     void removeMediaAsset(int assetIndex, int assetId);
+    bool canSplitSelectedTimelineClip() const;
+    void splitSelectedTimelineClip();
 
     CStatusBar statusBar_;
 #if MINI_EDITOR_USE_QT

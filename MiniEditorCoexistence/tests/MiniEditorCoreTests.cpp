@@ -381,6 +381,99 @@ void editorSessionUndoRedoTracksClipDeletion()
             "Redo must remove the deleted clip again.");
 }
 
+void splittingClipPreservesSourceRangesSettingsAndUndoHistory()
+{
+    EditorSession session(2);
+    const int originalId = session.addTimelineClip(
+        1, TimelineTrackType::Video, 100, 200);
+    require(originalId > 0, "The video clip used by the split test must be added.");
+    require(session.moveTimelineClip(originalId, { 100, 200, 40 }),
+            "The split test must establish a non-zero video source-in.");
+    session.selectTimelineClip(originalId);
+    session.updateSelectedClipSettings({ 75, 125, ClipPosition::TopLeft });
+    const int durationBeforeSplit = session.timelineModel().contentDurationFrames();
+
+    require(session.splitTimelineClip(originalId, 100, MediaKind::Video) == 0
+                && session.splitTimelineClip(originalId, 300, MediaKind::Video) == 0,
+            "A split must be strictly inside the selected clip.");
+    const int rightId = session.splitTimelineClip(
+        originalId, 150, MediaKind::Video);
+    require(rightId > 0, "Splitting a video clip at an interior frame must succeed.");
+
+    const TimelineClip *left = session.timelineModel().findClip(originalId);
+    const TimelineClip *right = session.timelineModel().findClip(rightId);
+    require(left != nullptr && right != nullptr,
+            "A split must retain the original left clip and create a right clip.");
+    require(left->state.startFrame == 100 && left->state.durationFrames == 50
+                && left->state.sourceInFrame == 40,
+            "The left split must retain the original start and source-in.");
+    require(right->state.startFrame == 150 && right->state.durationFrames == 150
+                && right->state.sourceInFrame == 90,
+            "The right video split must advance source-in by the left duration.");
+    require(right->mediaAssetId == left->mediaAssetId
+                && right->settings.opacityPercent == 75
+                && right->settings.scalePercent == 125
+                && right->settings.position == ClipPosition::TopLeft,
+            "Both split pieces must reference the same asset and placement settings.");
+    require(session.timelineModel().contentDurationFrames() == durationBeforeSplit,
+            "Splitting must not change total timeline duration or move other clips.");
+    require(session.selectedTimelineClipId() == rightId,
+            "The new right-hand clip must become the focused placement.");
+
+    require(session.undo(), "A split must undo as one atomic command.");
+    left = session.timelineModel().findClip(originalId);
+    require(left != nullptr && left->state.durationFrames == 200
+                && left->state.sourceInFrame == 40
+                && session.timelineModel().findClip(rightId) == nullptr,
+            "Undo must restore the original unsplit source range.");
+    require(session.selectedTimelineClipId() == originalId,
+            "Undo must restore selection to the original clip.");
+    require(session.redo(), "A split must redo as one atomic command.");
+    require(session.timelineModel().findClip(rightId) != nullptr
+                && session.selectedTimelineClipId() == rightId,
+            "Redo must restore the same right clip identity and selection.");
+
+    EditorSession imageSession(1);
+    const int imageId = imageSession.addTimelineClip(
+        1, TimelineTrackType::Video, 0, 90);
+    const int imageRightId = imageSession.splitTimelineClip(
+        imageId, 30, MediaKind::Image);
+    require(imageRightId > 0
+                && imageSession.timelineModel().findClip(imageId)
+                       ->state.sourceInFrame == 0
+                && imageSession.timelineModel().findClip(imageRightId)
+                       ->state.sourceInFrame == 0,
+            "Still-image splits must keep source-in at zero on both pieces.");
+}
+
+void timelineFocusDoesNotRequireASelectedClip()
+{
+    EditorSession session(2);
+    const int clipId = session.addTimelineClip(
+        1, TimelineTrackType::Video, 0, 100);
+    session.selectTimelineClip(clipId);
+    require(session.isTimelineFocused()
+                && session.selectedTimelineClipId() == clipId,
+            "Selecting a clip must give focus to the timeline workspace.");
+
+    session.focusTimeline();
+    require(session.isTimelineFocused()
+                && session.selectedTimelineClipId() == 0,
+            "The timeline must retain focus when its empty area is selected.");
+
+    session.selectAsset(1);
+    require(!session.isTimelineFocused()
+                && session.selectedTimelineClipId() == 0,
+            "Selecting a library asset must return focus to source preview.");
+
+    session.selectTimelineClip(clipId);
+    require(session.removeTimelineClip(clipId),
+            "The focused clip must be removable.");
+    require(session.isTimelineFocused()
+                && session.selectedTimelineClipId() == 0,
+            "Deleting the focused clip must leave an unfocused timeline, not select media.");
+}
+
 void focusedTimelineClipOwnsIndependentPlacementSettings()
 {
     EditorSession session(1);
@@ -886,6 +979,8 @@ int main()
         editorSessionUndoRedoTracksLibraryInsertion();
         editorSessionUsesRequestedTimelineClipDuration();
         editorSessionUndoRedoTracksClipDeletion();
+        splittingClipPreservesSourceRangesSettingsAndUndoHistory();
+        timelineFocusDoesNotRequireASelectedClip();
         focusedTimelineClipOwnsIndependentPlacementSettings();
         playbackStopsAtFocusedPreviewDuration();
         pausedPlaybackPreservesItsCurrentFrame();

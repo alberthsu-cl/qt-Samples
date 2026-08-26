@@ -138,6 +138,12 @@ void QtTimelineCanvas::setTimelineClipSelectedHandler(TimelineClipSelectedHandle
     timelineClipSelectedHandler_ = std::move(handler);
 }
 
+void QtTimelineCanvas::setTimelineFocusRequestedHandler(
+    TimelineFocusRequestedHandler handler)
+{
+    timelineFocusRequestedHandler_ = std::move(handler);
+}
+
 void QtTimelineCanvas::paintEvent(QPaintEvent *)
 {
     const TimelineGeometry timelineGeometry = geometry();
@@ -324,12 +330,19 @@ void QtTimelineCanvas::mousePressEvent(QMouseEvent *event)
     const QPoint point = event->position().toPoint();
     const TimelineGeometry timelineGeometry = geometry();
     if (point.y() < TimelineGeometry::kRulerHeight && seekHandler_) {
+        selectedClipId_ = 0;
+        if (timelineFocusRequestedHandler_)
+            timelineFocusRequestedHandler_();
         seekHandler_(timelineGeometry.rulerFrameAtX(point.x()));
     } else if (event->button() == Qt::LeftButton) {
         const TimelineClipHit hit = timelineGeometry.hitTestClip(
             timelineClips_, { point.x(), point.y() },
             selectedClipId_, kTrimHandleWidth);
         if (hit.clip == nullptr) {
+            selectedClipId_ = 0;
+            if (timelineFocusRequestedHandler_)
+                timelineFocusRequestedHandler_();
+            update();
             QWidget::mousePressEvent(event);
             return;
         }

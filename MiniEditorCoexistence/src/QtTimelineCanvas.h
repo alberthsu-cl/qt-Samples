@@ -26,6 +26,7 @@ public:
         std::function<std::optional<TimelineAssetPresentation>(int mediaAssetId)>;
     using TimelineClipDeletedHandler = std::function<void(int clipId)>;
     using TimelineClipSelectedHandler = std::function<void(int clipId)>;
+    using TimelineFocusRequestedHandler = std::function<void()>;
 
     explicit QtTimelineCanvas(QWidget *parent = nullptr);
 
@@ -43,6 +44,7 @@ public:
     void setAssetPresentationResolver(AssetPresentationResolver resolver);
     void setTimelineClipDeletedHandler(TimelineClipDeletedHandler handler);
     void setTimelineClipSelectedHandler(TimelineClipSelectedHandler handler);
+    void setTimelineFocusRequestedHandler(TimelineFocusRequestedHandler handler);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -74,6 +76,7 @@ private:
     AssetPresentationResolver assetPresentationResolver_;
     TimelineClipDeletedHandler timelineClipDeletedHandler_;
     TimelineClipSelectedHandler timelineClipSelectedHandler_;
+    TimelineFocusRequestedHandler timelineFocusRequestedHandler_;
     std::vector<TimelineClip> timelineClips_;
     int timelineDurationFrames_ = 600;
     TimelineClipHitRegion dragRegion_ = TimelineClipHitRegion::None;

@@ -68,6 +68,33 @@ bool TimelineModel::moveClip(int clipId, const TimelineClipState &state)
     return true;
 }
 
+int TimelineModel::splitClip(int clipId, int splitFrame, MediaKind mediaKind)
+{
+    const auto iterator = std::find_if(clips_.begin(), clips_.end(),
+        [clipId](const TimelineClip &clip) { return clip.id == clipId; });
+    if (iterator == clips_.end())
+        return 0;
+
+    const int clipStart = iterator->state.startFrame;
+    const int clipEnd = clipStart + iterator->state.durationFrames;
+    if (splitFrame <= clipStart || splitFrame >= clipEnd)
+        return 0;
+
+    const int leftDuration = splitFrame - clipStart;
+    TimelineClip rightClip = *iterator;
+    rightClip.id = nextClipId_++;
+    rightClip.state.startFrame = splitFrame;
+    rightClip.state.durationFrames = clipEnd - splitFrame;
+    rightClip.state.sourceInFrame = mediaKind == MediaKind::Image
+        ? 0 : iterator->state.sourceInFrame + leftDuration;
+
+    iterator->state.durationFrames = leftDuration;
+    if (mediaKind == MediaKind::Image)
+        iterator->state.sourceInFrame = 0;
+    clips_.push_back(rightClip);
+    return rightClip.id;
+}
+
 bool TimelineModel::removeClip(int clipId)
 {
     const auto iterator = std::find_if(clips_.begin(), clips_.end(),

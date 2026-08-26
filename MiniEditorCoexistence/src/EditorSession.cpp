@@ -124,6 +124,11 @@ int EditorSession::selectedTimelineClipId() const
     return selectedTimelineClipId_;
 }
 
+bool EditorSession::isTimelineFocused() const
+{
+    return isTimelineFocused_;
+}
+
 int EditorSession::addTimelineClip(int mediaAssetId, TimelineTrackType trackType,
                                    int startFrame, int durationFrames)
 {
@@ -300,11 +305,13 @@ bool EditorSession::removeTimelineClip(int clipId)
         entry.timelineBefore = before;
         entry.timelineAfter = timelineModel_.clips();
         projectDirty_ = true;
-        if (selectedTimelineClipId_ == clipId)
+        const bool removedSelection = selectedTimelineClipId_ == clipId;
+        if (removedSelection)
             selectedTimelineClipId_ = 0;
         undoHistory_.push_back(std::move(entry));
         redoHistory_.clear();
-        notifyStateChanged(EditorChange::TimelineClip);
+        notifyStateChanged(EditorChange::TimelineClip
+            | (removedSelection ? EditorChange::Selection : EditorChange::None));
         return true;
     }
 
@@ -312,13 +319,53 @@ bool EditorSession::removeTimelineClip(int clipId)
         return false;
 
     projectDirty_ = true;
-    if (selectedTimelineClipId_ == clipId)
+    const bool removedSelection = selectedTimelineClipId_ == clipId;
+    if (removedSelection)
         selectedTimelineClipId_ = 0;
     undoHistory_.push_back({ HistoryEntryType::TimelineModelRemove, selectedAssetIndex_,
                              {}, {}, {}, {}, clipId, removedClip });
     redoHistory_.clear();
-    notifyStateChanged(EditorChange::TimelineClip);
+    notifyStateChanged(EditorChange::TimelineClip
+        | (removedSelection ? EditorChange::Selection : EditorChange::None));
     return true;
+}
+
+int EditorSession::splitTimelineClip(int clipId, int splitFrame,
+                                     MediaKind mediaKind)
+{
+    const TimelineClip *clip = timelineModel_.findClip(clipId);
+    if (clip == nullptr)
+        return 0;
+
+    const int clipStart = clip->state.startFrame;
+    const int clipEnd = clipStart + clip->state.durationFrames;
+    if (splitFrame <= clipStart || splitFrame >= clipEnd)
+        return 0;
+
+    const std::vector<TimelineClip> before = timelineModel_.clips();
+    const int selectionBefore = selectedTimelineClipId_;
+    const bool timelineFocusedBefore = isTimelineFocused_;
+    const int rightClipId = timelineModel_.splitClip(clipId, splitFrame, mediaKind);
+    if (rightClipId == 0)
+        return 0;
+
+    selectedTimelineClipId_ = rightClipId;
+    isTimelineFocused_ = true;
+    HistoryEntry entry{};
+    entry.type = HistoryEntryType::TimelineModelBatch;
+    entry.assetIndex = selectedAssetIndex_;
+    entry.timelineClipId = rightClipId;
+    entry.timelineBefore = before;
+    entry.timelineAfter = timelineModel_.clips();
+    entry.selectedTimelineClipBefore = selectionBefore;
+    entry.selectedTimelineClipAfter = rightClipId;
+    entry.timelineFocusedBefore = timelineFocusedBefore;
+    entry.timelineFocusedAfter = true;
+    projectDirty_ = true;
+    undoHistory_.push_back(std::move(entry));
+    redoHistory_.clear();
+    notifyStateChanged(EditorChange::Selection | EditorChange::TimelineClip);
+    return rightClipId;
 }
 
 void EditorSession::selectTimelineClip(int clipId)
@@ -326,6 +373,14 @@ void EditorSession::selectTimelineClip(int clipId)
     if (timelineModel_.findClip(clipId) == nullptr)
         return;
     selectedTimelineClipId_ = clipId;
+    isTimelineFocused_ = true;
+    notifyStateChanged(EditorChange::Selection);
+}
+
+void EditorSession::focusTimeline()
+{
+    selectedTimelineClipId_ = 0;
+    isTimelineFocused_ = true;
     notifyStateChanged(EditorChange::Selection);
 }
 
@@ -366,6 +421,7 @@ void EditorSession::selectAsset(int assetIndex)
     selectedAssetIndex_ = std::clamp(assetIndex, 0,
                                      static_cast<int>(clipSettings_.size()) - 1);
     selectedTimelineClipId_ = 0;
+    isTimelineFocused_ = false;
     notifyStateChanged(EditorChange::Selection);
 }
 
@@ -434,6 +490,8 @@ void EditorSession::replaceProject(const EditorProject &project)
     timelineModel_ = std::move(restoredTimeline);
     selectedAssetIndex_ = std::clamp(selectedAssetIndex_, 0,
                                      static_cast<int>(clipSettings_.size()) - 1);
+    selectedTimelineClipId_ = 0;
+    isTimelineFocused_ = false;
     projectDirty_ = false;
     undoHistory_.clear();
     redoHistory_.clear();
@@ -478,12 +536,17 @@ bool EditorSession::undo()
     } else if (entry.type == HistoryEntryType::TimelineModelSettings) {
         timelineModel_.updateClipSettings(entry.timelineClipId, entry.clipSettingsBefore);
         selectedTimelineClipId_ = entry.timelineClipId;
+        isTimelineFocused_ = true;
         changes = changes | EditorChange::ClipSettings | EditorChange::TimelineClip;
     } else if (entry.type == HistoryEntryType::TimelineModelAdd) {
         timelineModel_.removeClip(entry.timelineClipId);
         changes = changes | EditorChange::TimelineClip;
     } else if (entry.type == HistoryEntryType::TimelineModelBatch) {
         timelineModel_.replaceClips(entry.timelineBefore);
+        if (entry.selectedTimelineClipBefore >= 0)
+            selectedTimelineClipId_ = entry.selectedTimelineClipBefore;
+        if (entry.selectedTimelineClipBefore >= 0)
+            isTimelineFocused_ = entry.timelineFocusedBefore;
         changes = changes | EditorChange::TimelineClip;
     } else {
         timelineModel_.restoreClip(entry.timelineClip);
@@ -516,12 +579,17 @@ bool EditorSession::redo()
     } else if (entry.type == HistoryEntryType::TimelineModelSettings) {
         timelineModel_.updateClipSettings(entry.timelineClipId, entry.clipSettingsAfter);
         selectedTimelineClipId_ = entry.timelineClipId;
+        isTimelineFocused_ = true;
         changes = changes | EditorChange::ClipSettings | EditorChange::TimelineClip;
     } else if (entry.type == HistoryEntryType::TimelineModelAdd) {
         timelineModel_.restoreClip(entry.timelineClip);
         changes = changes | EditorChange::TimelineClip;
     } else if (entry.type == HistoryEntryType::TimelineModelBatch) {
         timelineModel_.replaceClips(entry.timelineAfter);
+        if (entry.selectedTimelineClipAfter >= 0)
+            selectedTimelineClipId_ = entry.selectedTimelineClipAfter;
+        if (entry.selectedTimelineClipAfter >= 0)
+            isTimelineFocused_ = entry.timelineFocusedAfter;
         changes = changes | EditorChange::TimelineClip;
     } else {
         timelineModel_.removeClip(entry.timelineClipId);

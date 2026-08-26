@@ -29,6 +29,7 @@ public:
         std::function<std::optional<TimelineAssetPresentation>(int mediaAssetId)>;
     using TimelineClipDeletedHandler = std::function<void(int clipId)>;
     using TimelineClipSelectedHandler = std::function<void(int clipId)>;
+    using TimelineFocusRequestedHandler = std::function<void()>;
 
     QtTimelineCanvasHost();
     ~QtTimelineCanvasHost();
@@ -49,6 +50,7 @@ public:
     void setAssetPresentationResolver(AssetPresentationResolver resolver);
     void setTimelineClipDeletedHandler(TimelineClipDeletedHandler handler);
     void setTimelineClipSelectedHandler(TimelineClipSelectedHandler handler);
+    void setTimelineFocusRequestedHandler(TimelineFocusRequestedHandler handler);
 
 private:
     std::unique_ptr<QScrollArea> scrollArea_;

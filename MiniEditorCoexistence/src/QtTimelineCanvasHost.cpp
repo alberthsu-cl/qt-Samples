@@ -132,3 +132,10 @@ void QtTimelineCanvasHost::setTimelineClipSelectedHandler(TimelineClipSelectedHa
     if (canvas_)
         canvas_->setTimelineClipSelectedHandler(std::move(handler));
 }
+
+void QtTimelineCanvasHost::setTimelineFocusRequestedHandler(
+    TimelineFocusRequestedHandler handler)
+{
+    if (canvas_)
+        canvas_->setTimelineFocusRequestedHandler(std::move(handler));
+}

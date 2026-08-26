@@ -41,6 +41,11 @@ bool QtTimelineToolbarHost::create(void *mfcParentWindowHandle)
                          if (fitTimelineHandler_)
                              fitTimelineHandler_();
                      });
+    QObject::connect(toolbar_.get(), &QtTimelineToolbar::splitClipRequested,
+                     toolbar_.get(), [this] {
+                         if (splitClipHandler_)
+                             splitClipHandler_();
+                     });
     toolbar_->show();
     return true;
 }
@@ -61,6 +66,12 @@ void QtTimelineToolbarHost::setViewState(const TimelineViewState &state)
         toolbar_->setViewState(state);
 }
 
+void QtTimelineToolbarHost::setSplitEnabled(bool isEnabled)
+{
+    if (toolbar_)
+        toolbar_->setSplitEnabled(isEnabled);
+}
+
 void QtTimelineToolbarHost::setViewStateEditedHandler(ViewStateEditedHandler handler)
 {
     viewStateEditedHandler_ = std::move(handler);
@@ -69,4 +80,9 @@ void QtTimelineToolbarHost::setViewStateEditedHandler(ViewStateEditedHandler han
 void QtTimelineToolbarHost::setFitTimelineHandler(FitTimelineHandler handler)
 {
     fitTimelineHandler_ = std::move(handler);
+}
+
+void QtTimelineToolbarHost::setSplitClipHandler(SplitClipHandler handler)
+{
+    splitClipHandler_ = std::move(handler);
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "MediaKind.h"
 #include "ProjectState.h"
 
 #include <cstddef>
@@ -38,6 +39,7 @@ public:
                 const TimelineClipState &state = {});
     bool restoreClip(const TimelineClip &clip);
     bool moveClip(int clipId, const TimelineClipState &state);
+    int splitClip(int clipId, int splitFrame, MediaKind mediaKind);
     bool updateClipSettings(int clipId, const ClipSettings &settings);
     bool removeClip(int clipId);
     bool replaceClips(const std::vector<TimelineClip> &clips);

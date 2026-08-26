@@ -11,6 +11,7 @@ QtTimelineToolbar::QtTimelineToolbar(QWidget *parent)
     , zoomSlider_(new QSlider(Qt::Horizontal, this))
     , zoomLabel_(new QLabel(this))
     , fitButton_(new QToolButton(this))
+    , splitButton_(new QToolButton(this))
     , audioTrackButton_(new QToolButton(this))
     , rippleButton_(new QToolButton(this))
 {
@@ -27,6 +28,10 @@ QtTimelineToolbar::QtTimelineToolbar(QWidget *parent)
     zoomLabel_->setMinimumWidth(42);
     fitButton_->setText(QStringLiteral("Fit"));
     fitButton_->setToolTip(QStringLiteral("Reset timeline zoom to 100%"));
+    splitButton_->setText(QStringLiteral("Split"));
+    splitButton_->setToolTip(QStringLiteral(
+        "Split the selected clip at the timeline cursor (Ctrl+B)"));
+    splitButton_->setEnabled(false);
     audioTrackButton_->setText(QStringLiteral("Audio"));
     audioTrackButton_->setToolTip(QStringLiteral("Show or hide the audio track"));
     audioTrackButton_->setCheckable(true);
@@ -40,6 +45,7 @@ QtTimelineToolbar::QtTimelineToolbar(QWidget *parent)
     layout->setSpacing(8);
     layout->addWidget(new QLabel(QStringLiteral("Timeline"), this));
     layout->addStretch();
+    layout->addWidget(splitButton_);
     layout->addWidget(rippleButton_);
     layout->addWidget(audioTrackButton_);
     layout->addWidget(fitButton_);
@@ -60,8 +66,15 @@ QtTimelineToolbar::QtTimelineToolbar(QWidget *parent)
                              isEnabled);
     });
     connect(fitButton_, &QToolButton::clicked, this, &QtTimelineToolbar::fitTimelineRequested);
+    connect(splitButton_, &QToolButton::clicked,
+            this, &QtTimelineToolbar::splitClipRequested);
 
     setViewState({});
+}
+
+void QtTimelineToolbar::setSplitEnabled(bool isEnabled)
+{
+    splitButton_->setEnabled(isEnabled);
 }
 
 void QtTimelineToolbar::setViewState(const TimelineViewState &state)

@@ -17,16 +17,19 @@ class QtTimelineToolbar final : public QWidget
 public:
     explicit QtTimelineToolbar(QWidget *parent = nullptr);
     void setViewState(const TimelineViewState &state);
+    void setSplitEnabled(bool isEnabled);
 
 signals:
     void viewStateEdited(int zoomPercent, bool isAudioTrackVisible,
                          bool isRippleEditingEnabled);
     void fitTimelineRequested();
+    void splitClipRequested();
 
 private:
     QSlider *zoomSlider_ = nullptr;
     QLabel *zoomLabel_ = nullptr;
     QToolButton *fitButton_ = nullptr;
+    QToolButton *splitButton_ = nullptr;
     QToolButton *audioTrackButton_ = nullptr;
     QToolButton *rippleButton_ = nullptr;
 };

@@ -131,8 +131,10 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         });
     timelineCanvasHost_.setTimelineClipDeletedHandler(
         [this](int clipId) {
+            const bool removedFocusedClip =
+                editorSession_.selectedTimelineClipId() == clipId;
             if (editorSession_.removeTimelineClip(clipId))
-                synchronizePlaybackDurationForFocus(false);
+                synchronizePlaybackDurationForFocus(removedFocusedClip);
         });
     timelineCanvasHost_.setTimelineClipSelectedHandler(
         [this](int clipId) {
@@ -147,6 +149,10 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
             editorSession_.selectTimelineClip(clipId);
             synchronizePlaybackDurationForFocus(true);
         });
+    timelineCanvasHost_.setTimelineFocusRequestedHandler([this] {
+        editorSession_.focusTimeline();
+        synchronizePlaybackDurationForFocus(true);
+    });
     if (!mediaLibraryHost_.create(GetSafeHwnd(), mediaLibrary_))
         return -1;
     if (!propertiesHost_.create(GetSafeHwnd()))
@@ -177,6 +183,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         editorSession_.updateTimelineViewState(state);
     });
     timelineToolbarHost_.setFitTimelineHandler([this] { editorSession_.fitTimeline(); });
+    timelineToolbarHost_.setSplitClipHandler([this] { splitSelectedTimelineClip(); });
 #else
     if (!mediaLibraryPane_.Create(this, IDC_MEDIA_LIBRARY)
         || !propertiesPane_.Create(this, IDC_PROPERTIES)
@@ -245,6 +252,11 @@ void MainFrame::OnEditRedo()
     editorSession_.redo();
 }
 
+void MainFrame::OnEditSplitClip()
+{
+    splitSelectedTimelineClip();
+}
+
 void MainFrame::OnUpdateEditUndo(CCmdUI *commandUi)
 {
     commandUi->Enable(editorSession_.canUndo());
@@ -253,6 +265,11 @@ void MainFrame::OnUpdateEditUndo(CCmdUI *commandUi)
 void MainFrame::OnUpdateEditRedo(CCmdUI *commandUi)
 {
     commandUi->Enable(editorSession_.canRedo());
+}
+
+void MainFrame::OnUpdateEditSplitClip(CCmdUI *commandUi)
+{
+    commandUi->Enable(canSplitSelectedTimelineClip());
 }
 
 void MainFrame::OnTimer(UINT_PTR timerId)
@@ -418,7 +435,7 @@ void MainFrame::refreshEditorViews(EditorChange changes)
 
 #if MINI_EDITOR_USE_QT
     if (selectionChanged) {
-        if (editorSession_.selectedTimelineClipId() != 0)
+        if (editorSession_.isTimelineFocused())
             mediaLibraryHost_.clearSelection();
         else
             mediaLibraryHost_.setSelectedAssetIndex(selectedAssetIndex);
@@ -432,6 +449,8 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     }
     if (timelineViewChanged)
         timelineToolbarHost_.setViewState(timelineViewState);
+    if (selectionChanged || playbackChanged || timelineClipChanged)
+        timelineToolbarHost_.setSplitEnabled(canSplitSelectedTimelineClip());
 #else
     if (selectionChanged) {
         mediaLibraryPane_.setSelectedAssetIndex(selectedAssetIndex);
@@ -469,7 +488,7 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     if (timelineViewChanged)
         timelineCanvasHost_.setViewState(timelineViewState);
     if (playbackChanged) {
-        if (editorSession_.selectedTimelineClipId() != 0)
+        if (editorSession_.isTimelineFocused())
             timelineCanvasHost_.setPlaybackState(playbackState);
         transportHost_.setPlaybackState(playbackState);
     }
@@ -491,7 +510,7 @@ PreviewState MainFrame::currentPreviewState() const
 {
     PreviewState preview;
     const PlaybackState &playback = editorSession_.playbackState();
-    const bool timelineMode = editorSession_.selectedTimelineClipId() != 0;
+    const bool timelineMode = editorSession_.isTimelineFocused();
     preview.mode = timelineMode ? PreviewMode::Timeline : PreviewMode::Source;
 
     if (!timelineMode) {
@@ -559,7 +578,7 @@ PreviewState MainFrame::currentPreviewState() const
 
 void MainFrame::synchronizePlaybackDurationForFocus(bool resetToBeginning)
 {
-    if (editorSession_.selectedTimelineClipId() != 0) {
+    if (editorSession_.isTimelineFocused()) {
         editorSession_.setPlaybackDuration(
             editorSession_.timelineModel().contentDurationFrames(), resetToBeginning);
         return;
@@ -679,6 +698,41 @@ void MainFrame::removeMediaAsset(int assetIndex, int assetId)
     }
 }
 
+bool MainFrame::canSplitSelectedTimelineClip() const
+{
+    const TimelineClip *clip = editorSession_.timelineModel().findClip(
+        editorSession_.selectedTimelineClipId());
+    if (clip == nullptr)
+        return false;
+
+    const int splitFrame = editorSession_.playbackState().currentFrame;
+    return splitFrame > clip->state.startFrame
+        && splitFrame < clip->state.startFrame + clip->state.durationFrames;
+}
+
+void MainFrame::splitSelectedTimelineClip()
+{
+    if (!canSplitSelectedTimelineClip())
+        return;
+
+    const int clipId = editorSession_.selectedTimelineClipId();
+    const TimelineClip *clip = editorSession_.timelineModel().findClip(clipId);
+    if (clip == nullptr)
+        return;
+    const LibraryMediaAsset *asset = mediaLibrary_.findAsset(clip->mediaAssetId);
+    if (asset == nullptr)
+        return;
+
+    const int splitFrame = editorSession_.playbackState().currentFrame;
+    if (editorSession_.splitTimelineClip(clipId, splitFrame, asset->kind) == 0)
+        return;
+
+    // Recalculate preview bounds without moving the timeline cursor. The
+    // newly created right-hand clip becomes the focused placement.
+    synchronizePlaybackDurationForFocus(false);
+    KillTimer(kPlaybackTimerId);
+}
+
 bool MainFrame::saveProject(bool chooseFilePath)
 {
     if (chooseFilePath || projectFilePath_.empty()) {
@@ -770,8 +824,10 @@ BEGIN_MESSAGE_MAP(MainFrame, CFrameWnd)
                      &MainFrame::OnPlaybackCommand)
     ON_COMMAND(ID_EDIT_UNDO, &MainFrame::OnEditUndo)
     ON_COMMAND(ID_EDIT_REDO, &MainFrame::OnEditRedo)
+    ON_COMMAND(ID_EDIT_SPLIT_CLIP, &MainFrame::OnEditSplitClip)
     ON_UPDATE_COMMAND_UI(ID_EDIT_UNDO, &MainFrame::OnUpdateEditUndo)
     ON_UPDATE_COMMAND_UI(ID_EDIT_REDO, &MainFrame::OnUpdateEditRedo)
+    ON_UPDATE_COMMAND_UI(ID_EDIT_SPLIT_CLIP, &MainFrame::OnUpdateEditSplitClip)
     ON_WM_TIMER()
     ON_COMMAND(ID_FILE_NEW, &MainFrame::OnFileNew)
     ON_COMMAND(ID_FILE_OPEN, &MainFrame::OnFileOpen)

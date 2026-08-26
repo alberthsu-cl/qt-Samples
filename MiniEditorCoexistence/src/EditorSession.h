@@ -51,12 +51,15 @@ public:
     EditorProject projectSnapshot() const;
     const TimelineModel &timelineModel() const;
     int selectedTimelineClipId() const;
+    bool isTimelineFocused() const;
     int addTimelineClip(int mediaAssetId, TimelineTrackType trackType, int startFrame,
                         int durationFrames = TimelineClipState{}.durationFrames);
     bool moveTimelineClip(int clipId, const TimelineClipState &state,
                           TimelineClipEditKind editKind = TimelineClipEditKind::Move);
+    int splitTimelineClip(int clipId, int splitFrame, MediaKind mediaKind);
     bool removeTimelineClip(int clipId);
     void selectTimelineClip(int clipId);
+    void focusTimeline();
     void addMediaAsset();
     bool removeMediaAsset(int assetIndex);
     bool isProjectDirty() const;
@@ -106,6 +109,12 @@ private:
         TimelineClip timelineClip;
         std::vector<TimelineClip> timelineBefore;
         std::vector<TimelineClip> timelineAfter;
+        // -1 means that this older command does not explicitly change
+        // timeline selection during Undo/Redo.
+        int selectedTimelineClipBefore = -1;
+        int selectedTimelineClipAfter = -1;
+        bool timelineFocusedBefore = false;
+        bool timelineFocusedAfter = false;
     };
 
     void notifyStateChanged(EditorChange changes);
@@ -115,6 +124,7 @@ private:
     TimelineModel timelineModel_;
     int selectedAssetIndex_ = 0;
     int selectedTimelineClipId_ = 0;
+    bool isTimelineFocused_ = false;
     PlaybackState playbackState_;
     TimelineViewState timelineViewState_;
     bool projectDirty_ = false;
