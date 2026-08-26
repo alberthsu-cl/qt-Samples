@@ -185,12 +185,19 @@ canvas, transport, and status bar—not the media library or properties panel.
 
 ## Phase 13 — Framework-neutral Undo/Redo
 
-`EditorSession` records only `ClipSettings` edits (opacity, scale, and
-position) in undo/redo history. Playback, selection, timeline view, and
-workspace layout are deliberately excluded because they are transient UI
-state, not project-edit decisions. The MFC Edit menu invokes the same
-framework-neutral `undo()` and `redo()` operations, and enables each action
-only when the matching history stack has an entry.
+`EditorHistory` owns the undo and redo stacks as framework-neutral Command
+objects. `SourceClipSettingsCommand`, `SourceTimelineStateCommand`, and
+`TimelineClipSettingsCommand` restore focused value edits. Structural editing
+uses one `TimelineSnapshotCommand`: add, move, trim, Ripple, Delete, and Split
+all store a valid before/after timeline plus focus state, so a multi-clip edit
+remains one atomic command without adding another switch case.
+
+`EditorSession` executes editing policy and records completed commands, but it
+no longer contains an undo/redo type switch. During Undo or Redo it lends the
+command a narrow `EditorCommandContext` containing only state references; the
+command has no MFC, Qt, or `EditorSession` dependency. Playback, timeline view,
+and workspace layout remain transient and are not recorded. The MFC Edit menu
+continues to invoke the same framework-neutral `undo()` and `redo()` API.
 
 ## Phase 14 — Undoable timeline clip moves
 

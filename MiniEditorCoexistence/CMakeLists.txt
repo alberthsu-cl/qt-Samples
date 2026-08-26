@@ -27,6 +27,9 @@ add_executable(MiniEditorCoexistence WIN32
     src/MediaKind.h
     src/EditorProject.h
     src/EditorProject.cpp
+    src/EditorChange.h
+    src/EditorHistory.h
+    src/EditorHistory.cpp
     src/ProjectSerializer.h
     src/ProjectSerializer.cpp
     src/MediaLibrary.h
@@ -75,6 +78,9 @@ source_group("DataModel" FILES
     src/MediaKind.h
     src/EditorProject.h
     src/EditorProject.cpp
+    src/EditorChange.h
+    src/EditorHistory.h
+    src/EditorHistory.cpp
     src/ProjectSerializer.h
     src/ProjectSerializer.cpp
     src/MediaLibrary.h
@@ -110,6 +116,9 @@ if(BUILD_TESTING)
         tests/MiniEditorCoreTests.cpp
         src/EditorProject.h
         src/EditorProject.cpp
+        src/EditorChange.h
+        src/EditorHistory.h
+        src/EditorHistory.cpp
         src/ProjectSerializer.h
         src/ProjectSerializer.cpp
         src/MediaLibrary.h
