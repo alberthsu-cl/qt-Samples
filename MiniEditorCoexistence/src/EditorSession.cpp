@@ -1,4 +1,5 @@
 #include "EditorSession.h"
+#include "TimelineTrackPolicy.h"
 
 #include "DemoProject.h"
 
@@ -113,8 +114,9 @@ int EditorSession::addTimelineClip(int mediaAssetId, TimelineTrackType trackType
                                    int startFrame, int durationFrames)
 {
     TimelineClipState state;
-    state.startFrame = std::max(0, startFrame);
     state.durationFrames = std::max(1, durationFrames);
+    state.startFrame = TimelineTrackPolicy::nearestAvailableStart(
+        timelineModel_.clips(), trackType, startFrame, state.durationFrames);
     const int clipId = timelineModel_.addClip(mediaAssetId, trackType, state);
     const TimelineClip *addedClip = timelineModel_.findClip(clipId);
     if (addedClip == nullptr)

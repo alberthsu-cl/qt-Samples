@@ -1,4 +1,5 @@
 #include "ProjectSerializer.h"
+#include "TimelineTrackPolicy.h"
 
 #include <fstream>
 #include <exception>
@@ -160,6 +161,15 @@ bool ProjectSerializer::save(const std::filesystem::path &path,
             setError(errorMessage, L"A timeline clip has an invalid source range.");
             return false;
         }
+    }
+
+    std::vector<TimelineClip> validatedClips;
+    for (const TimelineClip &clip : project.timelineItems) {
+        if (!TimelineTrackPolicy::canPlace(validatedClips, clip.trackType, clip.state)) {
+            setError(errorMessage, L"Clips on the same timeline track may not overlap.");
+            return false;
+        }
+        validatedClips.push_back(clip);
     }
 
     std::ofstream output(path, std::ios::trunc);
@@ -356,6 +366,14 @@ std::optional<EditorProject> ProjectSerializer::load(const std::filesystem::path
         project.timelineItems.push_back({ *id, mediaAssetId, *trackType,
                                           { *startFrame, *durationFrames,
                                             *sourceInFrame }, settings });
+        const TimelineClip &loadedClip = project.timelineItems.back();
+        std::vector<TimelineClip> earlierClips(project.timelineItems.begin(),
+                                               project.timelineItems.end() - 1);
+        if (!TimelineTrackPolicy::canPlace(earlierClips, loadedClip.trackType,
+                                           loadedClip.state)) {
+            setError(errorMessage, L"Clips on the same timeline track may not overlap.");
+            return std::nullopt;
+        }
     }
 
     // Version 4 stored placement settings once per source asset. During

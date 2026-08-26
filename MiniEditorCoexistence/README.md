@@ -265,6 +265,12 @@ image's handles adjust when and how long it appears without a source limit.
 The live range label reports source frames for timed media and display frames
 for still images.
 
+Because this learning project intentionally supports only one video track and
+one audio track, clips on the same track no longer overlap. The framework-neutral
+`TimelineTrackPolicy` finds the nearest available gap for drops and moves, and
+limits trim handles at adjacent clip boundaries. `TimelineModel` independently
+enforces that invariant, while V1 and A1 may still contain media at the same time.
+
 ## Phase 19 — Timeline model foundation
 
 `TimelineModel` is the first step toward a real editor timeline. It starts

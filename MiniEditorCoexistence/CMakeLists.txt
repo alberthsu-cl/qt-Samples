@@ -37,6 +37,8 @@ add_executable(MiniEditorCoexistence WIN32
     src/TimelineGeometry.cpp
     src/TimelineClipEdit.h
     src/TimelineClipEdit.cpp
+    src/TimelineTrackPolicy.h
+    src/TimelineTrackPolicy.cpp
     src/EditorSession.h
     src/EditorSession.cpp
     src/WorkspaceSettings.h
@@ -92,6 +94,8 @@ source_group("Layout" FILES
     src/TimelineGeometry.cpp
     src/TimelineClipEdit.h
     src/TimelineClipEdit.cpp
+    src/TimelineTrackPolicy.h
+    src/TimelineTrackPolicy.cpp
 )
 
 if(BUILD_TESTING)
@@ -109,6 +113,8 @@ if(BUILD_TESTING)
         src/TimelineGeometry.cpp
         src/TimelineClipEdit.h
         src/TimelineClipEdit.cpp
+        src/TimelineTrackPolicy.h
+        src/TimelineTrackPolicy.cpp
         src/EditorSession.h
         src/EditorSession.cpp
         src/WorkspaceLayout.h

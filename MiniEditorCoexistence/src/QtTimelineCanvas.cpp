@@ -1,4 +1,5 @@
 #include "QtTimelineCanvas.h"
+#include "TimelineTrackPolicy.h"
 
 #include <QMouseEvent>
 #include <QMimeData>
@@ -409,8 +410,10 @@ bool QtTimelineCanvas::updateMediaDropPreview(const QMimeData *mimeData, int tim
 
     isMediaDropPreviewVisible_ = true;
     mediaDropAssetId_ = mediaAssetId;
-    mediaDropStartFrame_ = geometry().frameAtX(timelineX);
     mediaDropPresentation_ = *presentation;
+    mediaDropStartFrame_ = TimelineTrackPolicy::nearestAvailableStart(
+        timelineClips_, presentation->trackType, geometry().frameAtX(timelineX),
+        presentation->durationFrames);
     update();
     return true;
 }
@@ -458,6 +461,24 @@ void QtTimelineCanvas::updateDragPreview(int timelineX)
         break;
     case TimelineClipHitRegion::None:
         break;
+    }
+
+    const auto clipIterator = std::find_if(timelineClips_.begin(), timelineClips_.end(),
+        [this](const TimelineClip &clip) { return clip.id == dragClipId_; });
+    if (clipIterator != timelineClips_.end()) {
+        if (dragRegion_ == TimelineClipHitRegion::Body) {
+            dragPreviewState_.startFrame = TimelineTrackPolicy::nearestAvailableStart(
+                timelineClips_, clipIterator->trackType,
+                dragPreviewState_.startFrame, dragPreviewState_.durationFrames,
+                dragClipId_);
+        } else if (dragRegion_ == TimelineClipHitRegion::TrimStart) {
+            dragPreviewState_ = TimelineTrackPolicy::constrainStartTrim(
+                timelineClips_, *clipIterator, dragPreviewState_,
+                dragTrimContext_.mediaKind);
+        } else if (dragRegion_ == TimelineClipHitRegion::TrimEnd) {
+            dragPreviewState_ = TimelineTrackPolicy::constrainEndTrim(
+                timelineClips_, *clipIterator, dragPreviewState_);
+        }
     }
 
     const int provisionalEnd = dragPreviewState_.startFrame

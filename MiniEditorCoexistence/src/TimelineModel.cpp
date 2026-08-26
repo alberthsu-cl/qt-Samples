@@ -1,4 +1,5 @@
 #include "TimelineModel.h"
+#include "TimelineTrackPolicy.h"
 
 #include <algorithm>
 
@@ -23,6 +24,9 @@ int TimelineModel::durationFrames() const
 int TimelineModel::addClip(int mediaAssetId, TimelineTrackType trackType,
                            const TimelineClipState &state)
 {
+    if (!TimelineTrackPolicy::canPlace(clips_, trackType, state))
+        return 0;
+
     const int clipId = nextClipId_++;
     clips_.push_back({ clipId, mediaAssetId, trackType, state, {} });
     return clipId;
@@ -40,7 +44,8 @@ bool TimelineModel::updateClipSettings(int clipId, const ClipSettings &settings)
 
 bool TimelineModel::restoreClip(const TimelineClip &clip)
 {
-    if (clip.id <= 0 || findClip(clip.id) != nullptr)
+    if (clip.id <= 0 || findClip(clip.id) != nullptr
+        || !TimelineTrackPolicy::canPlace(clips_, clip.trackType, clip.state))
         return false;
 
     clips_.push_back(clip);
@@ -53,6 +58,9 @@ bool TimelineModel::moveClip(int clipId, const TimelineClipState &state)
     const auto iterator = std::find_if(clips_.begin(), clips_.end(),
         [clipId](const TimelineClip &clip) { return clip.id == clipId; });
     if (iterator == clips_.end())
+        return false;
+
+    if (!TimelineTrackPolicy::canPlace(clips_, iterator->trackType, state, clipId))
         return false;
 
     iterator->state = state;

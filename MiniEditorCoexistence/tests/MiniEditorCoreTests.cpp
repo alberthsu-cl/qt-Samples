@@ -3,6 +3,7 @@
 #include "MediaLibrary.h"
 #include "TimelineModel.h"
 #include "TimelineClipEdit.h"
+#include "TimelineTrackPolicy.h"
 #include "TimelineGeometry.h"
 #include "WorkspaceLayout.h"
 
@@ -433,16 +434,49 @@ void timelineSlotResolutionReturnsNothingForGaps()
             "Timeline preview must switch to the next active media slot.");
 }
 
-void overlappingTimelineClipsUseLastClipAsTopmost()
+void singleTrackPolicyPreventsOverlapAndFindsNearestGap()
 {
     TimelineModel timeline;
     const int firstId = timeline.addClip(1, TimelineTrackType::Video, { 0, 180 });
-    const int secondId = timeline.addClip(2, TimelineTrackType::Video, { 90, 180 });
+    const int secondId = timeline.addClip(2, TimelineTrackType::Video, { 240, 120 });
+    require(firstId > 0 && secondId > 0,
+            "Non-overlapping clips must be accepted on the single video track.");
+    require(timeline.addClip(3, TimelineTrackType::Video, { 90, 180 }) == 0,
+            "The model must reject an overlapping clip on V1.");
+    require(timeline.addClip(4, TimelineTrackType::Audio, { 90, 180 }) > 0,
+            "The same time range must remain available on the independent A1 track.");
+    require(!timeline.moveClip(secondId, { 120, 120 }),
+            "The model must reject a move that overlaps another V1 clip.");
 
-    require(timeline.visibleVideoClipAt(89)->id == firstId,
-            "The first clip must remain visible before the overlap.");
-    require(timeline.visibleVideoClipAt(90)->id == secondId,
-            "The later painted clip must be topmost throughout an overlap.");
+    require(TimelineTrackPolicy::nearestAvailableStart(
+                timeline.clips(), TimelineTrackType::Video, 150, 60) == 180,
+            "A dropped clip must snap to the nearest gap boundary.");
+    require(TimelineTrackPolicy::nearestAvailableStart(
+                timeline.clips(), TimelineTrackType::Video, 270, 60) == 180,
+            "Equal-distance gaps must choose the earlier edit position.");
+
+    const TimelineClip *secondClip = timeline.findClip(secondId);
+    const TimelineClipState startTrim = TimelineTrackPolicy::constrainStartTrim(
+        timeline.clips(), *secondClip, { 120, 240, 0 }, MediaKind::Video);
+    require(startTrim.startFrame == 180 && startTrim.durationFrames == 180,
+            "A left trim must stop at the previous clip's end.");
+    const TimelineClip *firstClip = timeline.findClip(firstId);
+    const TimelineClipState endTrim = TimelineTrackPolicy::constrainEndTrim(
+        timeline.clips(), *firstClip, { 0, 300, 0 });
+    require(endTrim.durationFrames == 240,
+            "A right trim must stop at the next clip's start.");
+
+    EditorSession session(2);
+    require(session.addTimelineClip(1, TimelineTrackType::Video, 0, 180) > 0,
+            "The session must insert the first V1 clip.");
+    const int snappedId = session.addTimelineClip(
+        2, TimelineTrackType::Video, 90, 180);
+    require(session.timelineModel().findClip(snappedId)->state.startFrame == 180,
+            "A session insertion must store the policy's non-overlapping position.");
+    require(session.undo() && session.redo(),
+            "A snapped insertion must remain a single undoable command.");
+    require(session.timelineModel().findClip(snappedId)->state.startFrame == 180,
+            "Redo must restore the same snapped position.");
 }
 
 void timelineGeometryOwnsFrameworkNeutralCoordinatesAndHitTesting()
@@ -467,15 +501,16 @@ void timelineGeometryOwnsFrameworkNeutralCoordinatesAndHitTesting()
                                   + TimelineGeometry::kTrackGap,
             "A1 must follow V1 with the configured gap.");
 
-    TimelineModel timeline;
-    const int firstId = timeline.addClip(1, TimelineTrackType::Video, { 0, 180 });
-    const int secondId = timeline.addClip(2, TimelineTrackType::Video, { 90, 180 });
+    const std::vector<TimelineClip> clips{
+        { 1, 1, TimelineTrackType::Video, { 0, 180 }, {} },
+        { 2, 2, TimelineTrackType::Video, { 90, 180 }, {} }
+    };
     const TimelinePoint overlapPoint{
         geometry.xForFrame(120),
         videoTrack.top + TimelineGeometry::kClipVerticalMargin + 1
     };
-    const TimelineClip *topmost = geometry.topmostClipAt(timeline.clips(), overlapPoint);
-    require(topmost != nullptr && topmost->id == secondId,
+    const TimelineClip *topmost = geometry.topmostClipAt(clips, overlapPoint);
+    require(topmost != nullptr && topmost->id == 2,
             "Geometry hit-testing must select the later painted overlap.");
 
     const TimelinePoint firstOnlyPoint{
@@ -483,8 +518,8 @@ void timelineGeometryOwnsFrameworkNeutralCoordinatesAndHitTesting()
         videoTrack.top + TimelineGeometry::kClipVerticalMargin + 1
     };
     const TimelineClip *firstOnly = geometry.topmostClipAt(
-        timeline.clips(), firstOnlyPoint);
-    require(firstOnly != nullptr && firstOnly->id == firstId,
+        clips, firstOnlyPoint);
+    require(firstOnly != nullptr && firstOnly->id == 1,
             "Geometry hit-testing must retain the first non-overlapping clip.");
 }
 
@@ -646,7 +681,7 @@ int main()
         focusedTimelineClipOwnsIndependentPlacementSettings();
         playbackStopsAtFocusedPreviewDuration();
         timelineSlotResolutionReturnsNothingForGaps();
-        overlappingTimelineClipsUseLastClipAsTopmost();
+        singleTrackPolicyPreventsOverlapAndFindsNearestGap();
         timelineGeometryOwnsFrameworkNeutralCoordinatesAndHitTesting();
         timelineClipTrimmingPreservesValidRangesAndHandleHits();
         mediaLibraryOwnsStableSourceAssetIds();
