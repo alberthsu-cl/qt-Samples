@@ -474,6 +474,86 @@ void timelineFocusDoesNotRequireASelectedClip()
             "Deleting the focused clip must leave an unfocused timeline, not select media.");
 }
 
+void internalTimelineClipboardSupportsCopyCutPasteAndDuplicate()
+{
+    EditorSession session(2);
+    const int originalId = session.addTimelineClip(
+        2, TimelineTrackType::Video, 0, 100);
+    require(session.moveTimelineClip(originalId, { 0, 100, 25 }),
+            "The clipboard test must establish a trimmed source range.");
+    session.selectTimelineClip(originalId, 1);
+    session.updateSelectedClipSettings(
+        { 65, 140, ClipPosition::BottomRight });
+
+    require(session.copySelectedTimelineClip()
+                && session.hasTimelineClipboard()
+                && session.timelineClipboardMediaAssetId() == 2,
+            "Copy must capture the focused placement in the internal clipboard.");
+    require(session.timelineModel().clips().size() == 1,
+            "Copy must not edit the timeline or create another clip.");
+
+    const int pastedId = session.pasteTimelineClip(200);
+    const TimelineClip *pasted = session.timelineModel().findClip(pastedId);
+    require(pasted != nullptr && pasted->state.startFrame == 200
+                && pasted->state.durationFrames == 100
+                && pasted->state.sourceInFrame == 25,
+            "Paste must preserve duration/source-in and use the requested free position.");
+    require(pasted->mediaAssetId == 2
+                && pasted->trackType == TimelineTrackType::Video
+                && pasted->settings.opacityPercent == 65
+                && pasted->settings.scalePercent == 140
+                && pasted->settings.position == ClipPosition::BottomRight,
+            "Paste must preserve media, track, and placement properties.");
+    require(session.selectedTimelineClipId() == pastedId
+                && session.selectedAssetIndex() == 1,
+            "Paste must focus the new placement and its source asset.");
+    require(session.undo(), "Paste must undo as one timeline command.");
+    require(session.timelineModel().findClip(pastedId) == nullptr,
+            "Undo must remove the pasted placement.");
+    require(session.redo(), "Paste must redo as one timeline command.");
+    require(session.timelineModel().findClip(pastedId) != nullptr
+                && session.selectedTimelineClipId() == pastedId,
+            "Redo must restore the same pasted clip ID and focus.");
+
+    session.selectTimelineClip(originalId, 1);
+    const int duplicatedId = session.duplicateSelectedTimelineClip();
+    const TimelineClip *duplicated = session.timelineModel().findClip(duplicatedId);
+    require(duplicated != nullptr && duplicated->state.startFrame == 100,
+            "Duplicate must use the first free position after the focused clip.");
+
+    require(session.cutSelectedTimelineClip(),
+            "Cut must copy and remove the focused duplicate.");
+    require(session.timelineModel().findClip(duplicatedId) == nullptr,
+            "Cut must remove the focused placement.");
+    require(session.undo(), "Cut must undo as one timeline command.");
+    require(session.timelineModel().findClip(duplicatedId) != nullptr
+                && session.selectedTimelineClipId() == duplicatedId,
+            "Undo Cut must restore the removed placement and focus.");
+
+    EditorSession rippleSession(2);
+    TimelineViewState rippleView;
+    rippleView.isRippleEditingEnabled = true;
+    rippleSession.updateTimelineViewState(rippleView);
+    const int rippleFirstId = rippleSession.addTimelineClip(
+        1, TimelineTrackType::Video, 0, 100);
+    const int rippleFollowerId = rippleSession.addTimelineClip(
+        2, TimelineTrackType::Video, 100, 100);
+    rippleSession.selectTimelineClip(rippleFirstId, 0);
+    require(rippleSession.copySelectedTimelineClip(),
+            "Ripple paste requires a copied source placement.");
+    const int ripplePastedId = rippleSession.pasteTimelineClip(100);
+    require(rippleSession.timelineModel().findClip(ripplePastedId)
+                    ->state.startFrame == 100
+                && rippleSession.timelineModel().findClip(rippleFollowerId)
+                    ->state.startFrame == 200,
+            "Ripple paste must open the copied duration on only its track.");
+    require(rippleSession.undo(), "Ripple paste must undo atomically.");
+    require(rippleSession.timelineModel().findClip(ripplePastedId) == nullptr
+                && rippleSession.timelineModel().findClip(rippleFollowerId)
+                    ->state.startFrame == 100,
+            "Undo Ripple Paste must restore the complete earlier timeline.");
+}
+
 void focusedTimelineClipOwnsIndependentPlacementSettings()
 {
     EditorSession session(1);
@@ -981,6 +1061,7 @@ int main()
         editorSessionUndoRedoTracksClipDeletion();
         splittingClipPreservesSourceRangesSettingsAndUndoHistory();
         timelineFocusDoesNotRequireASelectedClip();
+        internalTimelineClipboardSupportsCopyCutPasteAndDuplicate();
         focusedTimelineClipOwnsIndependentPlacementSettings();
         playbackStopsAtFocusedPreviewDuration();
         pausedPlaybackPreservesItsCurrentFrame();

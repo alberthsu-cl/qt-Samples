@@ -45,9 +45,17 @@ protected:
     afx_msg void OnPlaybackCommand(UINT commandId);
     afx_msg void OnEditUndo();
     afx_msg void OnEditRedo();
+    afx_msg void OnEditCopyClip();
+    afx_msg void OnEditCutClip();
+    afx_msg void OnEditPasteClip();
+    afx_msg void OnEditDuplicateClip();
     afx_msg void OnEditSplitClip();
     afx_msg void OnUpdateEditUndo(CCmdUI *commandUi);
     afx_msg void OnUpdateEditRedo(CCmdUI *commandUi);
+    afx_msg void OnUpdateEditCopyClip(CCmdUI *commandUi);
+    afx_msg void OnUpdateEditCutClip(CCmdUI *commandUi);
+    afx_msg void OnUpdateEditPasteClip(CCmdUI *commandUi);
+    afx_msg void OnUpdateEditDuplicateClip(CCmdUI *commandUi);
     afx_msg void OnUpdateEditSplitClip(CCmdUI *commandUi);
     afx_msg void OnTimer(UINT_PTR timerId);
     afx_msg void OnFileExit();
@@ -82,6 +90,8 @@ private:
     void removeMediaAsset(int assetIndex, int assetId);
     void focusTimelineClip(int clipId, bool resetToBeginning);
     void focusTimelineFrame(int frame);
+    bool canPasteTimelineClip() const;
+    void finishInsertedTimelineClip(int clipId);
     bool canSplitSelectedTimelineClip() const;
     void splitSelectedTimelineClip();
 

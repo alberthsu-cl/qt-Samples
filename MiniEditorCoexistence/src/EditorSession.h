@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <optional>
 #include <vector>
 
 // Framework-neutral editor state and commands. It knows no MFC window and no
@@ -37,6 +38,12 @@ public:
                           TimelineClipEditKind editKind = TimelineClipEditKind::Move);
     int splitTimelineClip(int clipId, int splitFrame, MediaKind mediaKind);
     bool removeTimelineClip(int clipId);
+    bool copySelectedTimelineClip();
+    bool cutSelectedTimelineClip();
+    int pasteTimelineClip(int startFrame);
+    int duplicateSelectedTimelineClip();
+    bool hasTimelineClipboard() const;
+    int timelineClipboardMediaAssetId() const;
     void selectTimelineClip(int clipId);
     void selectTimelineClip(int clipId, int assetIndex);
     void focusTimeline();
@@ -72,6 +79,8 @@ private:
     EditorCommandContext commandContext();
     void recordTimelineCommand(std::vector<TimelineClip> before,
                                EditorSelectionState selectionBefore);
+    int insertTimelineClipCopy(const TimelineClip &sourceClip,
+                               int sourceAssetIndex, int desiredStartFrame);
     void notifyStateChanged(EditorChange changes);
 
     std::vector<ClipSettings> clipSettings_;
@@ -84,6 +93,11 @@ private:
     TimelineViewState timelineViewState_;
     bool projectDirty_ = false;
     EditorHistory history_;
+    struct TimelineClipboard {
+        TimelineClip clip;
+        int sourceAssetIndex = 0;
+    };
+    std::optional<TimelineClipboard> timelineClipboard_;
     struct Observer {
         ObserverId id;
         StateChangedHandler handler;

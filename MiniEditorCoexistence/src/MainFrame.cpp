@@ -242,6 +242,32 @@ void MainFrame::OnEditRedo()
     editorSession_.redo();
 }
 
+void MainFrame::OnEditCopyClip()
+{
+    editorSession_.copySelectedTimelineClip();
+}
+
+void MainFrame::OnEditCutClip()
+{
+    if (!editorSession_.cutSelectedTimelineClip())
+        return;
+    synchronizePlaybackDurationForFocus(true);
+    KillTimer(kPlaybackTimerId);
+}
+
+void MainFrame::OnEditPasteClip()
+{
+    if (!canPasteTimelineClip())
+        return;
+    finishInsertedTimelineClip(editorSession_.pasteTimelineClip(
+        editorSession_.playbackState().currentFrame));
+}
+
+void MainFrame::OnEditDuplicateClip()
+{
+    finishInsertedTimelineClip(editorSession_.duplicateSelectedTimelineClip());
+}
+
 void MainFrame::OnEditSplitClip()
 {
     splitSelectedTimelineClip();
@@ -255,6 +281,26 @@ void MainFrame::OnUpdateEditUndo(CCmdUI *commandUi)
 void MainFrame::OnUpdateEditRedo(CCmdUI *commandUi)
 {
     commandUi->Enable(editorSession_.canRedo());
+}
+
+void MainFrame::OnUpdateEditCopyClip(CCmdUI *commandUi)
+{
+    commandUi->Enable(editorSession_.selectedTimelineClipId() != 0);
+}
+
+void MainFrame::OnUpdateEditCutClip(CCmdUI *commandUi)
+{
+    commandUi->Enable(editorSession_.selectedTimelineClipId() != 0);
+}
+
+void MainFrame::OnUpdateEditPasteClip(CCmdUI *commandUi)
+{
+    commandUi->Enable(canPasteTimelineClip());
+}
+
+void MainFrame::OnUpdateEditDuplicateClip(CCmdUI *commandUi)
+{
+    commandUi->Enable(editorSession_.selectedTimelineClipId() != 0);
 }
 
 void MainFrame::OnUpdateEditSplitClip(CCmdUI *commandUi)
@@ -727,6 +773,26 @@ void MainFrame::focusTimelineFrame(int frame)
     editorSession_.seekTimeline(frame);
 }
 
+bool MainFrame::canPasteTimelineClip() const
+{
+    return editorSession_.hasTimelineClipboard()
+        && mediaLibrary_.findAsset(
+               editorSession_.timelineClipboardMediaAssetId()) != nullptr;
+}
+
+void MainFrame::finishInsertedTimelineClip(int clipId)
+{
+    if (clipId == 0)
+        return;
+    const TimelineClip *clip = editorSession_.timelineModel().findClip(clipId);
+    if (clip == nullptr)
+        return;
+
+    synchronizePlaybackDurationForFocus(false);
+    editorSession_.seekTimeline(clip->state.startFrame);
+    KillTimer(kPlaybackTimerId);
+}
+
 bool MainFrame::canSplitSelectedTimelineClip() const
 {
     const TimelineClip *clip = editorSession_.timelineModel().findClip(
@@ -853,9 +919,18 @@ BEGIN_MESSAGE_MAP(MainFrame, CFrameWnd)
                      &MainFrame::OnPlaybackCommand)
     ON_COMMAND(ID_EDIT_UNDO, &MainFrame::OnEditUndo)
     ON_COMMAND(ID_EDIT_REDO, &MainFrame::OnEditRedo)
+    ON_COMMAND(ID_EDIT_COPY_CLIP, &MainFrame::OnEditCopyClip)
+    ON_COMMAND(ID_EDIT_CUT_CLIP, &MainFrame::OnEditCutClip)
+    ON_COMMAND(ID_EDIT_PASTE_CLIP, &MainFrame::OnEditPasteClip)
+    ON_COMMAND(ID_EDIT_DUPLICATE_CLIP, &MainFrame::OnEditDuplicateClip)
     ON_COMMAND(ID_EDIT_SPLIT_CLIP, &MainFrame::OnEditSplitClip)
     ON_UPDATE_COMMAND_UI(ID_EDIT_UNDO, &MainFrame::OnUpdateEditUndo)
     ON_UPDATE_COMMAND_UI(ID_EDIT_REDO, &MainFrame::OnUpdateEditRedo)
+    ON_UPDATE_COMMAND_UI(ID_EDIT_COPY_CLIP, &MainFrame::OnUpdateEditCopyClip)
+    ON_UPDATE_COMMAND_UI(ID_EDIT_CUT_CLIP, &MainFrame::OnUpdateEditCutClip)
+    ON_UPDATE_COMMAND_UI(ID_EDIT_PASTE_CLIP, &MainFrame::OnUpdateEditPasteClip)
+    ON_UPDATE_COMMAND_UI(ID_EDIT_DUPLICATE_CLIP,
+                         &MainFrame::OnUpdateEditDuplicateClip)
     ON_UPDATE_COMMAND_UI(ID_EDIT_SPLIT_CLIP, &MainFrame::OnUpdateEditSplitClip)
     ON_WM_TIMER()
     ON_COMMAND(ID_FILE_NEW, &MainFrame::OnFileNew)

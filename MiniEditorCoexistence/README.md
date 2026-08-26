@@ -296,6 +296,14 @@ left duration; still images keep source-in zero. Media identity and placement
 properties are copied, total timeline duration is unchanged, and the complete
 operation—including selection of the right piece—is one Undo/Redo command.
 
+The Edit menu also provides an internal timeline clipboard: **Ctrl+C** copies
+the focused placement, **Ctrl+X** cuts it, **Ctrl+V** pastes at the red head,
+and **Ctrl+D** duplicates after the focused clip. It is intentionally not the
+Windows clipboard. Copies retain media ID, track, source-in/duration, and all
+placement properties while receiving a new stable clip ID. Normal mode chooses
+the nearest non-overlapping position; Ripple mode opens the copied duration on
+that track. Cut, Paste, and Duplicate each record one `TimelineSnapshotCommand`.
+
 Timeline focus is modeled separately from timeline clip selection. Clicking
 an empty track area clears the clip ID but keeps Timeline Preview active,
 clears the media-library highlight, and resets playback to frame zero. Deleting
