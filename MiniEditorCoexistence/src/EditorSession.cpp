@@ -287,6 +287,7 @@ void EditorSession::replaceProject(const EditorProject &project)
     undoHistory_.clear();
     redoHistory_.clear();
     playbackState_.isPlaying = false;
+    playbackState_.isPaused = false;
     playbackState_.currentFrame = kFirstFrame;
     notifyStateChanged(EditorChange::All);
 }
@@ -380,18 +381,27 @@ void EditorSession::handlePlaybackCommand(PlaybackCommand command)
 {
     switch (command) {
     case PlaybackCommand::TogglePlayPause:
-        playbackState_.isPlaying = !playbackState_.isPlaying;
+        if (playbackState_.isPlaying) {
+            playbackState_.isPlaying = false;
+            playbackState_.isPaused = true;
+        } else {
+            playbackState_.isPlaying = true;
+            playbackState_.isPaused = false;
+        }
         break;
     case PlaybackCommand::Stop:
         playbackState_.isPlaying = false;
+        playbackState_.isPaused = false;
         playbackState_.currentFrame = kFirstFrame;
         break;
     case PlaybackCommand::StepBackward:
         playbackState_.isPlaying = false;
+        playbackState_.isPaused = true;
         playbackState_.currentFrame = std::max(kFirstFrame, playbackState_.currentFrame - 1);
         break;
     case PlaybackCommand::StepForward:
         playbackState_.isPlaying = false;
+        playbackState_.isPaused = true;
         playbackState_.currentFrame = std::min(playbackState_.durationFrames - 1,
                                                playbackState_.currentFrame + 1);
         break;
@@ -409,6 +419,7 @@ void EditorSession::advancePlaybackFrame()
     if (playbackState_.currentFrame >= playbackState_.durationFrames) {
         playbackState_.currentFrame = std::max(0, playbackState_.durationFrames - 1);
         playbackState_.isPlaying = false;
+        playbackState_.isPaused = true;
     }
     notifyStateChanged(EditorChange::Playback);
 }
@@ -424,6 +435,7 @@ void EditorSession::setPlaybackDuration(int durationFrames, bool resetToBeginnin
 {
     playbackState_.durationFrames = std::max(1, durationFrames);
     playbackState_.isPlaying = false;
+    playbackState_.isPaused = false;
     playbackState_.currentFrame = resetToBeginning
         ? 0 : std::min(playbackState_.currentFrame, playbackState_.durationFrames - 1);
     notifyStateChanged(EditorChange::Playback);

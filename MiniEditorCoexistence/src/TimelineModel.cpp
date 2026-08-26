@@ -90,15 +90,3 @@ const TimelineClip *TimelineModel::findClip(int clipId) const
         [clipId](const TimelineClip &clip) { return clip.id == clipId; });
     return iterator == clips_.end() ? nullptr : &*iterator;
 }
-
-const TimelineClip *TimelineModel::visibleVideoClipAt(int frame) const
-{
-    const TimelineClip *visibleClip = nullptr;
-    for (const TimelineClip &clip : clips_) {
-        const bool coversFrame = frame >= clip.state.startFrame
-            && frame < clip.state.startFrame + clip.state.durationFrames;
-        if (clip.trackType == TimelineTrackType::Video && coversFrame)
-            visibleClip = &clip;
-    }
-    return visibleClip;
-}

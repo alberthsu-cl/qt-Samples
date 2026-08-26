@@ -1,5 +1,7 @@
 #pragma once
 
+#include "MediaKind.h"
+
 #include <cstdint>
 #include <string>
 
@@ -23,6 +25,9 @@ struct ClipSettings {
 // controls send commands and display this state; they do not own a player.
 struct PlaybackState {
     bool isPlaying = false;
+    // Paused is distinct from stopped: both have isPlaying == false, but a
+    // paused preview must keep showing the exact frame under the playhead.
+    bool isPaused = false;
     int currentFrame = 0;
     int framesPerSecond = 30;
     int durationFrames = 300;
@@ -40,6 +45,15 @@ struct PreviewState {
     std::wstring displayName;
     std::uint32_t thumbnailColorRgb = 0;
     ClipSettings settings;
+    MediaKind mediaKind = MediaKind::Video;
+    int timelineFrame = 0;
+    int clipLocalFrame = 0;
+    int sourceFrame = 0;
+    int sourceDurationFrames = 0;
+    bool hasAudio = false;
+    std::wstring audioDisplayName;
+    int audioSourceFrame = 0;
+    int audioSourceDurationFrames = 0;
 };
 
 enum class PlaybackCommand {

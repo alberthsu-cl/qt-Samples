@@ -4,6 +4,7 @@
 #include "TimelineModel.h"
 #include "TimelineClipEdit.h"
 #include "TimelineTrackPolicy.h"
+#include "TimelinePlaybackResolver.h"
 #include "TimelineGeometry.h"
 #include "WorkspaceLayout.h"
 
@@ -417,21 +418,72 @@ void playbackStopsAtFocusedPreviewDuration()
     session.advancePlaybackFrame();
     require(!session.playbackState().isPlaying,
             "Preview playback must stop when its focused duration is reached.");
+    require(session.playbackState().isPaused,
+            "Natural playback end must preserve the final resolved preview frame.");
     require(session.playbackState().currentFrame == 2,
             "Stopped preview playback must remain on its final valid frame.");
 }
 
-void timelineSlotResolutionReturnsNothingForGaps()
+void pausedPlaybackPreservesItsCurrentFrame()
 {
+    EditorSession session(1);
+    session.setPlaybackDuration(20, true);
+    session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+    session.advancePlaybackFrame();
+    session.advancePlaybackFrame();
+    const int pausedFrame = session.playbackState().currentFrame;
+
+    session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+    require(!session.playbackState().isPlaying && session.playbackState().isPaused,
+            "Play/Pause must enter an explicit paused state.");
+    require(session.playbackState().currentFrame == pausedFrame,
+            "Pausing must preserve the exact current frame.");
+
+    session.handlePlaybackCommand(PlaybackCommand::Stop);
+    require(!session.playbackState().isPaused
+                && session.playbackState().currentFrame == 0,
+            "Stop must remain distinct from Pause and return to frame zero.");
+}
+
+void timelinePlaybackResolvesTrimmedSourcesGapsAndStillImages()
+{
+    MediaLibrary library;
+    const int videoId = library.addKnownAsset(
+        L"D:/media/video.mp4", MediaKind::Video, 400, 0x5078A0);
+    const int audioId = library.addKnownAsset(
+        L"D:/media/audio.wav", MediaKind::Audio, 500, 0x2878B4);
+    const int imageId = library.addKnownAsset(
+        L"D:/media/still.png", MediaKind::Image, 90, 0x7850A0);
+
     TimelineModel timeline;
-    const int firstId = timeline.addClip(1, TimelineTrackType::Video, { 0, 90 });
-    const int secondId = timeline.addClip(2, TimelineTrackType::Video, { 120, 60 });
-    require(timeline.visibleVideoClipAt(89)->id == firstId,
-            "Timeline preview must resolve the first active media slot.");
-    require(timeline.visibleVideoClipAt(90) == nullptr,
-            "Timeline preview must be empty when the playhead is in a gap.");
-    require(timeline.visibleVideoClipAt(120)->id == secondId,
-            "Timeline preview must switch to the next active media slot.");
+    timeline.addClip(videoId, TimelineTrackType::Video, { 100, 100, 50 });
+    timeline.addClip(audioId, TimelineTrackType::Audio, { 90, 200, 20 });
+    timeline.addClip(imageId, TimelineTrackType::Video, { 250, 90, 0 });
+
+    ResolvedTimelineFrame frame = TimelinePlaybackResolver::resolve(
+        timeline, library, 100);
+    require(frame.video && frame.video->clipLocalFrame == 0
+                && frame.video->sourceFrame == 50,
+            "A trimmed video must begin playback at its stored source-in frame.");
+    require(frame.audio && frame.audio->clipLocalFrame == 10
+                && frame.audio->sourceFrame == 30,
+            "V1 and A1 must resolve independently at the same timeline frame.");
+
+    frame = TimelinePlaybackResolver::resolve(timeline, library, 199);
+    require(frame.video && frame.video->sourceFrame == 149,
+            "The last video placement frame must map to the last included source frame.");
+    frame = TimelinePlaybackResolver::resolve(timeline, library, 200);
+    require(!frame.video && frame.audio,
+            "A timeline gap must return no video while audio may continue.");
+
+    frame = TimelinePlaybackResolver::resolve(timeline, library, 339);
+    require(frame.video && frame.video->mediaKind == MediaKind::Image
+                && frame.video->clipLocalFrame == 89
+                && frame.video->sourceFrame == 0,
+            "A still image must advance display time while remaining on source frame zero.");
+    frame = TimelinePlaybackResolver::resolve(timeline, library, 340);
+    require(!frame.video,
+            "A clip's timeline end must be exclusive so the following gap is visible.");
 }
 
 void singleTrackPolicyPreventsOverlapAndFindsNearestGap()
@@ -680,7 +732,8 @@ int main()
         editorSessionUndoRedoTracksClipDeletion();
         focusedTimelineClipOwnsIndependentPlacementSettings();
         playbackStopsAtFocusedPreviewDuration();
-        timelineSlotResolutionReturnsNothingForGaps();
+        pausedPlaybackPreservesItsCurrentFrame();
+        timelinePlaybackResolvesTrimmedSourcesGapsAndStillImages();
         singleTrackPolicyPreventsOverlapAndFindsNearestGap();
         timelineGeometryOwnsFrameworkNeutralCoordinatesAndHitTesting();
         timelineClipTrimmingPreservesValidRangesAndHandleHits();

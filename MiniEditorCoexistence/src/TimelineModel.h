@@ -42,7 +42,6 @@ public:
     bool removeClip(int clipId);
     void clear();
     const TimelineClip *findClip(int clipId) const;
-    const TimelineClip *visibleVideoClipAt(int frame) const;
 
 private:
     std::vector<TimelineClip> clips_;

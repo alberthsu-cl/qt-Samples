@@ -271,6 +271,15 @@ one audio track, clips on the same track no longer overlap. The framework-neutra
 limits trim handles at adjacent clip boundaries. `TimelineModel` independently
 enforces that invariant, while V1 and A1 may still contain media at the same time.
 
+`TimelinePlaybackResolver` completes the source-aware path independently of the
+UI frameworks. For each playhead position it resolves the active V1 and A1
+placements and maps timeline time to clip-local and source-media frames. Video
+and audio use `sourceInFrame + clipLocalFrame`; still images keep source frame
+zero while their display frame advances. Gaps deliberately resolve to no video.
+Pause, frame stepping, and natural playback end retain the resolved playhead
+frame and keep the timeline/source information overlay visible. Only an
+explicit Stop returns Preview to its stopped/focused state and hides the overlay.
+
 ## Phase 19 — Timeline model foundation
 
 `TimelineModel` is the first step toward a real editor timeline. It starts

@@ -1,6 +1,7 @@
 #include "MainFrame.h"
 
 #include "DemoProject.h"
+#include "TimelinePlaybackResolver.h"
 #include "resource.h"
 
 #include <algorithm>
@@ -502,37 +503,56 @@ PreviewState MainFrame::currentPreviewState() const
         preview.displayName = asset.displayName;
         preview.thumbnailColorRgb = asset.thumbnailColorRgb;
         preview.settings = {};
+        preview.mediaKind = asset.kind;
+        preview.sourceFrame = asset.kind == MediaKind::Image
+            ? 0 : playback.currentFrame;
+        preview.sourceDurationFrames = asset.timelineDurationFrames;
         return preview;
     }
 
     const TimelineModel &timeline = editorSession_.timelineModel();
-    const TimelineClip *visibleClip = nullptr;
+    const TimelineClip *selectedClip = timeline.findClip(
+        editorSession_.selectedTimelineClipId());
+    const ResolvedTimelineFrame resolvedFrame = TimelinePlaybackResolver::resolve(
+        timeline, mediaLibrary_, playback.currentFrame);
+    std::optional<ResolvedTimelineMedia> visibleVideo = resolvedFrame.video;
 
     // While stopped, Properties is an editor for the focused placement. Show
     // that video clip directly so opacity, scale, and position changes appear
     // immediately even when the timeline playhead is currently elsewhere.
-    const TimelineClip *selectedClip = timeline.findClip(
-        editorSession_.selectedTimelineClipId());
-    if (!playback.isPlaying && selectedClip != nullptr
+    if (!playback.isPlaying && !playback.isPaused && selectedClip != nullptr
         && selectedClip->trackType == TimelineTrackType::Video) {
-        visibleClip = selectedClip;
-    } else {
-        // During playback the playhead owns the preview. If clips overlap,
-        // the most recently inserted placement is the visible top item.
-        visibleClip = timeline.visibleVideoClipAt(playback.currentFrame);
+        visibleVideo = TimelinePlaybackResolver::resolveClip(
+            *selectedClip, mediaLibrary_, selectedClip->state.startFrame);
     }
 
-    if (visibleClip == nullptr)
+    preview.timelineFrame = playback.currentFrame;
+    if (resolvedFrame.audio) {
+        const LibraryMediaAsset *audioAsset = mediaLibrary_.findAsset(
+            resolvedFrame.audio->mediaAssetId);
+        if (audioAsset != nullptr) {
+            preview.hasAudio = true;
+            preview.audioDisplayName = audioAsset->displayName;
+            preview.audioSourceFrame = resolvedFrame.audio->sourceFrame;
+            preview.audioSourceDurationFrames = resolvedFrame.audio->sourceDurationFrames;
+        }
+    }
+
+    if (!visibleVideo)
         return preview;
 
-    const LibraryMediaAsset *asset = mediaLibrary_.findAsset(visibleClip->mediaAssetId);
+    const LibraryMediaAsset *asset = mediaLibrary_.findAsset(visibleVideo->mediaAssetId);
     if (asset == nullptr)
         return preview;
     preview.hasMedia = true;
     preview.mediaAssetId = asset->id;
     preview.displayName = asset->displayName;
     preview.thumbnailColorRgb = asset->thumbnailColorRgb;
-    preview.settings = visibleClip->settings;
+    preview.settings = visibleVideo->settings;
+    preview.mediaKind = visibleVideo->mediaKind;
+    preview.clipLocalFrame = visibleVideo->clipLocalFrame;
+    preview.sourceFrame = visibleVideo->sourceFrame;
+    preview.sourceDurationFrames = visibleVideo->sourceDurationFrames;
     return preview;
 }
 
