@@ -2,6 +2,7 @@
 #include "ProjectSerializer.h"
 #include "MediaLibrary.h"
 #include "TimelineModel.h"
+#include "TimelineGeometry.h"
 #include "WorkspaceLayout.h"
 
 #include <exception>
@@ -376,6 +377,49 @@ void overlappingTimelineClipsUseLastClipAsTopmost()
             "The later painted clip must be topmost throughout an overlap.");
 }
 
+void timelineGeometryOwnsFrameworkNeutralCoordinatesAndHitTesting()
+{
+    const TimelineGeometry geometry(100, 600);
+    require(geometry.xForFrame(0) == TimelineGeometry::kTimelineLeft,
+            "Frame zero must start after the track labels.");
+    require(geometry.xForFrame(300) == 410,
+            "One scale unit must use the configured pixel width.");
+    require(geometry.frameAtX(410) == 300,
+            "Timeline pixel conversion must return the matching frame.");
+    require(geometry.rulerFrameAtX(geometry.xForFrame(450)) == 450,
+            "Ruler seeking must work beyond the first scale unit.");
+
+    const TimelineRectangle videoTrack = geometry.trackRectangle(
+        TimelineTrackType::Video, 1000);
+    const TimelineRectangle audioTrack = geometry.trackRectangle(
+        TimelineTrackType::Audio, 1000);
+    require(videoTrack.top == TimelineGeometry::kRulerHeight,
+            "V1 must begin directly below the ruler.");
+    require(audioTrack.top == videoTrack.top + videoTrack.height
+                                  + TimelineGeometry::kTrackGap,
+            "A1 must follow V1 with the configured gap.");
+
+    TimelineModel timeline;
+    const int firstId = timeline.addClip(1, TimelineTrackType::Video, { 0, 180 });
+    const int secondId = timeline.addClip(2, TimelineTrackType::Video, { 90, 180 });
+    const TimelinePoint overlapPoint{
+        geometry.xForFrame(120),
+        videoTrack.top + TimelineGeometry::kClipVerticalMargin + 1
+    };
+    const TimelineClip *topmost = geometry.topmostClipAt(timeline.clips(), overlapPoint);
+    require(topmost != nullptr && topmost->id == secondId,
+            "Geometry hit-testing must select the later painted overlap.");
+
+    const TimelinePoint firstOnlyPoint{
+        geometry.xForFrame(30),
+        videoTrack.top + TimelineGeometry::kClipVerticalMargin + 1
+    };
+    const TimelineClip *firstOnly = geometry.topmostClipAt(
+        timeline.clips(), firstOnlyPoint);
+    require(firstOnly != nullptr && firstOnly->id == firstId,
+            "Geometry hit-testing must retain the first non-overlapping clip.");
+}
+
 void mediaLibraryOwnsStableSourceAssetIds()
 {
     MediaLibrary library;
@@ -451,6 +495,7 @@ int main()
         playbackStopsAtFocusedPreviewDuration();
         timelineSlotResolutionReturnsNothingForGaps();
         overlappingTimelineClipsUseLastClipAsTopmost();
+        timelineGeometryOwnsFrameworkNeutralCoordinatesAndHitTesting();
         mediaLibraryOwnsStableSourceAssetIds();
         workspaceLayoutProtectsPaneBounds();
         std::cout << "MiniEditorCoreTests passed.\n";

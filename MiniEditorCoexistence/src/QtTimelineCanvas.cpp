@@ -13,19 +13,12 @@
 
 namespace {
 
-constexpr int kTimelineLeft = 76;
-constexpr int kRulerHeight = 30;
-constexpr int kTrackHeight = 66;
-constexpr int kCanvasHeight = kRulerHeight + kTrackHeight * 2 + 16;
-constexpr int kTimelineFramesPerScaleUnit = 300;
-constexpr int kTimelineMaximumFrame = 600;
-constexpr int kTimelinePixelsAt100Percent = 334;
 constexpr int kFramesPerSecond = 30;
 constexpr char kMediaAssetMimeType[] = "application/x-mini-editor-media-id";
 
-int pixelsPerScaleUnit(const TimelineViewState &state)
+QRect toQRect(const TimelineRectangle &rectangle)
 {
-    return std::max(1, kTimelinePixelsAt100Percent * state.zoomPercent / 100);
+    return { rectangle.left, rectangle.top, rectangle.width, rectangle.height };
 }
 
 QString timeLabelForFrame(int frame)
@@ -44,7 +37,7 @@ QtTimelineCanvas::QtTimelineCanvas(QWidget *parent)
     setMouseTracking(true);
     setAcceptDrops(true);
     setFocusPolicy(Qt::StrongFocus);
-    setMinimumHeight(kCanvasHeight);
+    setMinimumHeight(TimelineGeometry::kCanvasHeight);
     setAutoFillBackground(false);
 }
 
@@ -108,10 +101,7 @@ void QtTimelineCanvas::setSelectedClipId(int clipId)
 void QtTimelineCanvas::setTimelineDuration(int durationFrames)
 {
     timelineDurationFrames_ = std::max(600, durationFrames);
-    const int contentWidth = kTimelineLeft
-        + timelineDurationFrames_ * pixelsPerScaleUnit(viewState_)
-            / kTimelineFramesPerScaleUnit + 24;
-    setMinimumWidth(contentWidth);
+    setMinimumWidth(geometry().contentWidth());
     update();
 }
 
@@ -138,26 +128,31 @@ void QtTimelineCanvas::setTimelineClipSelectedHandler(TimelineClipSelectedHandle
 
 void QtTimelineCanvas::paintEvent(QPaintEvent *)
 {
+    const TimelineGeometry timelineGeometry = geometry();
+    const QRect videoTrackRect = toQRect(timelineGeometry.trackRectangle(
+        TimelineTrackType::Video, width()));
+    const QRect audioTrackRect = toQRect(timelineGeometry.trackRectangle(
+        TimelineTrackType::Audio, width()));
+
     QPainter painter(this);
     painter.fillRect(rect(), QColor(30, 32, 37));
-    painter.fillRect(0, 0, width(), kRulerHeight, QColor(28, 30, 35));
-    painter.fillRect(0, kRulerHeight, width(), kTrackHeight, QColor(43, 46, 54));
-    painter.fillRect(0, kRulerHeight + kTrackHeight + 8,
-                     width(), kTrackHeight, QColor(38, 41, 48));
+    painter.fillRect(0, 0, width(), TimelineGeometry::kRulerHeight,
+                     QColor(28, 30, 35));
+    painter.fillRect(videoTrackRect, QColor(43, 46, 54));
+    painter.fillRect(audioTrackRect, QColor(38, 41, 48));
 
     const int tickFrames = viewState_.zoomPercent < 75 ? 120 : 60;
     painter.setPen(QColor(190, 195, 205));
     for (int frame = 0; frame <= timelineDurationFrames_; frame += tickFrames) {
-        const int x = kTimelineLeft + frame * pixelsPerScaleUnit(viewState_)
-            / kTimelineFramesPerScaleUnit;
-        painter.drawLine(x, 18, x, kRulerHeight);
+        const int x = timelineGeometry.xForFrame(frame);
+        painter.drawLine(x, 18, x, TimelineGeometry::kRulerHeight);
         painter.drawText(x + 3, 16, timeLabelForFrame(frame));
     }
 
-    painter.drawText(12, kRulerHeight + 38, QStringLiteral("V1"));
-    painter.drawText(12, kRulerHeight + kTrackHeight + 46, QStringLiteral("A1"));
+    painter.drawText(12, videoTrackRect.top() + 38, QStringLiteral("V1"));
+    painter.drawText(12, audioTrackRect.top() + 38, QStringLiteral("A1"));
 
-    const auto drawClip = [&painter, this](const TimelineClip &sourceClip) {
+    const auto drawClip = [&painter, this, &timelineGeometry](const TimelineClip &sourceClip) {
         TimelineClip clip = sourceClip;
         if (isDraggingClip_ && clip.id == dragClipId_)
             clip.state = dragPreviewState_;
@@ -169,14 +164,7 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
             return;
 
         const QColor assetColor = presentation->color.darker(100);
-        const int pixels = pixelsPerScaleUnit(viewState_);
-        const int left = kTimelineLeft + clip.state.startFrame * pixels
-            / kTimelineFramesPerScaleUnit;
-        const int clipWidth = std::max(1, clip.state.durationFrames * pixels
-            / kTimelineFramesPerScaleUnit);
-        const int trackTop = clip.trackType == TimelineTrackType::Audio
-            ? kRulerHeight + kTrackHeight + 8 : kRulerHeight;
-        const QRect clipRect(left, trackTop + 5, clipWidth, kTrackHeight - 10);
+        const QRect clipRect = toQRect(timelineGeometry.clipRectangle(clip));
         painter.fillRect(clipRect, assetColor);
         const bool selected = clip.id == selectedClipId_;
         painter.setPen(QPen(selected ? QColor(255, 196, 72) : QColor(180, 220, 255),
@@ -195,27 +183,25 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
             drawClip(clip);
     } else {
         painter.setPen(QColor(166, 171, 183));
-        painter.drawText(QRect(kTimelineLeft, kRulerHeight,
-                               width() - kTimelineLeft - 12, kTrackHeight),
+        painter.drawText(QRect(TimelineGeometry::kTimelineLeft, videoTrackRect.top(),
+                               width() - TimelineGeometry::kTimelineLeft - 12,
+                               videoTrackRect.height()),
                          Qt::AlignCenter, QStringLiteral("Drag media here to begin editing"));
     }
 
     if (!viewState_.isAudioTrackVisible)
-        painter.drawText(QRect(kTimelineLeft, kRulerHeight + kTrackHeight + 8,
-                               width() - kTimelineLeft - 12, kTrackHeight),
+        painter.drawText(QRect(TimelineGeometry::kTimelineLeft, audioTrackRect.top(),
+                               width() - TimelineGeometry::kTimelineLeft - 12,
+                               audioTrackRect.height()),
                          Qt::AlignVCenter, QStringLiteral("Audio track hidden"));
 
     if (isMediaDropPreviewVisible_) {
-        const int pixels = pixelsPerScaleUnit(viewState_);
-        const int left = kTimelineLeft + mediaDropStartFrame_ * pixels
-            / kTimelineFramesPerScaleUnit;
-        const int previewWidth = std::max(
-            1, mediaDropPresentation_.durationFrames * pixels
-                / kTimelineFramesPerScaleUnit);
-        const int trackTop = mediaDropPresentation_.trackType == TimelineTrackType::Audio
-            ? kRulerHeight + kTrackHeight + 8 : kRulerHeight;
-        const QRect previewRect(left, trackTop + 5,
-                                previewWidth, kTrackHeight - 10);
+        const TimelineClipState previewState{
+            mediaDropStartFrame_, mediaDropPresentation_.durationFrames
+        };
+        const QRect previewRect = toQRect(timelineGeometry.clipRectangle(
+            mediaDropPresentation_.trackType, previewState));
+        const int left = previewRect.left();
 
         QColor previewColor = mediaDropPresentation_.color;
         previewColor.setAlpha(150);
@@ -239,24 +225,26 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
         painter.drawText(labelRect, Qt::AlignCenter, startLabel);
     }
 
-    const int playheadX = kTimelineLeft + playbackState_.currentFrame
-        * pixelsPerScaleUnit(viewState_) / kTimelineFramesPerScaleUnit;
+    const int playheadX = timelineGeometry.xForFrame(playbackState_.currentFrame);
     painter.fillRect(playheadX, 0, 2, height(), QColor(240, 74, 74));
 }
 
 void QtTimelineCanvas::mousePressEvent(QMouseEvent *event)
 {
     const QPoint point = event->position().toPoint();
-    if (point.y() < kRulerHeight && seekHandler_) {
-        seekHandler_(frameAtRulerX(point.x()));
-    } else if (const TimelineClip *clip = clipAt(point)) {
+    const TimelineGeometry timelineGeometry = geometry();
+    if (point.y() < TimelineGeometry::kRulerHeight && seekHandler_) {
+        seekHandler_(timelineGeometry.rulerFrameAtX(point.x()));
+    } else if (const TimelineClip *clip = timelineGeometry.topmostClipAt(
+                   timelineClips_, { point.x(), point.y() })) {
         selectedClipId_ = clip->id;
         if (timelineClipSelectedHandler_)
             timelineClipSelectedHandler_(clip->id);
         isDraggingClip_ = true;
         dragClipId_ = clip->id;
         dragPreviewState_ = clip->state;
-        dragFrameOffset_ = frameAtTimelineX(point.x()) - dragPreviewState_.startFrame;
+        dragFrameOffset_ = timelineGeometry.frameAtX(point.x())
+            - dragPreviewState_.startFrame;
         grabMouse();
     }
     QWidget::mousePressEvent(event);
@@ -266,7 +254,7 @@ void QtTimelineCanvas::mouseMoveEvent(QMouseEvent *event)
 {
     if (isDraggingClip_ && (event->buttons() & Qt::LeftButton)) {
         dragPreviewState_.startFrame = std::max(
-            0, frameAtTimelineX(event->position().x()) - dragFrameOffset_);
+            0, geometry().frameAtX(event->position().toPoint().x()) - dragFrameOffset_);
         update();
     }
     QWidget::mouseMoveEvent(event);
@@ -276,7 +264,7 @@ void QtTimelineCanvas::mouseReleaseEvent(QMouseEvent *event)
 {
     if (isDraggingClip_ && event->button() == Qt::LeftButton) {
         dragPreviewState_.startFrame = std::max(
-            0, frameAtTimelineX(event->position().x()) - dragFrameOffset_);
+            0, geometry().frameAtX(event->position().toPoint().x()) - dragFrameOffset_);
         releaseMouse();
         isDraggingClip_ = false;
         if (timelineClipEditedHandler_)
@@ -363,7 +351,7 @@ bool QtTimelineCanvas::updateMediaDropPreview(const QMimeData *mimeData, int tim
 
     isMediaDropPreviewVisible_ = true;
     mediaDropAssetId_ = mediaAssetId;
-    mediaDropStartFrame_ = frameAtTimelineX(timelineX);
+    mediaDropStartFrame_ = geometry().frameAtX(timelineX);
     mediaDropPresentation_ = *presentation;
     update();
     return true;
@@ -379,43 +367,7 @@ void QtTimelineCanvas::clearMediaDropPreview()
     update();
 }
 
-int QtTimelineCanvas::frameAtRulerX(int x) const
+TimelineGeometry QtTimelineCanvas::geometry() const
 {
-    const int clipWidth = pixelsPerScaleUnit(viewState_);
-    const int relativeX = std::clamp(x - kTimelineLeft, 0, clipWidth);
-    return std::clamp(relativeX * kTimelineFramesPerScaleUnit / clipWidth,
-                      0, kTimelineFramesPerScaleUnit - 1);
-}
-
-int QtTimelineCanvas::frameAtTimelineX(int x) const
-{
-    return std::clamp((x - kTimelineLeft) * kTimelineFramesPerScaleUnit
-                          / pixelsPerScaleUnit(viewState_),
-                      0, timelineDurationFrames_);
-}
-
-QRect QtTimelineCanvas::timelineClipRect(const TimelineClip &clip) const
-{
-    const TimelineClipState &clipState = isDraggingClip_ && clip.id == dragClipId_
-        ? dragPreviewState_ : clip.state;
-    const int pixels = pixelsPerScaleUnit(viewState_);
-    const int left = kTimelineLeft + clipState.startFrame * pixels / kTimelineFramesPerScaleUnit;
-    const int clipWidth = std::max(1, clipState.durationFrames * pixels
-        / kTimelineFramesPerScaleUnit);
-    const int trackTop = clip.trackType == TimelineTrackType::Audio
-        ? kRulerHeight + kTrackHeight + 8 : kRulerHeight;
-    return QRect(left, trackTop + 5, clipWidth, kTrackHeight - 10);
-}
-
-const TimelineClip *QtTimelineCanvas::clipAt(const QPoint &point) const
-{
-    // Clips are painted in insertion order, so a later clip visually covers
-    // an earlier clip where they overlap. Hit-test in the opposite direction
-    // to select the same clip the user can actually see on top.
-    for (auto iterator = timelineClips_.rbegin(); iterator != timelineClips_.rend();
-         ++iterator) {
-        if (timelineClipRect(*iterator).contains(point))
-            return &*iterator;
-    }
-    return nullptr;
+    return { viewState_.zoomPercent, timelineDurationFrames_ };
 }

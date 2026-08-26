@@ -244,6 +244,12 @@ native layout and `EditorSession` still owns all state and Undo/Redo history.
 The pure-MFC configuration retains `MfcTimelineCanvas`, making the two
 implementations easy to compare while studying the migration boundary.
 
+`TimelineGeometry` now owns the fixed V1/A1 coordinate policy independently
+of Qt and MFC: zoom-aware frame/pixel conversion, ruler seeking, track and clip
+rectangles, canvas sizing, and topmost overlap hit-testing. `QtTimelineCanvas`
+converts these plain rectangles to `QRect` and concentrates on event handling
+and painting. Pure C++ tests cover the geometry without creating a window.
+
 ## Phase 19 — Timeline model foundation
 
 `TimelineModel` is the first step toward a real editor timeline. It starts

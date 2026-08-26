@@ -2,6 +2,7 @@
 
 #include "ProjectState.h"
 #include "TimelineAssetPresentation.h"
+#include "TimelineGeometry.h"
 #include "TimelineModel.h"
 
 #include <QWidget>
@@ -53,10 +54,7 @@ protected:
     void dropEvent(QDropEvent *event) override;
 
 private:
-    int frameAtRulerX(int x) const;
-    int frameAtTimelineX(int x) const;
-    QRect timelineClipRect(const TimelineClip &clip) const;
-    const TimelineClip *clipAt(const QPoint &point) const;
+    TimelineGeometry geometry() const;
     bool updateMediaDropPreview(const QMimeData *mimeData, int timelineX);
     void clearMediaDropPreview();
 

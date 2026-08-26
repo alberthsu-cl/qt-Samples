@@ -32,6 +32,8 @@ add_executable(MiniEditorCoexistence WIN32
     src/MediaLibrary.cpp
     src/TimelineModel.h
     src/TimelineModel.cpp
+    src/TimelineGeometry.h
+    src/TimelineGeometry.cpp
     src/EditorSession.h
     src/EditorSession.cpp
     src/WorkspaceSettings.h
@@ -82,6 +84,8 @@ source_group("DataModel" FILES
 source_group("Layout" FILES
     src/WorkspaceLayout.h
     src/WorkspaceLayout.cpp
+    src/TimelineGeometry.h
+    src/TimelineGeometry.cpp
 )
 
 if(BUILD_TESTING)
@@ -95,6 +99,8 @@ if(BUILD_TESTING)
         src/MediaLibrary.cpp
         src/TimelineModel.h
         src/TimelineModel.cpp
+        src/TimelineGeometry.h
+        src/TimelineGeometry.cpp
         src/EditorSession.h
         src/EditorSession.cpp
         src/WorkspaceLayout.h
