@@ -506,6 +506,14 @@ void singleTrackPolicyPreventsOverlapAndFindsNearestGap()
     require(TimelineTrackPolicy::nearestAvailableStart(
                 timeline.clips(), TimelineTrackType::Video, 270, 60) == 180,
             "Equal-distance gaps must choose the earlier edit position.");
+    require(TimelineTrackPolicy::magneticallySnappedStart(
+                timeline.clips(), TimelineTrackType::Video,
+                183, 40, 0, 8) == 180,
+            "A nearby drop must magnetically align its left edge to a clip boundary.");
+    require(TimelineTrackPolicy::magneticallySnappedStart(
+                timeline.clips(), TimelineTrackType::Video,
+                191, 40, 0, 8) == 191,
+            "A placement outside the magnetic tolerance must remain freely positioned.");
 
     const TimelineClip *secondClip = timeline.findClip(secondId);
     const TimelineClipState startTrim = TimelineTrackPolicy::constrainStartTrim(
@@ -517,6 +525,10 @@ void singleTrackPolicyPreventsOverlapAndFindsNearestGap()
         timeline.clips(), *firstClip, { 0, 300, 0 });
     require(endTrim.durationFrames == 240,
             "A right trim must stop at the next clip's start.");
+    const TimelineClipState magneticEndTrim = TimelineTrackPolicy::constrainEndTrim(
+        timeline.clips(), *firstClip, { 0, 235, 0 }, 400, 8);
+    require(magneticEndTrim.durationFrames == 240,
+            "A trim edge near its neighbor must magnetically close the gap.");
 
     EditorSession session(2);
     require(session.addTimelineClip(1, TimelineTrackType::Video, 0, 180) > 0,

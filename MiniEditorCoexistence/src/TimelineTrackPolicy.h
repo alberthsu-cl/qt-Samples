@@ -3,6 +3,7 @@
 #include "MediaKind.h"
 #include "TimelineModel.h"
 
+#include <limits>
 #include <vector>
 
 // Framework-neutral placement rules for the editor's single V1 and A1 tracks.
@@ -21,13 +22,24 @@ public:
                                      int durationFrames,
                                      int ignoredClipId = 0);
 
+    static int magneticallySnappedStart(
+        const std::vector<TimelineClip> &clips,
+        TimelineTrackType trackType,
+        int desiredStartFrame,
+        int durationFrames,
+        int ignoredClipId,
+        int snapToleranceFrames);
+
     static TimelineClipState constrainStartTrim(
         const std::vector<TimelineClip> &clips,
         const TimelineClip &editedClip,
         const TimelineClipState &proposedState,
-        MediaKind mediaKind);
+        MediaKind mediaKind,
+        int snapToleranceFrames = 0);
     static TimelineClipState constrainEndTrim(
         const std::vector<TimelineClip> &clips,
         const TimelineClip &editedClip,
-        const TimelineClipState &proposedState);
+        const TimelineClipState &proposedState,
+        int latestAllowedEndFrame = std::numeric_limits<int>::max(),
+        int snapToleranceFrames = 0);
 };

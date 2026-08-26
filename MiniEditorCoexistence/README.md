@@ -270,6 +270,9 @@ one audio track, clips on the same track no longer overlap. The framework-neutra
 `TimelineTrackPolicy` finds the nearest available gap for drops and moves, and
 limits trim handles at adjacent clip boundaries. `TimelineModel` independently
 enforces that invariant, while V1 and A1 may still contain media at the same time.
+The Qt canvas adds an eight-pixel magnetic zone around frame zero and adjacent
+clip edges. The tolerance is converted to frames at the current zoom level, so
+clips move freely inside a gap and snap only when their edges are visually near.
 
 `TimelinePlaybackResolver` completes the source-aware path independently of the
 UI frameworks. For each playhead position it resolves the active V1 and A1

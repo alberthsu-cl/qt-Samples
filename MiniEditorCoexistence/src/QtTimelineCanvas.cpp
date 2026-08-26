@@ -11,11 +11,13 @@
 #include <QKeyEvent>
 
 #include <algorithm>
+#include <limits>
 
 namespace {
 
 constexpr int kFramesPerSecond = 30;
 constexpr int kTrimHandleWidth = 7;
+constexpr int kSnapDistancePixels = 8;
 constexpr char kMediaAssetMimeType[] = "application/x-mini-editor-media-id";
 
 QRect toQRect(const TimelineRectangle &rectangle)
@@ -29,6 +31,14 @@ QString timeLabelForFrame(int frame)
     return QStringLiteral("%1:%2")
         .arg(totalSeconds / 60, 2, 10, QLatin1Char('0'))
         .arg(totalSeconds % 60, 2, 10, QLatin1Char('0'));
+}
+
+int snapToleranceFrames(const TimelineViewState &viewState)
+{
+    // Keep the magnetic zone visually stable as timeline zoom changes.
+    const int zoomPercent = std::max(1, viewState.zoomPercent);
+    return std::max(1, (kSnapDistancePixels * 100 + zoomPercent - 1)
+                           / zoomPercent);
 }
 
 } // namespace
@@ -411,9 +421,9 @@ bool QtTimelineCanvas::updateMediaDropPreview(const QMimeData *mimeData, int tim
     isMediaDropPreviewVisible_ = true;
     mediaDropAssetId_ = mediaAssetId;
     mediaDropPresentation_ = *presentation;
-    mediaDropStartFrame_ = TimelineTrackPolicy::nearestAvailableStart(
+    mediaDropStartFrame_ = TimelineTrackPolicy::magneticallySnappedStart(
         timelineClips_, presentation->trackType, geometry().frameAtX(timelineX),
-        presentation->durationFrames);
+        presentation->durationFrames, 0, snapToleranceFrames(viewState_));
     update();
     return true;
 }
@@ -467,17 +477,23 @@ void QtTimelineCanvas::updateDragPreview(int timelineX)
         [this](const TimelineClip &clip) { return clip.id == dragClipId_; });
     if (clipIterator != timelineClips_.end()) {
         if (dragRegion_ == TimelineClipHitRegion::Body) {
-            dragPreviewState_.startFrame = TimelineTrackPolicy::nearestAvailableStart(
+            dragPreviewState_.startFrame = TimelineTrackPolicy::magneticallySnappedStart(
                 timelineClips_, clipIterator->trackType,
                 dragPreviewState_.startFrame, dragPreviewState_.durationFrames,
-                dragClipId_);
+                dragClipId_, snapToleranceFrames(viewState_));
         } else if (dragRegion_ == TimelineClipHitRegion::TrimStart) {
             dragPreviewState_ = TimelineTrackPolicy::constrainStartTrim(
                 timelineClips_, *clipIterator, dragPreviewState_,
-                dragTrimContext_.mediaKind);
+                dragTrimContext_.mediaKind, snapToleranceFrames(viewState_));
         } else if (dragRegion_ == TimelineClipHitRegion::TrimEnd) {
+            const int latestAllowedEnd = dragTrimContext_.mediaKind == MediaKind::Image
+                ? std::numeric_limits<int>::max()
+                : dragOriginalState_.startFrame
+                    + dragTrimContext_.sourceDurationFrames
+                    - dragOriginalState_.sourceInFrame;
             dragPreviewState_ = TimelineTrackPolicy::constrainEndTrim(
-                timelineClips_, *clipIterator, dragPreviewState_);
+                timelineClips_, *clipIterator, dragPreviewState_,
+                latestAllowedEnd, snapToleranceFrames(viewState_));
         }
     }
 

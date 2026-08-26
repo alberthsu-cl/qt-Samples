@@ -88,9 +88,54 @@ int TimelineTrackPolicy::nearestAvailableStart(
     return bestStart;
 }
 
+int TimelineTrackPolicy::magneticallySnappedStart(
+    const std::vector<TimelineClip> &clips, TimelineTrackType trackType,
+    int desiredStartFrame, int durationFrames, int ignoredClipId,
+    int snapToleranceFrames)
+{
+    const int desired = std::max(0, desiredStartFrame);
+    const int duration = std::max(1, durationFrames);
+    const TimelineClipState desiredState{ desired, duration, 0 };
+
+    // An overlapping proposal must first move to a legal gap, regardless of
+    // snap tolerance. Magnetism is only a UI aid; non-overlap is an invariant.
+    if (!canPlace(clips, trackType, desiredState, ignoredClipId)) {
+        return nearestAvailableStart(clips, trackType, desired, duration,
+                                     ignoredClipId);
+    }
+
+    const int tolerance = std::max(0, snapToleranceFrames);
+    int bestStart = desired;
+    int bestDistance = tolerance + 1;
+    const auto consider = [&](int candidate, int &currentBest,
+                              int &currentDistance) {
+        const TimelineClipState candidateState{ candidate, duration, 0 };
+        if (!canPlace(clips, trackType, candidateState, ignoredClipId))
+            return;
+        const int distance = std::abs(candidate - desired);
+        if (distance <= tolerance
+            && (distance < currentDistance
+                || (distance == currentDistance && candidate < currentBest))) {
+            currentBest = candidate;
+            currentDistance = distance;
+        }
+    };
+
+    consider(0, bestStart, bestDistance);
+    for (const OccupiedRange &range : occupiedRanges(clips, trackType,
+                                                      ignoredClipId)) {
+        // Align either the moving clip's left edge after an existing clip or
+        // its right edge before one.
+        consider(range.end, bestStart, bestDistance);
+        consider(range.start - duration, bestStart, bestDistance);
+    }
+    return bestStart;
+}
+
 TimelineClipState TimelineTrackPolicy::constrainStartTrim(
     const std::vector<TimelineClip> &clips, const TimelineClip &editedClip,
-    const TimelineClipState &proposedState, MediaKind mediaKind)
+    const TimelineClipState &proposedState, MediaKind mediaKind,
+    int snapToleranceFrames)
 {
     const int originalEnd = editedClip.state.startFrame
         + editedClip.state.durationFrames;
@@ -103,21 +148,28 @@ TimelineClipState TimelineTrackPolicy::constrainStartTrim(
             minimumStart = std::max(minimumStart, clipEnd);
     }
 
-    if (proposedState.startFrame >= minimumStart)
+    const bool crossesBoundary = proposedState.startFrame < minimumStart;
+    const bool isNearBoundary = std::abs(proposedState.startFrame - minimumStart)
+        <= std::max(0, snapToleranceFrames);
+    if (!crossesBoundary && !isNearBoundary)
         return proposedState;
 
     TimelineClipState constrained = proposedState;
     const int removedFrames = minimumStart - proposedState.startFrame;
+    const int sourceInFrame = mediaKind == MediaKind::Image
+        ? 0 : proposedState.sourceInFrame + removedFrames;
+    if (sourceInFrame < 0)
+        return proposedState;
     constrained.startFrame = minimumStart;
     constrained.durationFrames = originalEnd - minimumStart;
-    constrained.sourceInFrame = mediaKind == MediaKind::Image
-        ? 0 : proposedState.sourceInFrame + removedFrames;
+    constrained.sourceInFrame = sourceInFrame;
     return constrained;
 }
 
 TimelineClipState TimelineTrackPolicy::constrainEndTrim(
     const std::vector<TimelineClip> &clips, const TimelineClip &editedClip,
-    const TimelineClipState &proposedState)
+    const TimelineClipState &proposedState, int latestAllowedEndFrame,
+    int snapToleranceFrames)
 {
     int maximumEnd = std::numeric_limits<int>::max();
     const int originalEnd = editedClip.state.startFrame
@@ -130,7 +182,14 @@ TimelineClipState TimelineTrackPolicy::constrainEndTrim(
     }
 
     const int proposedEnd = proposedState.startFrame + proposedState.durationFrames;
-    if (proposedEnd <= maximumEnd)
+    const bool crossesBoundary = proposedEnd > maximumEnd;
+    const bool isNearBoundary = maximumEnd != std::numeric_limits<int>::max()
+        && std::abs(proposedEnd - maximumEnd)
+            <= std::max(0, snapToleranceFrames);
+    if (!crossesBoundary && !isNearBoundary)
+        return proposedState;
+
+    if (maximumEnd > latestAllowedEndFrame)
         return proposedState;
 
     TimelineClipState constrained = proposedState;
