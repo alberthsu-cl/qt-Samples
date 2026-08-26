@@ -78,3 +78,25 @@ const TimelineClip *TimelineGeometry::topmostClipAt(
     }
     return nullptr;
 }
+
+TimelineClipHit TimelineGeometry::hitTestClip(
+    const std::vector<TimelineClip> &clips, const TimelinePoint &point,
+    int selectedClipId, int trimHandleWidth) const
+{
+    const TimelineClip *clip = topmostClipAt(clips, point);
+    if (clip == nullptr)
+        return {};
+
+    if (clip->id != selectedClipId || trimHandleWidth <= 0)
+        return { clip, TimelineClipHitRegion::Body };
+
+    const TimelineRectangle rectangle = clipRectangle(*clip);
+    const int distanceFromStart = point.x - rectangle.left;
+    const int distanceFromEnd = rectangle.left + rectangle.width - 1 - point.x;
+    if (std::min(distanceFromStart, distanceFromEnd) >= trimHandleWidth)
+        return { clip, TimelineClipHitRegion::Body };
+
+    return { clip, distanceFromStart <= distanceFromEnd
+                       ? TimelineClipHitRegion::TrimStart
+                       : TimelineClipHitRegion::TrimEnd };
+}

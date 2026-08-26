@@ -14,6 +14,7 @@
 namespace {
 
 constexpr int kFramesPerSecond = 30;
+constexpr int kTrimHandleWidth = 7;
 constexpr char kMediaAssetMimeType[] = "application/x-mini-editor-media-id";
 
 QRect toQRect(const TimelineRectangle &rectangle)
@@ -58,7 +59,7 @@ void QtTimelineCanvas::setClipSettings(const ClipSettings &settings)
 void QtTimelineCanvas::setTimelineClipState(const TimelineClipState &state)
 {
     timelineClipState_ = state;
-    if (!isDraggingClip_)
+    if (!isEditingClip())
         dragPreviewState_ = state;
     update();
 }
@@ -154,7 +155,7 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
 
     const auto drawClip = [&painter, this, &timelineGeometry](const TimelineClip &sourceClip) {
         TimelineClip clip = sourceClip;
-        if (isDraggingClip_ && clip.id == dragClipId_)
+        if (isEditingClip() && clip.id == dragClipId_)
             clip.state = dragPreviewState_;
         if (!assetPresentationResolver_)
             return;
@@ -177,6 +178,23 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
         painter.drawText(clipRect.adjusted(10, 0, -10, 0),
                          Qt::AlignCenter | Qt::TextSingleLine,
                          presentation->displayName);
+
+        if (selected) {
+            const int handleWidth = std::min(
+                kTrimHandleWidth, std::max(1, clipRect.width() / 2));
+            const QRect startHandle(clipRect.left(), clipRect.top(),
+                                    handleWidth, clipRect.height());
+            const QRect endHandle(clipRect.right() - handleWidth + 1,
+                                  clipRect.top(), handleWidth, clipRect.height());
+            const QColor handleColor(255, 196, 72, 190);
+            painter.fillRect(startHandle, handleColor);
+            painter.fillRect(endHandle, handleColor);
+            painter.setPen(QColor(255, 238, 190));
+            painter.drawLine(startHandle.right(), startHandle.top() + 7,
+                             startHandle.right(), startHandle.bottom() - 7);
+            painter.drawLine(endHandle.left(), endHandle.top() + 7,
+                             endHandle.left(), endHandle.bottom() - 7);
+        }
     };
     if (!timelineClips_.empty()) {
         for (const TimelineClip &clip : timelineClips_)
@@ -235,16 +253,26 @@ void QtTimelineCanvas::mousePressEvent(QMouseEvent *event)
     const TimelineGeometry timelineGeometry = geometry();
     if (point.y() < TimelineGeometry::kRulerHeight && seekHandler_) {
         seekHandler_(timelineGeometry.rulerFrameAtX(point.x()));
-    } else if (const TimelineClip *clip = timelineGeometry.topmostClipAt(
-                   timelineClips_, { point.x(), point.y() })) {
-        selectedClipId_ = clip->id;
+    } else if (event->button() == Qt::LeftButton) {
+        const TimelineClipHit hit = timelineGeometry.hitTestClip(
+            timelineClips_, { point.x(), point.y() },
+            selectedClipId_, kTrimHandleWidth);
+        if (hit.clip == nullptr) {
+            QWidget::mousePressEvent(event);
+            return;
+        }
+
+        selectedClipId_ = hit.clip->id;
         if (timelineClipSelectedHandler_)
-            timelineClipSelectedHandler_(clip->id);
-        isDraggingClip_ = true;
-        dragClipId_ = clip->id;
-        dragPreviewState_ = clip->state;
+            timelineClipSelectedHandler_(hit.clip->id);
+        dragRegion_ = hit.region;
+        dragClipId_ = hit.clip->id;
+        dragOriginalState_ = hit.clip->state;
+        dragPreviewState_ = hit.clip->state;
         dragFrameOffset_ = timelineGeometry.frameAtX(point.x())
             - dragPreviewState_.startFrame;
+        setCursor(dragRegion_ == TimelineClipHitRegion::Body
+                      ? Qt::ClosedHandCursor : Qt::SizeHorCursor);
         grabMouse();
     }
     QWidget::mousePressEvent(event);
@@ -252,24 +280,27 @@ void QtTimelineCanvas::mousePressEvent(QMouseEvent *event)
 
 void QtTimelineCanvas::mouseMoveEvent(QMouseEvent *event)
 {
-    if (isDraggingClip_ && (event->buttons() & Qt::LeftButton)) {
-        dragPreviewState_.startFrame = std::max(
-            0, geometry().frameAtX(event->position().toPoint().x()) - dragFrameOffset_);
+    const QPoint point = event->position().toPoint();
+    if (isEditingClip() && (event->buttons() & Qt::LeftButton)) {
+        updateDragPreview(point.x());
         update();
+    } else {
+        updateMouseCursor(point);
     }
     QWidget::mouseMoveEvent(event);
 }
 
 void QtTimelineCanvas::mouseReleaseEvent(QMouseEvent *event)
 {
-    if (isDraggingClip_ && event->button() == Qt::LeftButton) {
-        dragPreviewState_.startFrame = std::max(
-            0, geometry().frameAtX(event->position().toPoint().x()) - dragFrameOffset_);
+    if (isEditingClip() && event->button() == Qt::LeftButton) {
+        const QPoint point = event->position().toPoint();
+        updateDragPreview(point.x());
         releaseMouse();
-        isDraggingClip_ = false;
+        dragRegion_ = TimelineClipHitRegion::None;
         if (timelineClipEditedHandler_)
             timelineClipEditedHandler_(dragClipId_, dragPreviewState_);
         dragClipId_ = 0;
+        updateMouseCursor(point);
         update();
     }
     QWidget::mouseReleaseEvent(event);
@@ -370,4 +401,42 @@ void QtTimelineCanvas::clearMediaDropPreview()
 TimelineGeometry QtTimelineCanvas::geometry() const
 {
     return { viewState_.zoomPercent, timelineDurationFrames_ };
+}
+
+bool QtTimelineCanvas::isEditingClip() const
+{
+    return dragRegion_ != TimelineClipHitRegion::None;
+}
+
+void QtTimelineCanvas::updateDragPreview(int timelineX)
+{
+    const int frame = geometry().frameAtX(timelineX);
+    switch (dragRegion_) {
+    case TimelineClipHitRegion::Body:
+        dragPreviewState_ = TimelineClipEdit::moveTo(
+            dragOriginalState_, frame - dragFrameOffset_);
+        break;
+    case TimelineClipHitRegion::TrimStart:
+        dragPreviewState_ = TimelineClipEdit::trimStartTo(dragOriginalState_, frame);
+        break;
+    case TimelineClipHitRegion::TrimEnd:
+        dragPreviewState_ = TimelineClipEdit::trimEndTo(dragOriginalState_, frame);
+        break;
+    case TimelineClipHitRegion::None:
+        break;
+    }
+}
+
+void QtTimelineCanvas::updateMouseCursor(const QPoint &point)
+{
+    const TimelineClipHit hit = geometry().hitTestClip(
+        timelineClips_, { point.x(), point.y() }, selectedClipId_, kTrimHandleWidth);
+    if (hit.region == TimelineClipHitRegion::TrimStart
+        || hit.region == TimelineClipHitRegion::TrimEnd) {
+        setCursor(Qt::SizeHorCursor);
+    } else if (hit.region == TimelineClipHitRegion::Body) {
+        setCursor(Qt::OpenHandCursor);
+    } else {
+        unsetCursor();
+    }
 }

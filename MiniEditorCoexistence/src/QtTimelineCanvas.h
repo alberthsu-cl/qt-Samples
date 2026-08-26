@@ -2,6 +2,7 @@
 
 #include "ProjectState.h"
 #include "TimelineAssetPresentation.h"
+#include "TimelineClipEdit.h"
 #include "TimelineGeometry.h"
 #include "TimelineModel.h"
 
@@ -55,6 +56,9 @@ protected:
 
 private:
     TimelineGeometry geometry() const;
+    bool isEditingClip() const;
+    void updateDragPreview(int timelineX);
+    void updateMouseCursor(const QPoint &point);
     bool updateMediaDropPreview(const QMimeData *mimeData, int timelineX);
     void clearMediaDropPreview();
 
@@ -71,10 +75,11 @@ private:
     TimelineClipSelectedHandler timelineClipSelectedHandler_;
     std::vector<TimelineClip> timelineClips_;
     int timelineDurationFrames_ = 600;
-    bool isDraggingClip_ = false;
+    TimelineClipHitRegion dragRegion_ = TimelineClipHitRegion::None;
     int dragFrameOffset_ = 0;
     int dragClipId_ = 0;
     int selectedClipId_ = 0;
+    TimelineClipState dragOriginalState_;
     TimelineClipState dragPreviewState_;
     bool isMediaDropPreviewVisible_ = false;
     int mediaDropAssetId_ = 0;

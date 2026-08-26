@@ -2,6 +2,7 @@
 #include "ProjectSerializer.h"
 #include "MediaLibrary.h"
 #include "TimelineModel.h"
+#include "TimelineClipEdit.h"
 #include "TimelineGeometry.h"
 #include "WorkspaceLayout.h"
 
@@ -252,17 +253,21 @@ void editorSessionUndoRedoTracksModelClipMoves()
 {
     EditorSession session(2);
     const int clipId = session.addTimelineClip(1, TimelineTrackType::Video, 0);
-    require(session.moveTimelineClip(clipId, { 150, 180 }),
-            "Moving a model clip must succeed through EditorSession.");
-    require(session.canUndo(), "A model clip move must become undoable.");
+    require(session.moveTimelineClip(clipId, { 150, 120 }),
+            "Moving or trimming a model clip must succeed through EditorSession.");
+    require(session.canUndo(), "A model clip edit must become undoable.");
     require(session.timelineModel().findClip(clipId)->state.startFrame == 150,
             "Session must retain the moved model clip.");
-    require(session.undo(), "Undo must restore a model clip move.");
-    require(session.timelineModel().findClip(clipId)->state.startFrame == 0,
-            "Undo must restore the original model clip position.");
-    require(session.redo(), "Redo must reapply a model clip move.");
-    require(session.timelineModel().findClip(clipId)->state.startFrame == 150,
-            "Redo must restore the moved model clip position.");
+    require(session.timelineModel().findClip(clipId)->state.durationFrames == 120,
+            "Session must retain the trimmed model clip duration.");
+    require(session.undo(), "Undo must restore a model clip edit.");
+    const TimelineClip *undoClip = session.timelineModel().findClip(clipId);
+    require(undoClip->state.startFrame == 0 && undoClip->state.durationFrames == 180,
+            "Undo must restore the original model clip range.");
+    require(session.redo(), "Redo must reapply a model clip edit.");
+    const TimelineClip *redoClip = session.timelineModel().findClip(clipId);
+    require(redoClip->state.startFrame == 150 && redoClip->state.durationFrames == 120,
+            "Redo must restore the edited model clip range.");
 }
 
 void editorSessionUndoRedoTracksLibraryInsertion()
@@ -420,6 +425,62 @@ void timelineGeometryOwnsFrameworkNeutralCoordinatesAndHitTesting()
             "Geometry hit-testing must retain the first non-overlapping clip.");
 }
 
+void timelineClipTrimmingPreservesValidRangesAndHandleHits()
+{
+    const TimelineClipState original{ 100, 200 };
+    const TimelineClipState moved = TimelineClipEdit::moveTo(original, -20);
+    require(moved.startFrame == 0 && moved.durationFrames == 200,
+            "Moving must preserve duration and prevent a negative start.");
+
+    const TimelineClipState startTrim = TimelineClipEdit::trimStartTo(original, 140);
+    require(startTrim.startFrame == 140 && startTrim.durationFrames == 160,
+            "Start trim must preserve the original end frame.");
+    const TimelineClipState shortestStartTrim = TimelineClipEdit::trimStartTo(original, 999);
+    require(shortestStartTrim.startFrame == 299
+                && shortestStartTrim.durationFrames == 1,
+            "Start trim must preserve at least one frame.");
+    const TimelineClipState outwardStartTrim = TimelineClipEdit::trimStartTo(original, 0);
+    require(outwardStartTrim.startFrame == 100
+                && outwardStartTrim.durationFrames == 200,
+            "Start trim must not invent source frames before the clip.");
+
+    const TimelineClipState endTrim = TimelineClipEdit::trimEndTo(original, 250);
+    require(endTrim.startFrame == 100 && endTrim.durationFrames == 150,
+            "End trim must preserve the original start frame.");
+    const TimelineClipState shortestEndTrim = TimelineClipEdit::trimEndTo(original, 0);
+    require(shortestEndTrim.startFrame == 100
+                && shortestEndTrim.durationFrames == 1,
+            "End trim must preserve at least one frame.");
+    const TimelineClipState outwardEndTrim = TimelineClipEdit::trimEndTo(original, 999);
+    require(outwardEndTrim.startFrame == 100
+                && outwardEndTrim.durationFrames == 200,
+            "End trim must not invent source frames after the clip.");
+
+    TimelineModel timeline;
+    const int clipId = timeline.addClip(1, TimelineTrackType::Video, original);
+    const TimelineGeometry geometry(100, 600);
+    const TimelineRectangle rectangle = geometry.clipRectangle(
+        *timeline.findClip(clipId));
+    const int clipCenterY = rectangle.top + rectangle.height / 2;
+
+    const TimelineClipHit startHit = geometry.hitTestClip(
+        timeline.clips(), { rectangle.left + 2, clipCenterY }, clipId, 7);
+    require(startHit.region == TimelineClipHitRegion::TrimStart,
+            "The selected clip's left edge must be a start-trim handle.");
+    const TimelineClipHit endHit = geometry.hitTestClip(
+        timeline.clips(), { rectangle.left + rectangle.width - 3, clipCenterY }, clipId, 7);
+    require(endHit.region == TimelineClipHitRegion::TrimEnd,
+            "The selected clip's right edge must be an end-trim handle.");
+    const TimelineClipHit bodyHit = geometry.hitTestClip(
+        timeline.clips(), { rectangle.left + rectangle.width / 2, clipCenterY }, clipId, 7);
+    require(bodyHit.region == TimelineClipHitRegion::Body,
+            "The selected clip's center must remain a move target.");
+    const TimelineClipHit unselectedEdgeHit = geometry.hitTestClip(
+        timeline.clips(), { rectangle.left + 2, clipCenterY }, 0, 7);
+    require(unselectedEdgeHit.region == TimelineClipHitRegion::Body,
+            "Trim handles must activate only after the clip is selected.");
+}
+
 void mediaLibraryOwnsStableSourceAssetIds()
 {
     MediaLibrary library;
@@ -496,6 +557,7 @@ int main()
         timelineSlotResolutionReturnsNothingForGaps();
         overlappingTimelineClipsUseLastClipAsTopmost();
         timelineGeometryOwnsFrameworkNeutralCoordinatesAndHitTesting();
+        timelineClipTrimmingPreservesValidRangesAndHandleHits();
         mediaLibraryOwnsStableSourceAssetIds();
         workspaceLayoutProtectsPaneBounds();
         std::cout << "MiniEditorCoreTests passed.\n";

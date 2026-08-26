@@ -20,6 +20,18 @@ struct TimelineRectangle {
     bool contains(const TimelinePoint &point) const;
 };
 
+enum class TimelineClipHitRegion {
+    None,
+    Body,
+    TrimStart,
+    TrimEnd
+};
+
+struct TimelineClipHit {
+    const TimelineClip *clip = nullptr;
+    TimelineClipHitRegion region = TimelineClipHitRegion::None;
+};
+
 // Owns the coordinate policy for the fixed V1/A1 learning timeline. It knows
 // nothing about QWidget, QPainter, CWnd, or CDC.
 class TimelineGeometry final
@@ -53,6 +65,10 @@ public:
 
     const TimelineClip *topmostClipAt(const std::vector<TimelineClip> &clips,
                                       const TimelinePoint &point) const;
+    TimelineClipHit hitTestClip(const std::vector<TimelineClip> &clips,
+                                const TimelinePoint &point,
+                                int selectedClipId,
+                                int trimHandleWidth) const;
 
 private:
     int zoomPercent_ = 100;

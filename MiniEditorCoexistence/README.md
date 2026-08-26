@@ -250,6 +250,13 @@ rectangles, canvas sizing, and topmost overlap hit-testing. `QtTimelineCanvas`
 converts these plain rectangles to `QRect` and concentrates on event handling
 and painting. Pure C++ tests cover the geometry without creating a window.
 
+The selected Qt timeline clip displays left and right trim handles. Hovering
+an edge shows the horizontal-resize cursor, dragging paints a live provisional
+range, and releasing commits one `EditorSession` command for Undo/Redo. The
+framework-neutral `TimelineClipEdit` preserves a one-frame minimum and only
+shortens the current range because this UI-learning sample does not yet model
+source-media in/out frames.
+
 ## Phase 19 — Timeline model foundation
 
 `TimelineModel` is the first step toward a real editor timeline. It starts
