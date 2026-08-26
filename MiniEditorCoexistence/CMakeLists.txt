@@ -24,6 +24,7 @@ endif()
 add_executable(MiniEditorCoexistence WIN32
     src/DemoProject.h
     src/ProjectState.h
+    src/MediaKind.h
     src/EditorProject.h
     src/EditorProject.cpp
     src/ProjectSerializer.h
@@ -67,6 +68,7 @@ target_include_directories(MiniEditorCoexistence PRIVATE
 source_group("DataModel" FILES
     src/DemoProject.h
     src/ProjectState.h
+    src/MediaKind.h
     src/EditorProject.h
     src/EditorProject.cpp
     src/ProjectSerializer.h

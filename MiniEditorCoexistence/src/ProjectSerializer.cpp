@@ -12,7 +12,7 @@
 
 namespace {
 
-constexpr int kCurrentFormatVersion = 5;
+constexpr int kCurrentFormatVersion = 6;
 
 std::string utf8FromWide(const std::wstring &value)
 {
@@ -142,6 +142,26 @@ bool ProjectSerializer::save(const std::filesystem::path &path,
         return false;
     }
 
+    for (const TimelineClip &clip : project.timelineItems) {
+        const auto asset = std::find_if(project.mediaAssets.begin(), project.mediaAssets.end(),
+            [&clip](const LibraryMediaAsset &candidate) {
+                return candidate.id == clip.mediaAssetId;
+            });
+        const bool hasBasicRange = clip.state.startFrame >= 0
+            && clip.state.durationFrames > 0 && clip.state.sourceInFrame >= 0;
+        const bool hasValidImageRange = asset != project.mediaAssets.end()
+            && asset->kind == MediaKind::Image && clip.state.sourceInFrame == 0;
+        const bool hasValidTimedRange = asset != project.mediaAssets.end()
+            && asset->kind != MediaKind::Image
+            && clip.state.durationFrames <= asset->timelineDurationFrames
+            && clip.state.sourceInFrame
+                <= asset->timelineDurationFrames - clip.state.durationFrames;
+        if (!hasBasicRange || (!hasValidImageRange && !hasValidTimedRange)) {
+            setError(errorMessage, L"A timeline clip has an invalid source range.");
+            return false;
+        }
+    }
+
     std::ofstream output(path, std::ios::trunc);
     if (!output) {
         setError(errorMessage, L"The project file could not be opened for writing.");
@@ -170,6 +190,7 @@ bool ProjectSerializer::save(const std::filesystem::path &path,
                << ", \"trackType\": \"" << trackName(clip.trackType)
                << "\", \"startFrame\": " << clip.state.startFrame
                << ", \"durationFrames\": " << clip.state.durationFrames
+               << ", \"sourceInFrame\": " << clip.state.sourceInFrame
                << ", \"opacityPercent\": " << clip.settings.opacityPercent
                << ", \"scalePercent\": " << clip.settings.scalePercent
                << ", \"position\": \"" << positionName(clip.settings.position) << "\" }";
@@ -249,12 +270,12 @@ std::optional<EditorProject> ProjectSerializer::load(const std::filesystem::path
         }
 
         project.clipSettings.push_back({ *opacityPercent, *scalePercent, *clipPosition });
-        project.timelineClips.push_back({ *startFrame, *durationFrames });
+        project.timelineClips.push_back({ *startFrame, *durationFrames, 0 });
     }
 
-    if (*formatVersion == 5) {
+    if (*formatVersion >= 5) {
         // These defaults support source preview while placement settings live
-        // exclusively on TimelineClip in the v5 document.
+        // exclusively on TimelineClip in v5 and later documents.
         project.clipSettings.resize(project.mediaAssets.size());
         project.timelineClips.resize(project.mediaAssets.size());
     }
@@ -284,23 +305,40 @@ std::optional<EditorProject> ProjectSerializer::load(const std::filesystem::path
         const auto trackTypeName = stringValue(clipObject, "trackType");
         const auto startFrame = integerValue(clipObject, "startFrame");
         const auto durationFrames = integerValue(clipObject, "durationFrames");
+        const std::optional<int> sourceInFrame = *formatVersion >= 6
+            ? integerValue(clipObject, "sourceInFrame") : std::optional<int>(0);
         const auto trackType = trackTypeName ? trackFromName(*trackTypeName) : std::nullopt;
 
         if (!id || *id <= 0 || !assetReference || *assetReference < 0
             || !trackType || !startFrame || *startFrame < 0
-            || !durationFrames || *durationFrames <= 0) {
+            || !durationFrames || *durationFrames <= 0
+            || !sourceInFrame || *sourceInFrame < 0) {
             setError(errorMessage, L"A timeline clip in the project file is invalid.");
             return std::nullopt;
         }
 
         const int mediaAssetId = *formatVersion == 2 ? *assetReference + 1 : *assetReference;
+        const auto asset = std::find_if(project.mediaAssets.begin(), project.mediaAssets.end(),
+            [mediaAssetId](const LibraryMediaAsset &candidate) {
+                return candidate.id == mediaAssetId;
+            });
         const bool hasAsset = *formatVersion >= 4
-            ? std::any_of(project.mediaAssets.begin(), project.mediaAssets.end(),
-                [mediaAssetId](const LibraryMediaAsset &asset) { return asset.id == mediaAssetId; })
+            ? asset != project.mediaAssets.end()
             : mediaAssetId > 0 && mediaAssetId <= static_cast<int>(expectedAssetCount);
         if (!hasAsset) {
             setError(errorMessage, L"A timeline clip references an unknown media asset.");
             return std::nullopt;
+        }
+
+        if (*formatVersion >= 6) {
+            const bool invalidImageSource = asset->kind == MediaKind::Image
+                && *sourceInFrame != 0;
+            const bool invalidTimedSource = asset->kind != MediaKind::Image
+                && *sourceInFrame + *durationFrames > asset->timelineDurationFrames;
+            if (invalidImageSource || invalidTimedSource) {
+                setError(errorMessage, L"A timeline clip has an invalid source range.");
+                return std::nullopt;
+            }
         }
 
         ClipSettings settings;
@@ -316,12 +354,14 @@ std::optional<EditorProject> ProjectSerializer::load(const std::filesystem::path
             settings = { *opacity, *scale, *position };
         }
         project.timelineItems.push_back({ *id, mediaAssetId, *trackType,
-                                          { *startFrame, *durationFrames }, settings });
+                                          { *startFrame, *durationFrames,
+                                            *sourceInFrame }, settings });
     }
 
     // Version 4 stored placement settings once per source asset. During
     // migration, copy those settings into every timeline placement that
     // references the asset. Version 5 then persists each placement independently.
+    // Version 6 adds sourceInFrame; older placements migrate with source-in zero.
     if (*formatVersion == 4) {
         for (TimelineClip &clip : project.timelineItems) {
             const auto asset = std::find_if(project.mediaAssets.begin(), project.mediaAssets.end(),

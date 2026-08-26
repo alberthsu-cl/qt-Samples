@@ -123,6 +123,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
             presentation.color = QColor::fromRgb(asset->thumbnailColorRgb);
             presentation.trackType = asset->kind == MediaKind::Audio
                 ? TimelineTrackType::Audio : TimelineTrackType::Video;
+            presentation.mediaKind = asset->kind;
             presentation.durationFrames = asset->timelineDurationFrames;
             return presentation;
         });

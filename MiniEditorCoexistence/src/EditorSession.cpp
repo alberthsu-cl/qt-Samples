@@ -35,7 +35,8 @@ ClipSettings clampedClipSettings(ClipSettings settings)
 bool hasSameTimelineClipState(const TimelineClipState &left, const TimelineClipState &right)
 {
     return left.startFrame == right.startFrame
-        && left.durationFrames == right.durationFrames;
+        && left.durationFrames == right.durationFrames
+        && left.sourceInFrame == right.sourceInFrame;
 }
 
 TimelineClipState clampedTimelineClipState(TimelineClipState state)
@@ -43,6 +44,7 @@ TimelineClipState clampedTimelineClipState(TimelineClipState state)
     state.durationFrames = std::clamp(state.durationFrames, 1, kMaximumTimelineFrame);
     state.startFrame = std::clamp(state.startFrame, 0,
                                   kMaximumTimelineFrame - state.durationFrames);
+    state.sourceInFrame = std::max(0, state.sourceInFrame);
     return state;
 }
 
@@ -53,6 +55,7 @@ TimelineClipState clampedTimelineModelClipState(TimelineClipState state)
     // resulting project duration dynamically.
     state.startFrame = std::max(0, state.startFrame);
     state.durationFrames = std::max(1, state.durationFrames);
+    state.sourceInFrame = std::max(0, state.sourceInFrame);
     return state;
 }
 

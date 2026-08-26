@@ -61,6 +61,9 @@ struct TimelineViewState {
 struct TimelineClipState {
     int startFrame = 0;
     int durationFrames = 180;
+    // Video/audio: first source frame used by this placement. Still images
+    // have no running source and therefore keep this value at zero.
+    int sourceInFrame = 0;
 };
 
 inline const wchar_t *clipPositionDisplayName(ClipPosition position)

@@ -1,16 +1,12 @@
 #pragma once
 
+#include "MediaKind.h"
+
 #include <filesystem>
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
-
-enum class MediaKind {
-    Video,
-    Audio,
-    Image
-};
 
 // A source item in the project media library. IDs are stable: timeline clips
 // refer to the ID rather than a mutable list row.

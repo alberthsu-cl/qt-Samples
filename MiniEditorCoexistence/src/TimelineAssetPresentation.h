@@ -1,5 +1,6 @@
 #pragma once
 
+#include "MediaKind.h"
 #include "TimelineModel.h"
 
 #include <QColor>
@@ -11,5 +12,6 @@ struct TimelineAssetPresentation {
     QString displayName;
     QColor color;
     TimelineTrackType trackType = TimelineTrackType::Video;
+    MediaKind mediaKind = MediaKind::Video;
     int durationFrames = 0;
 };

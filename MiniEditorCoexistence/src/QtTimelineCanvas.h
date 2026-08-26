@@ -79,6 +79,7 @@ private:
     int dragFrameOffset_ = 0;
     int dragClipId_ = 0;
     int selectedClipId_ = 0;
+    TimelineTrimContext dragTrimContext_;
     TimelineClipState dragOriginalState_;
     TimelineClipState dragPreviewState_;
     bool isMediaDropPreviewVisible_ = false;

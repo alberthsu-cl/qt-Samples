@@ -53,6 +53,7 @@ public:
 
     int pixelsPerScaleUnit() const;
     int xForFrame(int frame) const;
+    int frameAtXUnclamped(int x) const;
     int frameAtX(int x) const;
     int rulerFrameAtX(int x) const;
     int contentWidth() const;

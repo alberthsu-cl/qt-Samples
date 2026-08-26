@@ -25,11 +25,15 @@ int TimelineGeometry::xForFrame(int frame) const
         / kFramesPerScaleUnit;
 }
 
+int TimelineGeometry::frameAtXUnclamped(int x) const
+{
+    return std::max(0, (x - kTimelineLeft) * kFramesPerScaleUnit
+                           / pixelsPerScaleUnit());
+}
+
 int TimelineGeometry::frameAtX(int x) const
 {
-    return std::clamp((x - kTimelineLeft) * kFramesPerScaleUnit
-                          / pixelsPerScaleUnit(),
-                      0, durationFrames_);
+    return std::min(frameAtXUnclamped(x), durationFrames_);
 }
 
 int TimelineGeometry::rulerFrameAtX(int x) const

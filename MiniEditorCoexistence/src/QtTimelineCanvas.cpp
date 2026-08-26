@@ -194,6 +194,21 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
                              startHandle.right(), startHandle.bottom() - 7);
             painter.drawLine(endHandle.left(), endHandle.top() + 7,
                              endHandle.left(), endHandle.bottom() - 7);
+
+            if (isEditingClip() && clip.id == dragClipId_) {
+                const QString rangeText = dragTrimContext_.mediaKind == MediaKind::Image
+                    ? QStringLiteral("Start %1f  |  Display %2f")
+                          .arg(clip.state.startFrame)
+                          .arg(clip.state.durationFrames)
+                    : QStringLiteral("Source %1f-%2f  |  Duration %3f")
+                          .arg(clip.state.sourceInFrame)
+                          .arg(clip.state.sourceInFrame + clip.state.durationFrames)
+                          .arg(clip.state.durationFrames);
+                const QRect rangeRect(clipRect.left() + 3, 2, 230, 22);
+                painter.fillRect(rangeRect, QColor(18, 20, 24, 235));
+                painter.setPen(QColor(230, 238, 248));
+                painter.drawText(rangeRect, Qt::AlignCenter, rangeText);
+            }
         }
     };
     if (!timelineClips_.empty()) {
@@ -269,6 +284,17 @@ void QtTimelineCanvas::mousePressEvent(QMouseEvent *event)
         dragClipId_ = hit.clip->id;
         dragOriginalState_ = hit.clip->state;
         dragPreviewState_ = hit.clip->state;
+        dragTrimContext_ = { MediaKind::Video,
+                             hit.clip->state.sourceInFrame
+                                 + hit.clip->state.durationFrames };
+        if (assetPresentationResolver_) {
+            const std::optional<TimelineAssetPresentation> presentation =
+                assetPresentationResolver_(hit.clip->mediaAssetId);
+            if (presentation) {
+                dragTrimContext_ = { presentation->mediaKind,
+                                     presentation->durationFrames };
+            }
+        }
         dragFrameOffset_ = timelineGeometry.frameAtX(point.x())
             - dragPreviewState_.startFrame;
         setCursor(dragRegion_ == TimelineClipHitRegion::Body
@@ -300,6 +326,7 @@ void QtTimelineCanvas::mouseReleaseEvent(QMouseEvent *event)
         if (timelineClipEditedHandler_)
             timelineClipEditedHandler_(dragClipId_, dragPreviewState_);
         dragClipId_ = 0;
+        setMinimumWidth(geometry().contentWidth());
         updateMouseCursor(point);
         update();
     }
@@ -410,20 +437,34 @@ bool QtTimelineCanvas::isEditingClip() const
 
 void QtTimelineCanvas::updateDragPreview(int timelineX)
 {
-    const int frame = geometry().frameAtX(timelineX);
+    const TimelineGeometry timelineGeometry = geometry();
+    const bool isTrimming = dragRegion_ == TimelineClipHitRegion::TrimStart
+        || dragRegion_ == TimelineClipHitRegion::TrimEnd;
+    const int frame = isTrimming
+        ? timelineGeometry.frameAtXUnclamped(timelineX)
+        : timelineGeometry.frameAtX(timelineX);
     switch (dragRegion_) {
     case TimelineClipHitRegion::Body:
         dragPreviewState_ = TimelineClipEdit::moveTo(
             dragOriginalState_, frame - dragFrameOffset_);
         break;
     case TimelineClipHitRegion::TrimStart:
-        dragPreviewState_ = TimelineClipEdit::trimStartTo(dragOriginalState_, frame);
+        dragPreviewState_ = TimelineClipEdit::trimStartTo(
+            dragOriginalState_, frame, dragTrimContext_);
         break;
     case TimelineClipHitRegion::TrimEnd:
-        dragPreviewState_ = TimelineClipEdit::trimEndTo(dragOriginalState_, frame);
+        dragPreviewState_ = TimelineClipEdit::trimEndTo(
+            dragOriginalState_, frame, dragTrimContext_);
         break;
     case TimelineClipHitRegion::None:
         break;
+    }
+
+    const int provisionalEnd = dragPreviewState_.startFrame
+        + dragPreviewState_.durationFrames;
+    if (provisionalEnd > timelineDurationFrames_) {
+        setMinimumWidth(TimelineGeometry(viewState_.zoomPercent, provisionalEnd)
+                            .contentWidth());
     }
 }
 

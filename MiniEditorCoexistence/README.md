@@ -220,6 +220,12 @@ only presents MFC file dialogs and messages; the serializer and the session
 know nothing about MFC or Qt. Loading a project clears Undo/Redo history and
 restores every editable clip state in one session notification.
 
+Project format v6 stores `sourceInFrame` for each timeline placement. Video
+and audio clips therefore retain their source range across Save/Open and
+Undo/Redo. Version 5 projects migrate with source-in zero. Still-image
+placements keep source-in at zero because their duration describes how long
+the image appears on the timeline rather than a range of running source media.
+
 ## Phase 16 — Document dirty state
 
 `EditorSession` tracks whether project edits are unsaved. New/Open/Exit now
@@ -253,9 +259,11 @@ and painting. Pure C++ tests cover the geometry without creating a window.
 The selected Qt timeline clip displays left and right trim handles. Hovering
 an edge shows the horizontal-resize cursor, dragging paints a live provisional
 range, and releasing commits one `EditorSession` command for Undo/Redo. The
-framework-neutral `TimelineClipEdit` preserves a one-frame minimum and only
-shortens the current range because this UI-learning sample does not yet model
-source-media in/out frames.
+framework-neutral `TimelineClipEdit` applies media-specific rules: video and
+audio handles update source-in/out within the source duration, while a still
+image's handles adjust when and how long it appears without a source limit.
+The live range label reports source frames for timed media and display frames
+for still images.
 
 ## Phase 19 — Timeline model foundation
 

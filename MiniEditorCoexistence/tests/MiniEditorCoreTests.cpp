@@ -168,6 +168,9 @@ void projectDocumentRoundTripsEditState()
         2, TimelineTrackType::Audio, 500, 4170);
     sourceSession.selectTimelineClip(insertedTimelineClipId);
     sourceSession.updateSelectedClipSettings(settings);
+    require(sourceSession.moveTimelineClip(insertedTimelineClipId,
+                                           { 120, 240, 30 }),
+            "Source-aware placement must accept a valid video source-in frame.");
 
     const std::filesystem::path testPath = std::filesystem::temp_directory_path()
         / "MiniEditorCoreTests.mini-editor.json";
@@ -186,7 +189,7 @@ void projectDocumentRoundTripsEditState()
     require(loadedProject.has_value(), "Project serializer must load its saved project.");
     require(loadedProject->mediaAssets.size() == 2
                 && loadedProject->mediaAssets[1].kind == MediaKind::Audio,
-            "Version 5 must restore the project media library.");
+            "Version 6 must restore the project media library.");
 
     EditorSession destinationSession(2);
     destinationSession.replaceProject(*loadedProject);
@@ -197,8 +200,11 @@ void projectDocumentRoundTripsEditState()
             "Loaded project must restore clip position.");
     const TimelineClip *loadedTimelineClip =
         destinationSession.timelineModel().findClip(insertedTimelineClipId);
-    require(loadedTimelineClip != nullptr && loadedTimelineClip->state.startFrame == 120,
-            "Loaded project must restore timeline clip placement.");
+    require(loadedTimelineClip != nullptr
+                && loadedTimelineClip->state.startFrame == 120
+                && loadedTimelineClip->state.durationFrames == 240
+                && loadedTimelineClip->state.sourceInFrame == 30,
+            "Loaded project must restore the complete source-aware placement.");
     const TimelineClip *loadedAudioClip =
         destinationSession.timelineModel().findClip(insertedAudioClipId);
     require(loadedAudioClip != nullptr
@@ -209,6 +215,63 @@ void projectDocumentRoundTripsEditState()
     require(!destinationSession.isProjectDirty(), "Loading a project must clear dirty state.");
     destinationSession.markProjectSaved();
     require(!destinationSession.isProjectDirty(), "Marking a project saved must clear dirty state.");
+}
+
+void version5ProjectMigratesToSourceInZero()
+{
+    const std::filesystem::path testPath = std::filesystem::temp_directory_path()
+        / "MiniEditorCoreTests-v5.mini-editor.json";
+    {
+        std::ofstream output(testPath, std::ios::trunc);
+        output << R"({
+  "formatVersion": 5,
+  "mediaAssets": [
+    { "id": 1, "filePath": "D:/media/legacy.mp4", "displayName": "legacy.mp4", "kind": "Video", "durationFrames": 300, "thumbnailColorRgb": 5273760 }
+  ],
+  "timelineClips": [
+    { "id": 1, "mediaAssetId": 1, "trackType": "Video", "startFrame": 30, "durationFrames": 120, "opacityPercent": 100, "scalePercent": 100, "position": "Center" }
+  ]
+})";
+    }
+
+    std::wstring errorMessage;
+    const auto project = ProjectSerializer::load(testPath, 1, &errorMessage);
+    std::error_code removeError;
+    std::filesystem::remove(testPath, removeError);
+    require(project.has_value() && project->timelineItems.size() == 1,
+            "Version 5 project must remain loadable after the v6 migration.");
+    require(project->timelineItems.front().state.sourceInFrame == 0,
+            "A version 5 placement must migrate with source-in frame zero.");
+}
+
+void projectSerializerValidatesTimedSourcesButAllowsStillDuration()
+{
+    const std::filesystem::path testPath = std::filesystem::temp_directory_path()
+        / "MiniEditorCoreTests-source-range.mini-editor.json";
+    EditorProject project = EditorProject::createDefault(2);
+    project.mediaAssets = {
+        { 1, L"D:/media/video.mp4", L"video.mp4", MediaKind::Video, 100, 0x5078A0 },
+        { 2, L"D:/media/still.png", L"still.png", MediaKind::Image, 90, 0x2878B4 }
+    };
+    project.timelineItems = {
+        { 1, 1, TimelineTrackType::Video, { 0, 60, 50 }, {} }
+    };
+
+    std::wstring errorMessage;
+    require(!ProjectSerializer::save(testPath, project, &errorMessage),
+            "Serializer must reject a video range beyond its source duration.");
+
+    project.timelineItems = {
+        { 2, 2, TimelineTrackType::Video, { 0, 300, 0 }, {} }
+    };
+    require(ProjectSerializer::save(testPath, project, &errorMessage),
+            "Serializer must allow a still image to have a longer display duration.");
+    const auto loaded = ProjectSerializer::load(testPath, 2, &errorMessage);
+    std::error_code removeError;
+    std::filesystem::remove(testPath, removeError);
+    require(loaded.has_value()
+                && loaded->timelineItems.front().state.durationFrames == 300,
+            "Still-image display duration must survive project round-trip.");
 }
 
 void timelineModelStartsEmptyAndOwnsIndependentClipIds()
@@ -427,37 +490,63 @@ void timelineGeometryOwnsFrameworkNeutralCoordinatesAndHitTesting()
 
 void timelineClipTrimmingPreservesValidRangesAndHandleHits()
 {
-    const TimelineClipState original{ 100, 200 };
-    const TimelineClipState moved = TimelineClipEdit::moveTo(original, -20);
-    require(moved.startFrame == 0 && moved.durationFrames == 200,
-            "Moving must preserve duration and prevent a negative start.");
+    const TimelineTrimContext videoContext{ MediaKind::Video, 400 };
+    const TimelineClipState videoOriginal{ 100, 200, 50 };
+    const TimelineClipState moved = TimelineClipEdit::moveTo(videoOriginal, -20);
+    require(moved.startFrame == 0 && moved.durationFrames == 200
+                && moved.sourceInFrame == 50,
+            "Moving must preserve duration and source-in while preventing a negative start.");
 
-    const TimelineClipState startTrim = TimelineClipEdit::trimStartTo(original, 140);
-    require(startTrim.startFrame == 140 && startTrim.durationFrames == 160,
-            "Start trim must preserve the original end frame.");
-    const TimelineClipState shortestStartTrim = TimelineClipEdit::trimStartTo(original, 999);
+    const TimelineClipState startTrim = TimelineClipEdit::trimStartTo(
+        videoOriginal, 140, videoContext);
+    require(startTrim.startFrame == 140 && startTrim.durationFrames == 160
+                && startTrim.sourceInFrame == 90,
+            "Video start trim must advance source-in and preserve the timeline end.");
+    const TimelineClipState shortestStartTrim = TimelineClipEdit::trimStartTo(
+        videoOriginal, 999, videoContext);
     require(shortestStartTrim.startFrame == 299
-                && shortestStartTrim.durationFrames == 1,
-            "Start trim must preserve at least one frame.");
-    const TimelineClipState outwardStartTrim = TimelineClipEdit::trimStartTo(original, 0);
-    require(outwardStartTrim.startFrame == 100
-                && outwardStartTrim.durationFrames == 200,
-            "Start trim must not invent source frames before the clip.");
+                && shortestStartTrim.durationFrames == 1
+                && shortestStartTrim.sourceInFrame == 249,
+            "Video start trim must preserve at least one source frame.");
+    const TimelineClipState outwardStartTrim = TimelineClipEdit::trimStartTo(
+        videoOriginal, 0, videoContext);
+    require(outwardStartTrim.startFrame == 50
+                && outwardStartTrim.durationFrames == 250
+                && outwardStartTrim.sourceInFrame == 0,
+            "Video start untrim must stop at source frame zero.");
 
-    const TimelineClipState endTrim = TimelineClipEdit::trimEndTo(original, 250);
-    require(endTrim.startFrame == 100 && endTrim.durationFrames == 150,
-            "End trim must preserve the original start frame.");
-    const TimelineClipState shortestEndTrim = TimelineClipEdit::trimEndTo(original, 0);
+    const TimelineClipState endTrim = TimelineClipEdit::trimEndTo(
+        videoOriginal, 250, videoContext);
+    require(endTrim.startFrame == 100 && endTrim.durationFrames == 150
+                && endTrim.sourceInFrame == 50,
+            "Video end trim must preserve timeline start and source-in.");
+    const TimelineClipState shortestEndTrim = TimelineClipEdit::trimEndTo(
+        videoOriginal, 0, videoContext);
     require(shortestEndTrim.startFrame == 100
-                && shortestEndTrim.durationFrames == 1,
-            "End trim must preserve at least one frame.");
-    const TimelineClipState outwardEndTrim = TimelineClipEdit::trimEndTo(original, 999);
+                && shortestEndTrim.durationFrames == 1
+                && shortestEndTrim.sourceInFrame == 50,
+            "Video end trim must preserve at least one source frame.");
+    const TimelineClipState outwardEndTrim = TimelineClipEdit::trimEndTo(
+        videoOriginal, 999, videoContext);
     require(outwardEndTrim.startFrame == 100
-                && outwardEndTrim.durationFrames == 200,
-            "End trim must not invent source frames after the clip.");
+                && outwardEndTrim.durationFrames == 350,
+            "Video end untrim must stop at the source-media duration.");
+
+    const TimelineTrimContext imageContext{ MediaKind::Image, 90 };
+    const TimelineClipState imageOriginal{ 100, 200, 0 };
+    const TimelineClipState imageStart = TimelineClipEdit::trimStartTo(
+        imageOriginal, 40, imageContext);
+    require(imageStart.startFrame == 40 && imageStart.durationFrames == 260
+                && imageStart.sourceInFrame == 0,
+            "Still-image left trim must change when and how long the image appears.");
+    const TimelineClipState imageEnd = TimelineClipEdit::trimEndTo(
+        imageOriginal, 500, imageContext);
+    require(imageEnd.startFrame == 100 && imageEnd.durationFrames == 400
+                && imageEnd.sourceInFrame == 0,
+            "Still-image right trim must extend display duration without a source limit.");
 
     TimelineModel timeline;
-    const int clipId = timeline.addClip(1, TimelineTrackType::Video, original);
+    const int clipId = timeline.addClip(1, TimelineTrackType::Video, videoOriginal);
     const TimelineGeometry geometry(100, 600);
     const TimelineRectangle rectangle = geometry.clipRectangle(
         *timeline.findClip(clipId));
@@ -547,6 +636,8 @@ int main()
         editorSessionUndoRedoTracksOnlyClipEdits();
         editorSessionUndoRedoTracksTimelineClipMoves();
         projectDocumentRoundTripsEditState();
+        version5ProjectMigratesToSourceInZero();
+        projectSerializerValidatesTimedSourcesButAllowsStillDuration();
         timelineModelStartsEmptyAndOwnsIndependentClipIds();
         editorSessionUndoRedoTracksModelClipMoves();
         editorSessionUndoRedoTracksLibraryInsertion();
