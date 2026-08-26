@@ -94,7 +94,8 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
 #if MINI_EDITOR_USE_QT
     if (!timelineCanvasHost_.create(GetSafeHwnd()))
         return -1;
-    timelineCanvasHost_.setSeekHandler([this](int frame) { editorSession_.seekTimeline(frame); });
+    timelineCanvasHost_.setSeekHandler(
+        [this](int frame) { focusTimelineFrame(frame); });
     timelineCanvasHost_.setTimelineClipEditedHandler(
         [this](int clipId, const TimelineClipState &state,
                TimelineClipEditKind editKind) {
@@ -137,18 +138,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
                 synchronizePlaybackDurationForFocus(removedFocusedClip);
         });
     timelineCanvasHost_.setTimelineClipSelectedHandler(
-        [this](int clipId) {
-            const TimelineClip *clip = editorSession_.timelineModel().findClip(clipId);
-            if (clip == nullptr)
-                return;
-            const auto &assets = mediaLibrary_.assets();
-            const auto iterator = std::find_if(assets.begin(), assets.end(),
-                [clip](const LibraryMediaAsset &asset) { return asset.id == clip->mediaAssetId; });
-            if (iterator != assets.end())
-                editorSession_.selectAsset(static_cast<int>(iterator - assets.begin()));
-            editorSession_.selectTimelineClip(clipId);
-            synchronizePlaybackDurationForFocus(true);
-        });
+        [this](int clipId) { focusTimelineClip(clipId, false); });
     timelineCanvasHost_.setTimelineFocusRequestedHandler([this] {
         editorSession_.focusTimeline();
         synchronizePlaybackDurationForFocus(true);
@@ -696,6 +686,45 @@ void MainFrame::removeMediaAsset(int assetIndex, int assetId)
         mediaLibraryHost_.refreshAssets();
 #endif
     }
+}
+
+void MainFrame::focusTimelineClip(int clipId, bool resetToBeginning)
+{
+    const TimelineClip *clip = editorSession_.timelineModel().findClip(clipId);
+    if (clip == nullptr)
+        return;
+
+    const auto &assets = mediaLibrary_.assets();
+    const auto asset = std::find_if(assets.begin(), assets.end(),
+        [clip](const LibraryMediaAsset &candidate) {
+            return candidate.id == clip->mediaAssetId;
+        });
+    if (asset == assets.end())
+        return;
+    editorSession_.selectTimelineClip(
+        clipId, static_cast<int>(asset - assets.begin()));
+    synchronizePlaybackDurationForFocus(resetToBeginning);
+}
+
+void MainFrame::focusTimelineFrame(int frame)
+{
+    const ResolvedTimelineFrame resolved = TimelinePlaybackResolver::resolve(
+        editorSession_.timelineModel(), mediaLibrary_, frame);
+
+    // V1 is the visible editing target when video and audio overlap. If V1 is
+    // empty at this frame, allow the A1 placement to receive focus instead.
+    if (resolved.video)
+        focusTimelineClip(resolved.video->clipId, false);
+    else if (resolved.audio)
+        focusTimelineClip(resolved.audio->clipId, false);
+    else {
+        editorSession_.focusTimeline();
+        synchronizePlaybackDurationForFocus(false);
+    }
+
+    // Focus first so the seek is clamped against timeline duration rather
+    // than the previously focused source asset's duration.
+    editorSession_.seekTimeline(frame);
 }
 
 bool MainFrame::canSplitSelectedTimelineClip() const

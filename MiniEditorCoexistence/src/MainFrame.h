@@ -80,6 +80,8 @@ private:
     void synchronizePlaybackDurationForFocus(bool resetToBeginning);
     void importMediaFile();
     void removeMediaAsset(int assetIndex, int assetId);
+    void focusTimelineClip(int clipId, bool resetToBeginning);
+    void focusTimelineFrame(int frame);
     bool canSplitSelectedTimelineClip() const;
     void splitSelectedTimelineClip();
 

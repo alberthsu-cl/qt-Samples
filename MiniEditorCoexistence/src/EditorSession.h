@@ -38,6 +38,7 @@ public:
     int splitTimelineClip(int clipId, int splitFrame, MediaKind mediaKind);
     bool removeTimelineClip(int clipId);
     void selectTimelineClip(int clipId);
+    void selectTimelineClip(int clipId, int assetIndex);
     void focusTimeline();
     void addMediaAsset();
     bool removeMediaAsset(int assetIndex);

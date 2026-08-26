@@ -297,11 +297,13 @@ properties are copied, total timeline duration is unchanged, and the complete
 operation—including selection of the right piece—is one Undo/Redo command.
 
 Timeline focus is modeled separately from timeline clip selection. Clicking
-an empty track area or the ruler clears the clip ID but keeps Timeline Preview
-active, clears the media-library highlight, and resets playback to frame zero.
-Deleting the focused clip produces the same state. Playback therefore resolves
-the sequence from its beginning (including a deliberate blank gap) instead of
-falling back to the first source-library asset.
+an empty track area clears the clip ID but keeps Timeline Preview active,
+clears the media-library highlight, and resets playback to frame zero. Deleting
+the focused clip produces the same state. Clicking the ruler instead moves the
+timeline head and focuses the V1 clip at that frame, or the A1 clip when V1 is
+empty. A gap leaves the timeline focused without a clip. Selecting a clip no
+longer resets the head, so the same ruler position can immediately enable
+Split. Playback therefore never falls back to the first source-library asset.
 
 `TimelinePlaybackResolver` completes the source-aware path independently of the
 UI frameworks. For each playhead position it resolves the active V1 and A1

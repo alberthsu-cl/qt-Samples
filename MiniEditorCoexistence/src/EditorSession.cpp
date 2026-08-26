@@ -338,8 +338,15 @@ int EditorSession::splitTimelineClip(int clipId, int splitFrame,
 
 void EditorSession::selectTimelineClip(int clipId)
 {
+    selectTimelineClip(clipId, selectedAssetIndex_);
+}
+
+void EditorSession::selectTimelineClip(int clipId, int assetIndex)
+{
     if (timelineModel_.findClip(clipId) == nullptr)
         return;
+    selectedAssetIndex_ = std::clamp(assetIndex, 0,
+                                     static_cast<int>(clipSettings_.size()) - 1);
     selectedTimelineClipId_ = clipId;
     isTimelineFocused_ = true;
     notifyStateChanged(EditorChange::Selection);

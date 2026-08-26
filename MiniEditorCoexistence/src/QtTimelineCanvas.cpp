@@ -330,9 +330,6 @@ void QtTimelineCanvas::mousePressEvent(QMouseEvent *event)
     const QPoint point = event->position().toPoint();
     const TimelineGeometry timelineGeometry = geometry();
     if (point.y() < TimelineGeometry::kRulerHeight && seekHandler_) {
-        selectedClipId_ = 0;
-        if (timelineFocusRequestedHandler_)
-            timelineFocusRequestedHandler_();
         seekHandler_(timelineGeometry.rulerFrameAtX(point.x()));
     } else if (event->button() == Qt::LeftButton) {
         const TimelineClipHit hit = timelineGeometry.hitTestClip(
