@@ -18,7 +18,11 @@ option(MINI_EDITOR_USE_QT
        ON)
 
 if(MINI_EDITOR_USE_QT)
-    find_package(Qt6 REQUIRED COMPONENTS Widgets)
+    if(BUILD_TESTING)
+        find_package(Qt6 REQUIRED COMPONENTS Widgets Test)
+    else()
+        find_package(Qt6 REQUIRED COMPONENTS Widgets)
+    endif()
 endif()
 
 add_executable(MiniEditorCoexistence WIN32
@@ -243,6 +247,49 @@ if(MINI_EDITOR_USE_QT)
                 "$<TARGET_FILE:MiniEditorCoexistence>"
         COMMENT "Deploying Qt runtime files beside MiniEditorCoexistence"
     )
+
+    if(BUILD_TESTING)
+        add_executable(MiniEditorQtWidgetTests
+            tests/MiniEditorQtWidgetTests.cpp
+            src/ProjectState.h
+            src/MediaKind.h
+            src/MediaLibrary.h
+            src/MediaLibrary.cpp
+            src/MediaAssetModel.h
+            src/MediaAssetModel.cpp
+            src/QtMediaLibraryPanel.h
+            src/QtMediaLibraryPanel.cpp
+            src/QtPropertiesPanel.h
+            src/QtPropertiesPanel.cpp
+            src/QtTransportPanel.h
+            src/QtTransportPanel.cpp
+        )
+        target_include_directories(MiniEditorQtWidgetTests PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/src"
+        )
+        target_link_libraries(MiniEditorQtWidgetTests PRIVATE
+            Qt6::Widgets
+            Qt6::Test
+        )
+        set_target_properties(MiniEditorQtWidgetTests PROPERTIES AUTOMOC ON)
+
+        add_test(NAME MiniEditorQtWidgetTests
+                 COMMAND $<TARGET_FILE:MiniEditorQtWidgetTests>)
+        set_tests_properties(MiniEditorQtWidgetTests PROPERTIES
+            ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        )
+        add_dependencies(check MiniEditorQtWidgetTests)
+        source_group("Tests" FILES tests/MiniEditorQtWidgetTests.cpp)
+
+        add_custom_command(TARGET MiniEditorQtWidgetTests POST_BUILD
+            COMMAND "$<TARGET_FILE_DIR:Qt6::Core>/windeployqt.exe"
+                    "$<$<CONFIG:Debug>:--debug>"
+                    "$<$<NOT:$<CONFIG:Debug>>:--release>"
+                    --include-plugins qoffscreen
+                    "$<TARGET_FILE:MiniEditorQtWidgetTests>"
+            COMMENT "Deploying the offscreen Qt runtime for widget tests"
+        )
+    endif()
 else()
     # These are complete MFC fallbacks. They intentionally stay out of the
     # Qt-enabled target, where their corresponding Qt panels are used instead.

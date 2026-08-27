@@ -34,6 +34,13 @@ QtTransportPanel::QtTransportPanel(QWidget *parent)
     , positionSlider_(new QSlider(Qt::Horizontal, this))
     , timecodeLabel_(new QLabel(this))
 {
+    stepBackwardButton_->setObjectName(QStringLiteral("stepBackwardButton"));
+    playPauseButton_->setObjectName(QStringLiteral("playPauseButton"));
+    stepForwardButton_->setObjectName(QStringLiteral("stepForwardButton"));
+    stopButton_->setObjectName(QStringLiteral("stopButton"));
+    positionSlider_->setObjectName(QStringLiteral("positionSlider"));
+    timecodeLabel_->setObjectName(QStringLiteral("timecodeLabel"));
+
     setStyleSheet(QStringLiteral(
         "QtTransportPanel { background: #1b1d22; }"
         "QToolButton { background: #30343d; color: #e6e8ed; "

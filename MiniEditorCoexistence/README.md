@@ -461,3 +461,16 @@ it.
 
 The Visual Studio **Desktop development with C++** workload must include
 **C++ MFC for latest v143 build tools**.
+
+## Headless Qt widget regression tests
+
+`MiniEditorQtWidgetTests` uses Qt Test with `QT_QPA_PLATFORM=offscreen` to
+exercise migrated panels without opening the MFC application. The tests cover
+model-to-view refresh blocking, semantic Properties edits, Transport commands
+and timecode, and Media Library selection/import/removal requests. Stable
+widget object names make these controls testable without exposing private
+implementation pointers.
+
+Build the `check` target to build the application and both test executables,
+then run them through CTest. The test target deploys the Qt offscreen platform
+plugin beside the executable automatically.

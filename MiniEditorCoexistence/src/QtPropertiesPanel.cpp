@@ -37,6 +37,12 @@ QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
         "QSpinBox, QComboBox { background: #31353e; color: #e6e8ed; "
         "border: 1px solid #4a4f5a; padding: 4px; }"));
 
+    opacitySlider_->setObjectName(QStringLiteral("opacitySlider"));
+    opacitySpinBox_->setObjectName(QStringLiteral("opacitySpinBox"));
+    scaleSlider_->setObjectName(QStringLiteral("scaleSlider"));
+    scaleSpinBox_->setObjectName(QStringLiteral("scaleSpinBox"));
+    positionComboBox_->setObjectName(QStringLiteral("positionComboBox"));
+
     opacitySlider_->setRange(0, 100);
     opacitySpinBox_->setRange(0, 100);
     opacitySpinBox_->setSuffix(QStringLiteral(" %"));

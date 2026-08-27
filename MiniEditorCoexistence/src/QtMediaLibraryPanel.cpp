@@ -129,10 +129,13 @@ QtMediaLibraryPanel::QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidg
 
     auto *importButton = new QPushButton(QStringLiteral("Import"), this);
     auto *removeButton = new QPushButton(QStringLiteral("Remove"), this);
+    importButton->setObjectName(QStringLiteral("importButton"));
+    removeButton->setObjectName(QStringLiteral("removeButton"));
     headerLayout->addWidget(importButton);
     headerLayout->addWidget(removeButton);
 
     assetView_->setModel(assetModel_);
+    assetView_->setObjectName(QStringLiteral("assetView"));
     assetView_->setItemDelegate(new MediaAssetDelegate(assetView_));
     assetView_->setViewMode(QListView::IconMode);
     assetView_->setResizeMode(QListView::Adjust);
