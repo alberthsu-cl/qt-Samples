@@ -30,6 +30,7 @@ public:
     using TimelineClipDeletedHandler = std::function<void(int clipId)>;
     using TimelineClipSelectedHandler = std::function<void(int clipId)>;
     using TimelineFocusRequestedHandler = std::function<void()>;
+    using AudioTrackVisibilityHandler = std::function<void(bool isVisible)>;
 
     QtTimelineCanvasHost();
     ~QtTimelineCanvasHost();
@@ -51,6 +52,7 @@ public:
     void setTimelineClipDeletedHandler(TimelineClipDeletedHandler handler);
     void setTimelineClipSelectedHandler(TimelineClipSelectedHandler handler);
     void setTimelineFocusRequestedHandler(TimelineFocusRequestedHandler handler);
+    void setAudioTrackVisibilityHandler(AudioTrackVisibilityHandler handler);
 
 private:
     std::unique_ptr<QScrollArea> scrollArea_;

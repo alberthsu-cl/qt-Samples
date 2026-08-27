@@ -30,6 +30,6 @@ private:
     QLabel *zoomLabel_ = nullptr;
     QToolButton *fitButton_ = nullptr;
     QToolButton *splitButton_ = nullptr;
-    QToolButton *audioTrackButton_ = nullptr;
     QToolButton *rippleButton_ = nullptr;
+    bool isAudioTrackVisible_ = true;
 };

@@ -13,6 +13,8 @@
 #include <vector>
 
 class QMimeData;
+class QResizeEvent;
+class QToolButton;
 
 class QtTimelineCanvas final : public QWidget
 {
@@ -27,6 +29,7 @@ public:
     using TimelineClipDeletedHandler = std::function<void(int clipId)>;
     using TimelineClipSelectedHandler = std::function<void(int clipId)>;
     using TimelineFocusRequestedHandler = std::function<void()>;
+    using AudioTrackVisibilityHandler = std::function<void(bool isVisible)>;
 
     explicit QtTimelineCanvas(QWidget *parent = nullptr);
 
@@ -45,6 +48,7 @@ public:
     void setTimelineClipDeletedHandler(TimelineClipDeletedHandler handler);
     void setTimelineClipSelectedHandler(TimelineClipSelectedHandler handler);
     void setTimelineFocusRequestedHandler(TimelineFocusRequestedHandler handler);
+    void setAudioTrackVisibilityHandler(AudioTrackVisibilityHandler handler);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -56,12 +60,15 @@ protected:
     void dragMoveEvent(QDragMoveEvent *event) override;
     void dragLeaveEvent(QDragLeaveEvent *event) override;
     void dropEvent(QDropEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private:
     TimelineGeometry geometry() const;
     bool isEditingClip() const;
     void updateDragPreview(int timelineX);
     void updateMouseCursor(const QPoint &point);
+    void layoutTrackHeaderControls();
+    void updateAudioTrackVisibilityButton();
     bool updateMediaDropPreview(const QMimeData *mimeData, int timelineX);
     void clearMediaDropPreview();
 
@@ -77,6 +84,8 @@ private:
     TimelineClipDeletedHandler timelineClipDeletedHandler_;
     TimelineClipSelectedHandler timelineClipSelectedHandler_;
     TimelineFocusRequestedHandler timelineFocusRequestedHandler_;
+    AudioTrackVisibilityHandler audioTrackVisibilityHandler_;
+    QToolButton *audioTrackVisibilityButton_ = nullptr;
     std::vector<TimelineClip> timelineClips_;
     int timelineDurationFrames_ = 600;
     TimelineClipHitRegion dragRegion_ = TimelineClipHitRegion::None;

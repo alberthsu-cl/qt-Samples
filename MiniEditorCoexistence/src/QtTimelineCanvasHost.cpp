@@ -139,3 +139,10 @@ void QtTimelineCanvasHost::setTimelineFocusRequestedHandler(
     if (canvas_)
         canvas_->setTimelineFocusRequestedHandler(std::move(handler));
 }
+
+void QtTimelineCanvasHost::setAudioTrackVisibilityHandler(
+    AudioTrackVisibilityHandler handler)
+{
+    if (canvas_)
+        canvas_->setAudioTrackVisibilityHandler(std::move(handler));
+}

@@ -8,6 +8,7 @@
 #include "TimelineGeometry.h"
 #include "TimelineEditingController.h"
 #include "PreviewStateResolver.h"
+#include "ProjectDocumentService.h"
 #include "WorkspaceLayout.h"
 
 #include <exception>
@@ -593,6 +594,56 @@ void previewStateResolverKeepsPreviewPolicyFrameworkNeutral()
     require(preview.mode == PreviewMode::Timeline && !preview.hasMedia
                 && !preview.hasAudio && preview.timelineFrame == 50,
             "An unfocused timeline gap must resolve to an empty preview without fallback media.");
+}
+
+void projectDocumentServiceMaintainsProjectAndMediaConsistency()
+{
+    MediaLibrary library;
+    library.addKnownAsset(L"D:/media/default-video.mp4", MediaKind::Video, 300, 0x5078A0);
+    library.addKnownAsset(L"D:/media/default-audio.wav", MediaKind::Audio, 300, 0x2878B4);
+
+    EditorSession session(2);
+    ProjectDocumentService documents(session, library);
+    documents.setDefaultMediaLibrary(library);
+
+    require(!documents.importMedia(L"D:/media/unsupported.txt").succeeded()
+                && library.assets().size() == 2,
+            "Unsupported import must leave the document media catalog unchanged.");
+    require(documents.importMedia(L"D:/media/imported.mp4").succeeded()
+                && library.assets().size() == 3
+                && session.projectSnapshot().clipSettings.size() == 3,
+            "Media import must add matching library and source-setting rows.");
+
+    const int importedAssetId = library.assets().back().id;
+    const int clipId = session.addTimelineClip(
+        importedAssetId, TimelineTrackType::Video, 0, 120);
+    require(documents.removeMedia(2, importedAssetId).error
+                == ProjectDocumentError::MediaUsedByTimeline,
+            "The document service must protect media still referenced by a timeline clip.");
+    require(session.removeTimelineClip(clipId)
+                && documents.removeMedia(2, importedAssetId).succeeded()
+                && library.assets().size() == 2
+                && session.projectSnapshot().clipSettings.size() == 2,
+            "Removing an unused asset must keep the library and session source rows aligned.");
+
+    require(documents.importMedia(L"D:/media/saved.mp4").succeeded(),
+            "The service save test requires one imported asset.");
+    const std::filesystem::path testPath = std::filesystem::temp_directory_path()
+        / "mini_editor_document_service_test.mini-editor.json";
+    require(documents.save(testPath).succeeded() && !session.isProjectDirty(),
+            "Saving through the service must serialize media and clear the dirty state.");
+
+    require(documents.createNewProject().succeeded()
+                && library.assets().size() == 2
+                && session.projectSnapshot().clipSettings.size() == 2,
+            "New Project must restore both the default catalog and default editor state.");
+    require(documents.load(testPath).succeeded()
+                && library.assets().size() == 3
+                && session.projectSnapshot().clipSettings.size() == 3,
+            "Loading through the service must restore media and matching editor state.");
+
+    std::error_code removeError;
+    std::filesystem::remove(testPath, removeError);
 }
 
 void internalTimelineClipboardSupportsCopyCutPasteAndDuplicate()
@@ -1184,6 +1235,7 @@ int main()
         timelineFocusDoesNotRequireASelectedClip();
         timelineEditingControllerCoordinatesFocusAndSplitPolicy();
         previewStateResolverKeepsPreviewPolicyFrameworkNeutral();
+        projectDocumentServiceMaintainsProjectAndMediaConsistency();
         internalTimelineClipboardSupportsCopyCutPasteAndDuplicate();
         focusedTimelineClipOwnsIndependentPlacementSettings();
         playbackStopsAtFocusedPreviewDuration();

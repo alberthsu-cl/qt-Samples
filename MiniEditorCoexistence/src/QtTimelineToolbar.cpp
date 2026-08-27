@@ -1,5 +1,7 @@
 #include "QtTimelineToolbar.h"
 
+#include "TimelineGeometry.h"
+
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QSignalBlocker>
@@ -12,7 +14,6 @@ QtTimelineToolbar::QtTimelineToolbar(QWidget *parent)
     , zoomLabel_(new QLabel(this))
     , fitButton_(new QToolButton(this))
     , splitButton_(new QToolButton(this))
-    , audioTrackButton_(new QToolButton(this))
     , rippleButton_(new QToolButton(this))
 {
     setStyleSheet(QStringLiteral(
@@ -32,37 +33,32 @@ QtTimelineToolbar::QtTimelineToolbar(QWidget *parent)
     splitButton_->setToolTip(QStringLiteral(
         "Split the selected clip at the timeline cursor (Ctrl+B)"));
     splitButton_->setEnabled(false);
-    audioTrackButton_->setText(QStringLiteral("Audio"));
-    audioTrackButton_->setToolTip(QStringLiteral("Show or hide the audio track"));
-    audioTrackButton_->setCheckable(true);
     rippleButton_->setText(QStringLiteral("Ripple"));
     rippleButton_->setToolTip(QStringLiteral(
         "Shift later clips on the same track during insert, trim, and delete"));
     rippleButton_->setCheckable(true);
 
     auto *layout = new QHBoxLayout(this);
-    layout->setContentsMargins(10, 6, 10, 6);
+    layout->setContentsMargins(0, 6, 10, 6);
     layout->setSpacing(8);
-    layout->addWidget(new QLabel(QStringLiteral("Timeline"), this));
-    layout->addStretch();
+    auto *timelineLabel = new QLabel(QStringLiteral("Timeline"), this);
+    timelineLabel->setFixedWidth(TimelineGeometry::kTimelineLeft - layout->spacing());
+    timelineLabel->setAlignment(Qt::AlignCenter);
+    layout->addWidget(timelineLabel);
     layout->addWidget(splitButton_);
     layout->addWidget(rippleButton_);
-    layout->addWidget(audioTrackButton_);
+    layout->addStretch();
     layout->addWidget(fitButton_);
     layout->addWidget(new QLabel(QStringLiteral("Zoom"), this));
     layout->addWidget(zoomSlider_);
     layout->addWidget(zoomLabel_);
 
     connect(zoomSlider_, &QSlider::valueChanged, this, [this](int zoomPercent) {
-        emit viewStateEdited(zoomPercent, audioTrackButton_->isChecked(),
-                             rippleButton_->isChecked());
-    });
-    connect(audioTrackButton_, &QToolButton::toggled, this, [this](bool isVisible) {
-        emit viewStateEdited(zoomSlider_->value(), isVisible,
+        emit viewStateEdited(zoomPercent, isAudioTrackVisible_,
                              rippleButton_->isChecked());
     });
     connect(rippleButton_, &QToolButton::toggled, this, [this](bool isEnabled) {
-        emit viewStateEdited(zoomSlider_->value(), audioTrackButton_->isChecked(),
+        emit viewStateEdited(zoomSlider_->value(), isAudioTrackVisible_,
                              isEnabled);
     });
     connect(fitButton_, &QToolButton::clicked, this, &QtTimelineToolbar::fitTimelineRequested);
@@ -80,10 +76,9 @@ void QtTimelineToolbar::setSplitEnabled(bool isEnabled)
 void QtTimelineToolbar::setViewState(const TimelineViewState &state)
 {
     const QSignalBlocker zoomBlocker(zoomSlider_);
-    const QSignalBlocker audioBlocker(audioTrackButton_);
     const QSignalBlocker rippleBlocker(rippleButton_);
     zoomSlider_->setValue(state.zoomPercent);
-    audioTrackButton_->setChecked(state.isAudioTrackVisible);
+    isAudioTrackVisible_ = state.isAudioTrackVisible;
     rippleButton_->setChecked(state.isRippleEditingEnabled);
     zoomLabel_->setText(QStringLiteral("%1%").arg(state.zoomPercent));
 }

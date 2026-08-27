@@ -34,7 +34,8 @@ CRect toClientRect(const WorkspaceRect &rect)
 
 MainFrame::MainFrame()
     : editorSession_(demoAssets().size()),
-      timelineController_(editorSession_, mediaLibrary_)
+      timelineController_(editorSession_, mediaLibrary_),
+      documentService_(editorSession_, mediaLibrary_)
 {
     // The sample starts with familiar built-in assets, but the Qt media
     // library now reads its display data from MediaLibrary rather than from
@@ -47,7 +48,7 @@ MainFrame::MainFrame()
             | static_cast<std::uint32_t>(GetBValue(asset.thumbnailColor));
         mediaLibrary_.addKnownAsset(asset.name, kind, asset.timelineDurationFrames, color);
     }
-    builtInMediaAssetCount_ = static_cast<int>(mediaLibrary_.assets().size());
+    documentService_.setDefaultMediaLibrary(mediaLibrary_);
 }
 
 MainFrame::~MainFrame()
@@ -140,6 +141,11 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         [this](int clipId) { timelineController_.focusClip(clipId, false); });
     timelineCanvasHost_.setTimelineFocusRequestedHandler(
         [this] { timelineController_.focusEmptyTimeline(); });
+    timelineCanvasHost_.setAudioTrackVisibilityHandler([this](bool isVisible) {
+        TimelineViewState state = editorSession_.timelineViewState();
+        state.isAudioTrackVisible = isVisible;
+        editorSession_.updateTimelineViewState(state);
+    });
     if (!mediaLibraryHost_.create(GetSafeHwnd(), mediaLibrary_))
         return -1;
     if (!propertiesHost_.create(GetSafeHwnd()))
@@ -334,7 +340,14 @@ void MainFrame::OnFileNew()
     if (!confirmSaveBeforeDestructiveAction())
         return;
 
-    editorSession_.replaceProject(EditorProject::createDefault(demoAssets().size()));
+    const ProjectDocumentResult result = documentService_.createNewProject();
+    if (!result.succeeded()) {
+        AfxMessageBox(CString(result.message.c_str()), MB_ICONERROR | MB_OK);
+        return;
+    }
+#if MINI_EDITOR_USE_QT
+    mediaLibraryHost_.refreshAssets();
+#endif
     projectFilePath_.clear();
     updateWindowTitle();
 }
@@ -493,8 +506,8 @@ void MainFrame::refreshEditorViews(EditorChange changes)
 #endif
 
     if (selectionChanged) {
-        previewCanvas_.setSelectedAssetIndex(std::min(selectedAssetIndex,
-                                                       builtInMediaAssetCount_ - 1));
+        previewCanvas_.setSelectedAssetIndex(std::min(
+            selectedAssetIndex, documentService_.protectedMediaAssetCount() - 1));
 #if MINI_EDITOR_USE_QT
         timelineCanvasHost_.setSelectedAssetIndex(selectedAssetIndex);
 #else
@@ -611,13 +624,12 @@ void MainFrame::importMediaFile()
     if (dialog.DoModal() != IDOK)
         return;
 
-    if (!mediaLibrary_.addFile(static_cast<LPCTSTR>(dialog.GetPathName()))) {
-        AfxMessageBox(_T("That file type is not supported by this sample."),
-                      MB_ICONWARNING | MB_OK);
+    const ProjectDocumentResult result = documentService_.importMedia(
+        std::filesystem::path(static_cast<LPCTSTR>(dialog.GetPathName())));
+    if (!result.succeeded()) {
+        AfxMessageBox(CString(result.message.c_str()), MB_ICONWARNING | MB_OK);
         return;
     }
-
-    editorSession_.addMediaAsset();
 #if MINI_EDITOR_USE_QT
     mediaLibraryHost_.refreshAssets();
 #endif
@@ -625,25 +637,17 @@ void MainFrame::importMediaFile()
 
 void MainFrame::removeMediaAsset(int assetIndex, int assetId)
 {
-    if (assetIndex < builtInMediaAssetCount_) {
-        AfxMessageBox(_T("Built-in sample media cannot be removed."), MB_ICONINFORMATION | MB_OK);
-        return;
-    }
-
-    const bool usedByTimeline = std::any_of(editorSession_.timelineModel().clips().begin(),
-                                            editorSession_.timelineModel().clips().end(),
-        [assetId](const TimelineClip &clip) { return clip.mediaAssetId == assetId; });
-    if (usedByTimeline) {
-        AfxMessageBox(_T("Remove this asset's timeline clips before removing it from the library."),
-                      MB_ICONWARNING | MB_OK);
-        return;
-    }
-
-    if (mediaLibrary_.removeAsset(assetId) && editorSession_.removeMediaAsset(assetIndex)) {
+    const ProjectDocumentResult result = documentService_.removeMedia(assetIndex, assetId);
+    if (result.succeeded()) {
 #if MINI_EDITOR_USE_QT
         mediaLibraryHost_.refreshAssets();
 #endif
+        return;
     }
+
+    const UINT icon = result.error == ProjectDocumentError::ProtectedMedia
+        ? MB_ICONINFORMATION : MB_ICONWARNING;
+    AfxMessageBox(CString(result.message.c_str()), icon | MB_OK);
 }
 
 void MainFrame::splitSelectedTimelineClip()
@@ -654,6 +658,7 @@ void MainFrame::splitSelectedTimelineClip()
 
 bool MainFrame::saveProject(bool chooseFilePath)
 {
+    std::filesystem::path path = projectFilePath_;
     if (chooseFilePath || projectFilePath_.empty()) {
         CFileDialog dialog(FALSE, L"mini-editor.json", L"Untitled.mini-editor.json",
                            OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT,
@@ -661,44 +666,30 @@ bool MainFrame::saveProject(bool chooseFilePath)
         if (dialog.DoModal() != IDOK)
             return false;
 
-        projectFilePath_ = std::filesystem::path(static_cast<LPCTSTR>(dialog.GetPathName()));
+        path = std::filesystem::path(static_cast<LPCTSTR>(dialog.GetPathName()));
     }
 
-    EditorProject project = editorSession_.projectSnapshot();
-    project.mediaAssets = mediaLibrary_.assets();
-    std::wstring errorMessage;
-    if (ProjectSerializer::save(projectFilePath_, project, &errorMessage)) {
-        editorSession_.markProjectSaved();
+    const ProjectDocumentResult result = documentService_.save(path);
+    if (result.succeeded()) {
+        projectFilePath_ = std::move(path);
         updateWindowTitle();
         return true;
     }
 
-    CString message(errorMessage.c_str());
-    AfxMessageBox(message, MB_ICONERROR | MB_OK);
+    AfxMessageBox(CString(result.message.c_str()), MB_ICONERROR | MB_OK);
     return false;
 }
 
 bool MainFrame::openProject(const std::filesystem::path &path)
 {
-    std::wstring errorMessage;
-    const auto project = ProjectSerializer::load(path, demoAssets().size(), &errorMessage);
-    if (!project) {
-        CString message(errorMessage.c_str());
-        AfxMessageBox(message, MB_ICONERROR | MB_OK);
+    const ProjectDocumentResult result = documentService_.load(path);
+    if (!result.succeeded()) {
+        AfxMessageBox(CString(result.message.c_str()), MB_ICONERROR | MB_OK);
         return false;
     }
-
-    if (!project->mediaAssets.empty()) {
-        if (!mediaLibrary_.replaceAssets(project->mediaAssets)) {
-            AfxMessageBox(_T("The project media library is invalid."), MB_ICONERROR | MB_OK);
-            return false;
-        }
-        builtInMediaAssetCount_ = std::min(6, static_cast<int>(mediaLibrary_.assets().size()));
 #if MINI_EDITOR_USE_QT
-        mediaLibraryHost_.refreshAssets();
+    mediaLibraryHost_.refreshAssets();
 #endif
-    }
-    editorSession_.replaceProject(*project);
     projectFilePath_ = path;
     updateWindowTitle();
     return true;

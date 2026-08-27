@@ -112,7 +112,7 @@ The custom timeline canvas remains MFC, while the standard timeline controls
 above it are now Qt:
 
 ```text
-Qt Timeline toolbar (zoom, fit, audio visibility)
+Qt Timeline toolbar (zoom, fit, ripple editing)
 MFC Timeline canvas (ruler, tracks, clip, playhead)
 ```
 
@@ -253,6 +253,11 @@ The Qt-enabled build now uses `QtTimelineCanvas`, a QWidget that paints the
 ruler, clip, audio track, and playhead with QPainter. It handles ruler seeking
 and clip dragging through plain C++ callbacks. `MainFrame` still owns the
 native layout and `EditorSession` still owns all state and Undo/Redo history.
+
+Audio-track visibility belongs to the `A1` lane itself: its header contains a
+small open/closed-eye toggle. The button updates the framework-neutral
+`TimelineViewState`; hiding A1 suppresses audio-clip drawing, selection, and
+audio drops, without changing the audio media or playback model.
 
 The pure-MFC configuration retains `MfcTimelineCanvas`, making the two
 implementations easy to compare while studying the migration boundary.
@@ -406,6 +411,16 @@ stopped focused-clip preview behavior. `MfcPreviewCanvas` remains only the MFC
 renderer of the resulting `PreviewState`; a future Qt preview can reuse this
 same resolver and state contract. Core tests cover source video, still images,
 stopped focused clips, paused timeline playback, and timeline gaps.
+
+## Framework-neutral project documents
+
+`ProjectDocumentService` coordinates `EditorSession`, `MediaLibrary`, and
+`ProjectSerializer` without MFC or Qt dependencies. It provides New, Save,
+Load, Import, and Remove operations as plain `ProjectDocumentResult` values.
+The UI still owns its native file dialogs, confirmation prompts, and error
+messages. New Project now restores both the default sample catalog and default
+editing state, while Remove prevents an asset from being deleted while a
+timeline placement still references it.
 
 ## Phase 12 — Flicker-free MFC playback painting
 

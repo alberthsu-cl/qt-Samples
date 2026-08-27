@@ -3,7 +3,13 @@
 
 #include <QMouseEvent>
 #include <QMimeData>
+#include <QIcon>
 #include <QPainter>
+#include <QPainterPath>
+#include <QPixmap>
+#include <QResizeEvent>
+#include <QSignalBlocker>
+#include <QToolButton>
 #include <QDragEnterEvent>
 #include <QDragLeaveEvent>
 #include <QDragMoveEvent>
@@ -41,6 +47,35 @@ int snapToleranceFrames(const TimelineViewState &viewState)
                            / zoomPercent);
 }
 
+QIcon audioTrackEyeIcon(bool isVisible)
+{
+    QPixmap pixmap(20, 20);
+    pixmap.fill(Qt::transparent);
+
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setPen(QPen(QColor(215, 223, 235), 1.7));
+
+    if (isVisible) {
+        QPainterPath eyeOutline;
+        eyeOutline.moveTo(2, 10);
+        eyeOutline.cubicTo(5, 5, 8, 3.5, 10, 3.5);
+        eyeOutline.cubicTo(12, 3.5, 15, 5, 18, 10);
+        eyeOutline.cubicTo(15, 15, 12, 16.5, 10, 16.5);
+        eyeOutline.cubicTo(8, 16.5, 5, 15, 2, 10);
+        painter.drawPath(eyeOutline);
+        painter.setBrush(QColor(215, 223, 235));
+        painter.drawEllipse(QPointF(10, 10), 2.3, 2.3);
+    } else {
+        // A curved lid plus a diagonal stroke keeps the closed-eye state
+        // readable even in the compact A1 header.
+        painter.drawArc(QRectF(3, 6, 14, 10), 0, 180 * 16);
+        painter.drawLine(QPointF(3, 4), QPointF(17, 16));
+    }
+
+    return QIcon(pixmap);
+}
+
 } // namespace
 
 QtTimelineCanvas::QtTimelineCanvas(QWidget *parent)
@@ -51,6 +86,23 @@ QtTimelineCanvas::QtTimelineCanvas(QWidget *parent)
     setFocusPolicy(Qt::StrongFocus);
     setMinimumHeight(TimelineGeometry::kCanvasHeight);
     setAutoFillBackground(false);
+
+    audioTrackVisibilityButton_ = new QToolButton(this);
+    audioTrackVisibilityButton_->setObjectName(QStringLiteral("audioTrackVisibilityButton"));
+    audioTrackVisibilityButton_->setAutoRaise(true);
+    audioTrackVisibilityButton_->setCheckable(true);
+    audioTrackVisibilityButton_->setFixedSize(26, 26);
+    audioTrackVisibilityButton_->setStyleSheet(QStringLiteral(
+        "QToolButton#audioTrackVisibilityButton { border: 0; background: transparent; }"
+        "QToolButton#audioTrackVisibilityButton:hover { background: #3c5572; border-radius: 3px; }"
+        "QToolButton#audioTrackVisibilityButton:pressed { background: #2a88eb; }"));
+    connect(audioTrackVisibilityButton_, &QToolButton::toggled, this,
+            [this](bool isVisible) {
+                updateAudioTrackVisibilityButton();
+                if (audioTrackVisibilityHandler_)
+                    audioTrackVisibilityHandler_(isVisible);
+            });
+    updateAudioTrackVisibilityButton();
 }
 
 void QtTimelineCanvas::setSelectedAssetIndex(int selectedAssetIndex)
@@ -84,6 +136,7 @@ void QtTimelineCanvas::setPlaybackState(const PlaybackState &state)
 void QtTimelineCanvas::setViewState(const TimelineViewState &state)
 {
     viewState_ = state;
+    updateAudioTrackVisibilityButton();
     setTimelineDuration(timelineDurationFrames_);
     update();
 }
@@ -144,6 +197,12 @@ void QtTimelineCanvas::setTimelineFocusRequestedHandler(
     timelineFocusRequestedHandler_ = std::move(handler);
 }
 
+void QtTimelineCanvas::setAudioTrackVisibilityHandler(
+    AudioTrackVisibilityHandler handler)
+{
+    audioTrackVisibilityHandler_ = std::move(handler);
+}
+
 void QtTimelineCanvas::paintEvent(QPaintEvent *)
 {
     const TimelineGeometry timelineGeometry = geometry();
@@ -157,7 +216,8 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
     painter.fillRect(0, 0, width(), TimelineGeometry::kRulerHeight,
                      QColor(28, 30, 35));
     painter.fillRect(videoTrackRect, QColor(43, 46, 54));
-    painter.fillRect(audioTrackRect, QColor(38, 41, 48));
+    painter.fillRect(audioTrackRect, viewState_.isAudioTrackVisible
+        ? QColor(38, 41, 48) : QColor(34, 36, 42));
 
     const int tickFrames = viewState_.zoomPercent < 75 ? 120 : 60;
     painter.setPen(QColor(190, 195, 205));
@@ -189,6 +249,10 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
                            rippleEditedState, rippleEditFrameDelta](
                               const TimelineClip &sourceClip) {
         TimelineClip clip = sourceClip;
+        if (!viewState_.isAudioTrackVisible
+            && clip.trackType == TimelineTrackType::Audio) {
+            return;
+        }
         if (viewState_.isRippleEditingEnabled && isMediaDropPreviewVisible_
             && clip.trackType == mediaDropPresentation_.trackType
             && clip.state.startFrame >= mediaDropStartFrame_) {
@@ -284,13 +348,6 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
                          Qt::AlignCenter, QStringLiteral("Drag media here to begin editing"));
     }
 
-    if (!viewState_.isAudioTrackVisible)
-        painter.drawText(QRect(TimelineGeometry::kTimelineLeft + 12,
-                               audioTrackRect.top(),
-                               width() - TimelineGeometry::kTimelineLeft - 24,
-                               audioTrackRect.height()),
-                         Qt::AlignVCenter, QStringLiteral("Audio track hidden"));
-
     if (isMediaDropPreviewVisible_) {
         const TimelineClipState previewState{
             mediaDropStartFrame_, mediaDropPresentation_.durationFrames
@@ -332,9 +389,13 @@ void QtTimelineCanvas::mousePressEvent(QMouseEvent *event)
     if (point.y() < TimelineGeometry::kRulerHeight && seekHandler_) {
         seekHandler_(timelineGeometry.rulerFrameAtX(point.x()));
     } else if (event->button() == Qt::LeftButton) {
-        const TimelineClipHit hit = timelineGeometry.hitTestClip(
+        TimelineClipHit hit = timelineGeometry.hitTestClip(
             timelineClips_, { point.x(), point.y() },
             selectedClipId_, kTrimHandleWidth);
+        if (!viewState_.isAudioTrackVisible && hit.clip != nullptr
+            && hit.clip->trackType == TimelineTrackType::Audio) {
+            hit = {};
+        }
         if (hit.clip == nullptr) {
             selectedClipId_ = 0;
             if (timelineFocusRequestedHandler_)
@@ -479,6 +540,10 @@ bool QtTimelineCanvas::updateMediaDropPreview(const QMimeData *mimeData, int tim
         assetPresentationResolver_(mediaAssetId);
     if (!presentation || presentation->durationFrames <= 0)
         return false;
+    if (!viewState_.isAudioTrackVisible
+        && presentation->trackType == TimelineTrackType::Audio) {
+        return false;
+    }
 
     isMediaDropPreviewVisible_ = true;
     mediaDropAssetId_ = mediaAssetId;
@@ -510,6 +575,12 @@ void QtTimelineCanvas::clearMediaDropPreview()
     mediaDropAssetId_ = 0;
     setMinimumWidth(geometry().contentWidth());
     update();
+}
+
+void QtTimelineCanvas::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    layoutTrackHeaderControls();
 }
 
 TimelineGeometry QtTimelineCanvas::geometry() const
@@ -602,8 +673,12 @@ void QtTimelineCanvas::updateDragPreview(int timelineX)
 
 void QtTimelineCanvas::updateMouseCursor(const QPoint &point)
 {
-    const TimelineClipHit hit = geometry().hitTestClip(
+    TimelineClipHit hit = geometry().hitTestClip(
         timelineClips_, { point.x(), point.y() }, selectedClipId_, kTrimHandleWidth);
+    if (!viewState_.isAudioTrackVisible && hit.clip != nullptr
+        && hit.clip->trackType == TimelineTrackType::Audio) {
+        hit = {};
+    }
     if (hit.region == TimelineClipHitRegion::TrimStart
         || hit.region == TimelineClipHitRegion::TrimEnd) {
         setCursor(Qt::SizeHorCursor);
@@ -612,4 +687,31 @@ void QtTimelineCanvas::updateMouseCursor(const QPoint &point)
     } else {
         unsetCursor();
     }
+}
+
+void QtTimelineCanvas::layoutTrackHeaderControls()
+{
+    if (audioTrackVisibilityButton_ == nullptr)
+        return;
+
+    const TimelineRectangle audioTrack = geometry().trackRectangle(
+        TimelineTrackType::Audio, width());
+    const int buttonSize = audioTrackVisibilityButton_->width();
+    audioTrackVisibilityButton_->move(
+        TimelineGeometry::kTimelineLeft - buttonSize - 5,
+        audioTrack.top + (audioTrack.height - buttonSize) / 2);
+}
+
+void QtTimelineCanvas::updateAudioTrackVisibilityButton()
+{
+    if (audioTrackVisibilityButton_ == nullptr)
+        return;
+
+    const QSignalBlocker blocker(audioTrackVisibilityButton_);
+    const bool isVisible = viewState_.isAudioTrackVisible;
+    audioTrackVisibilityButton_->setChecked(isVisible);
+    audioTrackVisibilityButton_->setIcon(audioTrackEyeIcon(isVisible));
+    audioTrackVisibilityButton_->setToolTip(isVisible
+        ? QStringLiteral("Hide audio track")
+        : QStringLiteral("Show audio track"));
 }

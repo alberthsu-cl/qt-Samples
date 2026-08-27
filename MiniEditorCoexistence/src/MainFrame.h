@@ -2,7 +2,7 @@
 
 #include "EditorSession.h"
 #include "MediaLibrary.h"
-#include "ProjectSerializer.h"
+#include "ProjectDocumentService.h"
 #include "TimelineEditingController.h"
 #include "WorkspaceLayout.h"
 #include "WorkspaceSettings.h"
@@ -111,9 +111,9 @@ private:
     MfcWorkspaceSplitter rightSplitter_;
     MfcWorkspaceSplitter timelineSplitter_;
     MediaLibrary mediaLibrary_;
-    int builtInMediaAssetCount_ = 0;
     EditorSession editorSession_;
     TimelineEditingController timelineController_;
+    ProjectDocumentService documentService_;
     EditorSession::ObserverId editorSessionObserverId_ = 0;
     WorkspaceLayout workspaceLayout_;
     std::filesystem::path projectFilePath_;
