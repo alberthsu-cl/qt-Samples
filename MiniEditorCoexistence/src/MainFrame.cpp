@@ -1,7 +1,7 @@
 #include "MainFrame.h"
 
 #include "DemoProject.h"
-#include "TimelinePlaybackResolver.h"
+#include "PreviewStateResolver.h"
 #include "resource.h"
 
 #include <algorithm>
@@ -531,81 +531,12 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     }
 #endif
     if (selectionChanged || clipSettingsChanged || playbackChanged || timelineClipChanged)
-        previewCanvas_.setPreviewState(currentPreviewState());
+        previewCanvas_.setPreviewState(
+            PreviewStateResolver::resolve(editorSession_, mediaLibrary_));
     if (selectionChanged || clipSettingsChanged || playbackChanged)
         updateStatusText();
     if (clipSettingsChanged || timelineClipChanged)
         updateWindowTitle();
-}
-
-PreviewState MainFrame::currentPreviewState() const
-{
-    PreviewState preview;
-    const PlaybackState &playback = editorSession_.playbackState();
-    const bool timelineMode = editorSession_.isTimelineFocused();
-    preview.mode = timelineMode ? PreviewMode::Timeline : PreviewMode::Source;
-
-    if (!timelineMode) {
-        const int index = editorSession_.selectedAssetIndex();
-        if (index < 0 || index >= static_cast<int>(mediaLibrary_.assets().size()))
-            return preview;
-        const LibraryMediaAsset &asset = mediaLibrary_.assets()[index];
-        preview.hasMedia = true;
-        preview.mediaAssetId = asset.id;
-        preview.displayName = asset.displayName;
-        preview.thumbnailColorRgb = asset.thumbnailColorRgb;
-        preview.settings = {};
-        preview.mediaKind = asset.kind;
-        preview.sourceFrame = asset.kind == MediaKind::Image
-            ? 0 : playback.currentFrame;
-        preview.sourceDurationFrames = asset.timelineDurationFrames;
-        return preview;
-    }
-
-    const TimelineModel &timeline = editorSession_.timelineModel();
-    const TimelineClip *selectedClip = timeline.findClip(
-        editorSession_.selectedTimelineClipId());
-    const ResolvedTimelineFrame resolvedFrame = TimelinePlaybackResolver::resolve(
-        timeline, mediaLibrary_, playback.currentFrame);
-    std::optional<ResolvedTimelineMedia> visibleVideo = resolvedFrame.video;
-
-    // While stopped, Properties is an editor for the focused placement. Show
-    // that video clip directly so opacity, scale, and position changes appear
-    // immediately even when the timeline playhead is currently elsewhere.
-    if (!playback.isPlaying && !playback.isPaused && selectedClip != nullptr
-        && selectedClip->trackType == TimelineTrackType::Video) {
-        visibleVideo = TimelinePlaybackResolver::resolveClip(
-            *selectedClip, mediaLibrary_, selectedClip->state.startFrame);
-    }
-
-    preview.timelineFrame = playback.currentFrame;
-    if (resolvedFrame.audio) {
-        const LibraryMediaAsset *audioAsset = mediaLibrary_.findAsset(
-            resolvedFrame.audio->mediaAssetId);
-        if (audioAsset != nullptr) {
-            preview.hasAudio = true;
-            preview.audioDisplayName = audioAsset->displayName;
-            preview.audioSourceFrame = resolvedFrame.audio->sourceFrame;
-            preview.audioSourceDurationFrames = resolvedFrame.audio->sourceDurationFrames;
-        }
-    }
-
-    if (!visibleVideo)
-        return preview;
-
-    const LibraryMediaAsset *asset = mediaLibrary_.findAsset(visibleVideo->mediaAssetId);
-    if (asset == nullptr)
-        return preview;
-    preview.hasMedia = true;
-    preview.mediaAssetId = asset->id;
-    preview.displayName = asset->displayName;
-    preview.thumbnailColorRgb = asset->thumbnailColorRgb;
-    preview.settings = visibleVideo->settings;
-    preview.mediaKind = visibleVideo->mediaKind;
-    preview.clipLocalFrame = visibleVideo->clipLocalFrame;
-    preview.sourceFrame = visibleVideo->sourceFrame;
-    preview.sourceDurationFrames = visibleVideo->sourceDurationFrames;
-    return preview;
 }
 
 void MainFrame::moveLeftSplitter(int parentX)

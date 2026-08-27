@@ -397,6 +397,16 @@ rules can be exercised without constructing an MFC frame or Qt widget. This
 is also a scalable migration seam: a future all-Qt main window can reuse the
 same controller and session rather than reimplementing editor behavior.
 
+## Framework-neutral preview presentation
+
+`PreviewStateResolver` moves preview-selection policy out of `MainFrame`.
+Given only `EditorSession` and `MediaLibrary`, it chooses source or timeline
+mode, maps the playhead to V1/A1 source frames, handles gaps, and preserves the
+stopped focused-clip preview behavior. `MfcPreviewCanvas` remains only the MFC
+renderer of the resulting `PreviewState`; a future Qt preview can reuse this
+same resolver and state contract. Core tests cover source video, still images,
+stopped focused clips, paused timeline playback, and timeline gaps.
+
 ## Phase 12 — Flicker-free MFC playback painting
 
 `MfcDoubleBufferedPaint` draws MFC preview and timeline content to a

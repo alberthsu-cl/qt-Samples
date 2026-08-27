@@ -48,6 +48,8 @@ add_executable(MiniEditorCoexistence WIN32
     src/EditorSession.cpp
     src/TimelineEditingController.h
     src/TimelineEditingController.cpp
+    src/PreviewStateResolver.h
+    src/PreviewStateResolver.cpp
     src/WorkspaceSettings.h
     src/WorkspaceSettings.cpp
     src/WorkspaceLayout.h
@@ -118,6 +120,11 @@ source_group("Controller" FILES
     src/TimelineEditingController.cpp
 )
 
+source_group("Presentation" FILES
+    src/PreviewStateResolver.h
+    src/PreviewStateResolver.cpp
+)
+
 if(BUILD_TESTING)
     add_executable(MiniEditorCoreTests
         tests/MiniEditorCoreTests.cpp
@@ -144,6 +151,8 @@ if(BUILD_TESTING)
         src/EditorSession.cpp
         src/TimelineEditingController.h
         src/TimelineEditingController.cpp
+        src/PreviewStateResolver.h
+        src/PreviewStateResolver.cpp
         src/WorkspaceLayout.h
         src/WorkspaceLayout.cpp
     )

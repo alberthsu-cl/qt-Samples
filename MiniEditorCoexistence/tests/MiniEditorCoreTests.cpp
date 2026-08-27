@@ -7,6 +7,7 @@
 #include "TimelinePlaybackResolver.h"
 #include "TimelineGeometry.h"
 #include "TimelineEditingController.h"
+#include "PreviewStateResolver.h"
 #include "WorkspaceLayout.h"
 
 #include <exception>
@@ -530,6 +531,68 @@ void timelineEditingControllerCoordinatesFocusAndSplitPolicy()
 
     require(secondVideoId != videoId,
             "Media library IDs used by controller mapping must remain distinct.");
+}
+
+void previewStateResolverKeepsPreviewPolicyFrameworkNeutral()
+{
+    MediaLibrary library;
+    const int videoId = library.addKnownAsset(
+        L"D:/media/video.mp4", MediaKind::Video, 400, 0x5078A0);
+    const int audioId = library.addKnownAsset(
+        L"D:/media/audio.wav", MediaKind::Audio, 500, 0x2878B4);
+    const int imageId = library.addKnownAsset(
+        L"D:/media/still.png", MediaKind::Image, 90, 0x7850A0);
+
+    EditorSession session(3);
+    session.selectAsset(0);
+    session.setPlaybackDuration(400, true);
+    session.seekTimeline(50);
+    PreviewState preview = PreviewStateResolver::resolve(session, library);
+    require(preview.mode == PreviewMode::Source && preview.hasMedia
+                && preview.mediaAssetId == videoId && preview.sourceFrame == 50,
+            "Source preview must resolve the selected timed asset at its playback frame.");
+
+    session.selectAsset(2);
+    session.setPlaybackDuration(90, true);
+    session.seekTimeline(20);
+    preview = PreviewStateResolver::resolve(session, library);
+    require(preview.mediaAssetId == imageId && preview.sourceFrame == 0,
+            "A still-image source preview must always use source frame zero.");
+
+    const int videoClipId = session.addTimelineClip(
+        videoId, TimelineTrackType::Video, 100, 100);
+    const int audioClipId = session.addTimelineClip(
+        audioId, TimelineTrackType::Audio, 120, 60);
+    require(session.moveTimelineClip(videoClipId, { 100, 100, 20 }),
+            "Preview resolver test requires a video clip with a source-in frame.");
+    require(session.moveTimelineClip(audioClipId, { 120, 60, 10 }),
+            "Preview resolver test requires a timed audio placement.");
+
+    session.selectTimelineClip(videoClipId, 0);
+    session.updateSelectedClipSettings({ 70, 125, ClipPosition::BottomRight });
+    session.setPlaybackDuration(session.timelineModel().contentDurationFrames(), false);
+    session.seekTimeline(50);
+    preview = PreviewStateResolver::resolve(session, library);
+    require(preview.mode == PreviewMode::Timeline && preview.hasMedia
+                && preview.mediaAssetId == videoId && preview.sourceFrame == 20
+                && preview.settings.opacityPercent == 70,
+            "A stopped focused video clip must preview its clip settings at its own start.");
+
+    session.seekTimeline(150);
+    session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+    preview = PreviewStateResolver::resolve(session, library);
+    require(preview.hasMedia && preview.sourceFrame == 70
+                && preview.hasAudio && preview.audioSourceFrame == 40,
+            "A paused timeline preview must resolve video and audio at the playhead.");
+
+    session.focusTimeline();
+    session.setPlaybackDuration(session.timelineModel().contentDurationFrames(), false);
+    session.seekTimeline(50);
+    preview = PreviewStateResolver::resolve(session, library);
+    require(preview.mode == PreviewMode::Timeline && !preview.hasMedia
+                && !preview.hasAudio && preview.timelineFrame == 50,
+            "An unfocused timeline gap must resolve to an empty preview without fallback media.");
 }
 
 void internalTimelineClipboardSupportsCopyCutPasteAndDuplicate()
@@ -1120,6 +1183,7 @@ int main()
         splittingClipPreservesSourceRangesSettingsAndUndoHistory();
         timelineFocusDoesNotRequireASelectedClip();
         timelineEditingControllerCoordinatesFocusAndSplitPolicy();
+        previewStateResolverKeepsPreviewPolicyFrameworkNeutral();
         internalTimelineClipboardSupportsCopyCutPasteAndDuplicate();
         focusedTimelineClipOwnsIndependentPlacementSettings();
         playbackStopsAtFocusedPreviewDuration();
