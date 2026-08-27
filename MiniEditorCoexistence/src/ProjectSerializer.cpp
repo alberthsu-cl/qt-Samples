@@ -162,9 +162,15 @@ bool ProjectSerializer::save(const std::filesystem::path &path,
             setError(errorMessage, L"A timeline clip has an invalid source range.");
             return false;
         }
-        if (clip.settings.fadeInFrames < 0 || clip.settings.fadeOutFrames < 0
-            || clip.settings.fadeInFrames + clip.settings.fadeOutFrames
-                > clip.state.durationFrames) {
+        const bool hasSupportedFadeLengths = clip.settings.fadeInFrames >= 0
+            && clip.settings.fadeInFrames <= ClipFade::kMaximumFadeFrames
+            && clip.settings.fadeOutFrames >= 0
+            && clip.settings.fadeOutFrames <= ClipFade::kMaximumFadeFrames;
+        const bool fadesFitInsideClip = hasSupportedFadeLengths
+            && static_cast<long long>(clip.settings.fadeInFrames)
+                    + clip.settings.fadeOutFrames
+                <= clip.state.durationFrames;
+        if (!hasSupportedFadeLengths || !fadesFitInsideClip) {
             setError(errorMessage, L"A timeline clip has a fade longer than the clip.");
             return false;
         }

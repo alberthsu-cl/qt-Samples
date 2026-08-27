@@ -60,6 +60,8 @@ add_executable(MiniEditorCoexistence WIN32
     src/TimelineEditingController.cpp
     src/PreviewStateResolver.h
     src/PreviewStateResolver.cpp
+    src/ClipPropertiesStateResolver.h
+    src/ClipPropertiesStateResolver.cpp
     src/ProjectDocumentService.h
     src/ProjectDocumentService.cpp
     src/WorkspaceSettings.h
@@ -135,6 +137,8 @@ source_group("Controller" FILES
 source_group("Presentation" FILES
     src/PreviewStateResolver.h
     src/PreviewStateResolver.cpp
+    src/ClipPropertiesStateResolver.h
+    src/ClipPropertiesStateResolver.cpp
 )
 
 source_group("Services" FILES
@@ -176,6 +180,8 @@ if(BUILD_TESTING)
         src/TimelineEditingController.cpp
         src/PreviewStateResolver.h
         src/PreviewStateResolver.cpp
+        src/ClipPropertiesStateResolver.h
+        src/ClipPropertiesStateResolver.cpp
         src/ProjectDocumentService.h
         src/ProjectDocumentService.cpp
         src/WorkspaceLayout.h
@@ -267,6 +273,7 @@ if(MINI_EDITOR_USE_QT)
             src/QtMediaLibraryPanel.cpp
             src/QtPropertiesPanel.h
             src/QtPropertiesPanel.cpp
+            src/ClipPropertiesStateResolver.h
             src/QtTransportPanel.h
             src/QtTransportPanel.cpp
             src/TimelineAssetPresentation.h

@@ -39,15 +39,26 @@ void MiniEditorQtWidgetTests::propertiesModelRefreshDoesNotEmitUserEdit()
     QtPropertiesPanel panel;
     QSignalSpy editedSpy(&panel, &QtPropertiesPanel::clipSettingsEdited);
 
-    panel.setClipSettings({ 72, 135, ClipPosition::BottomRight });
+    ClipPropertiesViewState viewState;
+    viewState.editingEnabled = true;
+    viewState.mediaKind = MediaKind::Audio;
+    viewState.durationFrames = 90;
+    viewState.settings = { 72, 135, ClipPosition::BottomRight, 20, 10 };
+    panel.setViewState(viewState);
 
     QCOMPARE(editedSpy.count(), 0);
     QCOMPARE(panel.findChild<QSpinBox *>(QStringLiteral("opacitySpinBox"))->value(), 72);
     QCOMPARE(panel.findChild<QSpinBox *>(QStringLiteral("scaleSpinBox"))->value(), 135);
     QCOMPARE(panel.findChild<QComboBox *>(QStringLiteral("positionComboBox"))->currentData().toInt(),
              static_cast<int>(ClipPosition::BottomRight));
+    QCOMPARE(panel.findChild<QLabel *>(QStringLiteral("fadeSummaryLabel"))->text(),
+             QStringLiteral("90 f clip, 60 f at full level"));
+    QCOMPARE(panel.findChild<QSpinBox *>(QStringLiteral("fadeInSpinBox"))->toolTip(),
+             QStringLiteral("Frames the clip takes to ramp up from silence."));
+    QCOMPARE(editedSpy.count(), 0);
 
-    panel.setEditingEnabled(false);
+    viewState.editingEnabled = false;
+    panel.setViewState(viewState);
     QVERIFY(!panel.findChild<QSlider *>(QStringLiteral("opacitySlider"))->isEnabled());
     QVERIFY(!panel.findChild<QComboBox *>(QStringLiteral("positionComboBox"))->isEnabled());
 }

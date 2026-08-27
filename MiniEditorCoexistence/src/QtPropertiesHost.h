@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ProjectState.h"
+#include "ClipPropertiesStateResolver.h"
 
 #include <afxwin.h>
 
@@ -24,9 +24,7 @@ public:
 
     bool create(void *mfcParentWindowHandle);
     void resize(const CRect &bounds);
-    void setClipSettings(const ClipSettings &settings);
-    void setClipDurationFrames(int durationFrames);
-    void setEditingEnabled(bool enabled);
+    void setViewState(const ClipPropertiesViewState &viewState);
     void setClipSettingsEditedHandler(ClipSettingsEditedHandler handler);
 
 private:

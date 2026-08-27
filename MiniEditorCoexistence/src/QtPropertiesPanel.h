@@ -2,7 +2,7 @@
 
 #include <QWidget>
 
-#include "ProjectState.h"
+#include "ClipPropertiesStateResolver.h"
 
 class QComboBox;
 class QLabel;
@@ -18,6 +18,9 @@ class QtPropertiesPanel final : public QWidget
 public:
     explicit QtPropertiesPanel(QWidget *parent = nullptr);
 
+    void setViewState(const ClipPropertiesViewState &viewState);
+    // Kept public as focused teaching/test seams. Production refreshes use
+    // setViewState() so duration, values, media kind, and enabled state agree.
     void setClipSettings(const ClipSettings &settings);
     // The placement length bounds both fade editors, so the panel can never
     // request a ramp that ClipFade would silently shorten again.
@@ -42,6 +45,7 @@ private:
     QSpinBox *fadeOutSpinBox_ = nullptr;
     QLabel *fadeSummaryLabel_ = nullptr;
     int clipDurationFrames_ = 0;
+    MediaKind mediaKind_ = MediaKind::Video;
 
     int fadeLimitFrames() const;
     void applyFadeRanges();

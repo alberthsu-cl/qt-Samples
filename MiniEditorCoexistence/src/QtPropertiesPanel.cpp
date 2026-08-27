@@ -269,9 +269,33 @@ void QtPropertiesPanel::updateFadeSummary()
 
     const int held = std::max(0, clipDurationFrames_ - fadeInSpinBox_->value()
                                      - fadeOutSpinBox_->value());
-    fadeSummaryLabel_->setText(QStringLiteral("%1 f clip, %2 f at full opacity")
+    const QString fullLevelText = mediaKind_ == MediaKind::Audio
+        ? QStringLiteral("full level") : QStringLiteral("full opacity");
+    fadeSummaryLabel_->setText(QStringLiteral("%1 f clip, %2 f at %3")
                                    .arg(clipDurationFrames_)
-                                   .arg(held));
+                                   .arg(held)
+                                   .arg(fullLevelText));
+}
+
+void QtPropertiesPanel::setViewState(const ClipPropertiesViewState &viewState)
+{
+    mediaKind_ = viewState.mediaKind;
+    setClipDurationFrames(viewState.durationFrames);
+    setClipSettings(viewState.settings);
+    setEditingEnabled(viewState.editingEnabled);
+
+    const bool isAudio = mediaKind_ == MediaKind::Audio;
+    const QString fadeInToolTip = isAudio
+        ? QStringLiteral("Frames the clip takes to ramp up from silence.")
+        : QStringLiteral("Frames the clip takes to ramp up from transparent.");
+    const QString fadeOutToolTip = isAudio
+        ? QStringLiteral("Frames the clip takes to ramp down to silence.")
+        : QStringLiteral("Frames the clip takes to ramp down to transparent.");
+    fadeInSpinBox_->setToolTip(fadeInToolTip);
+    fadeInSlider_->setToolTip(fadeInToolTip);
+    fadeOutSpinBox_->setToolTip(fadeOutToolTip);
+    fadeOutSlider_->setToolTip(fadeOutToolTip);
+    updateFadeSummary();
 }
 
 void QtPropertiesPanel::setClipSettings(const ClipSettings &settings)

@@ -1,6 +1,7 @@
 #include "MainFrame.h"
 
 #include "DemoProject.h"
+#include "ClipPropertiesStateResolver.h"
 #include "PreviewStateResolver.h"
 #include "resource.h"
 
@@ -501,6 +502,8 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     const PlaybackState &playbackState = editorSession_.playbackState();
     const TimelineViewState &timelineViewState = editorSession_.timelineViewState();
     const TimelineClipState &timelineClipState = editorSession_.selectedTimelineClipState();
+    const ClipPropertiesViewState propertiesViewState =
+        ClipPropertiesStateResolver::resolve(editorSession_, mediaLibrary_);
     const bool selectionChanged = includesChange(changes, EditorChange::Selection);
     const bool clipSettingsChanged = includesChange(changes, EditorChange::ClipSettings);
     const bool playbackChanged = includesChange(changes, EditorChange::Playback);
@@ -520,12 +523,7 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     if (selectionChanged || clipSettingsChanged || timelineClipChanged) {
         // QtPropertiesPanel uses QSignalBlocker while it receives this state,
         // so an editor-to-view refresh never loops back as a user request.
-        const TimelineClip *focusedClip = editorSession_.timelineModel().findClip(
-            editorSession_.selectedTimelineClipId());
-        propertiesHost_.setClipDurationFrames(
-            focusedClip != nullptr ? focusedClip->state.durationFrames : 0);
-        propertiesHost_.setClipSettings(settings);
-        propertiesHost_.setEditingEnabled(editorSession_.selectedTimelineClipId() != 0);
+        propertiesHost_.setViewState(propertiesViewState);
     }
     if (timelineViewChanged)
         timelineToolbarHost_.setViewState(timelineViewState);
@@ -535,10 +533,9 @@ void MainFrame::refreshEditorViews(EditorChange changes)
 #else
     if (selectionChanged) {
         mediaLibraryPane_.setSelectedAssetIndex(selectedAssetIndex);
-        propertiesPane_.setSelectedAssetIndex(selectedAssetIndex);
     }
-    if (selectionChanged || clipSettingsChanged)
-        propertiesPane_.setClipSettings(settings);
+    if (selectionChanged || clipSettingsChanged || timelineClipChanged)
+        propertiesPane_.setViewState(propertiesViewState);
 #endif
 
     if (selectionChanged) {

@@ -58,22 +58,10 @@ void QtPropertiesHost::resize(const CRect &bounds)
                    SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
-void QtPropertiesHost::setClipSettings(const ClipSettings &settings)
+void QtPropertiesHost::setViewState(const ClipPropertiesViewState &viewState)
 {
     if (panel_)
-        panel_->setClipSettings(settings);
-}
-
-void QtPropertiesHost::setClipDurationFrames(int durationFrames)
-{
-    if (panel_)
-        panel_->setClipDurationFrames(durationFrames);
-}
-
-void QtPropertiesHost::setEditingEnabled(bool enabled)
-{
-    if (panel_)
-        panel_->setEditingEnabled(enabled);
+        panel_->setViewState(viewState);
 }
 
 void QtPropertiesHost::setClipSettingsEditedHandler(ClipSettingsEditedHandler handler)

@@ -1,4 +1,5 @@
 #include "ClipFade.h"
+#include "ClipPropertiesStateResolver.h"
 #include "EditorSession.h"
 #include "EditorCommandController.h"
 #include "PlaybackClockController.h"
@@ -1443,11 +1444,53 @@ void clipFadesTravelThroughSessionUndoAndProjectFiles()
                 && savedVideoClip->settings.fadeOutFrames == 20,
             "Format version 7 must round-trip both fade lengths.");
 
-    // The file format keeps the same invariant the session enforces, so an
-    // impossible fade can never reach disk through a hand-edited snapshot.
-    project.timelineItems.front().settings.fadeInFrames = 500;
+    // Save must reject values above the editor's supported maximum even when
+    // the clip itself is long enough. Otherwise load would silently clamp the
+    // value and the saved project would not round-trip exactly.
+    project.timelineItems.front().state.durationFrames = 400;
+    project.timelineItems.front().settings.fadeInFrames =
+        ClipFade::kMaximumFadeFrames + 1;
+    project.timelineItems.front().settings.fadeOutFrames = 0;
     require(!ProjectSerializer::save(path, project, &errorMessage),
-            "Saving a fade longer than its clip must be rejected.");
+            "Saving a fade above the supported maximum must be rejected.");
+}
+
+void clipPropertiesResolverBuildsOneCompleteViewSnapshot()
+{
+    MediaLibrary library;
+    const int videoId = library.addKnownAsset(
+        L"D:/media/video.mp4", MediaKind::Video, 240, 0x5078A0);
+    library.addKnownAsset(
+        L"D:/media/audio.wav", MediaKind::Audio, 180, 0x2878B4);
+
+    EditorSession session(2);
+    const int clipId = session.addTimelineClip(
+        videoId, TimelineTrackType::Video, 30, 120);
+    session.selectTimelineClip(clipId, 0);
+    ClipSettings settings;
+    settings.opacityPercent = 75;
+    settings.scalePercent = 130;
+    settings.position = ClipPosition::BottomRight;
+    settings.fadeInFrames = 15;
+    settings.fadeOutFrames = 25;
+    session.updateSelectedClipSettings(settings);
+
+    const ClipPropertiesViewState selected =
+        ClipPropertiesStateResolver::resolve(session, library);
+    require(selected.editingEnabled
+                && selected.mediaKind == MediaKind::Video
+                && selected.durationFrames == 120
+                && selected.settings.opacityPercent == 75
+                && selected.settings.fadeInFrames == 15
+                && selected.settings.fadeOutFrames == 25,
+            "The Properties snapshot must describe the complete focused placement.");
+
+    session.focusTimeline();
+    const ClipPropertiesViewState emptyTimelineSelection =
+        ClipPropertiesStateResolver::resolve(session, library);
+    require(!emptyTimelineSelection.editingEnabled
+                && emptyTimelineSelection.durationFrames == 0,
+            "Properties must disable editing when the timeline has no focused clip.");
 }
 
 } // namespace
@@ -1474,6 +1517,7 @@ int main()
         previewStateResolverKeepsPreviewPolicyFrameworkNeutral();
         clipFadeOwnsRampPolicyIndependentlyOfAnyRenderer();
         clipFadesTravelThroughSessionUndoAndProjectFiles();
+        clipPropertiesResolverBuildsOneCompleteViewSnapshot();
         projectDocumentServiceMaintainsProjectAndMediaConsistency();
         internalTimelineClipboardSupportsCopyCutPasteAndDuplicate();
         focusedTimelineClipOwnsIndependentPlacementSettings();
