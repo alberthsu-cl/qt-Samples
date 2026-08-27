@@ -501,6 +501,17 @@ void timelineEditingControllerCoordinatesFocusAndSplitPolicy()
     const int audioClipId = session.addTimelineClip(
         audioId, TimelineTrackType::Audio, 90, 200);
 
+    require(controller.insertMediaAsset(secondVideoId, 300),
+            "Controller insertion must accept a known library asset.");
+    const int insertedClipId = session.selectedTimelineClipId();
+    const TimelineClip *insertedClip = session.timelineModel().findClip(insertedClipId);
+    require(insertedClip != nullptr
+                && insertedClip->mediaAssetId == secondVideoId
+                && insertedClip->state.startFrame == 300
+                && session.isTimelineFocused()
+                && session.selectedAssetIndex() == 1,
+            "Drag insertion must focus the new placement for Properties editing.");
+
     controller.selectSourceAsset(1);
     session.seekTimeline(50);
     require(controller.focusClip(videoClipId, false)
@@ -1479,6 +1490,7 @@ void clipPropertiesResolverBuildsOneCompleteViewSnapshot()
     const ClipPropertiesViewState selected =
         ClipPropertiesStateResolver::resolve(session, library);
     require(selected.editingEnabled
+                && selected.target == ClipPropertiesTarget::TimelineClip
                 && selected.mediaKind == MediaKind::Video
                 && selected.durationFrames == 120
                 && selected.settings.opacityPercent == 75
@@ -1490,8 +1502,16 @@ void clipPropertiesResolverBuildsOneCompleteViewSnapshot()
     const ClipPropertiesViewState emptyTimelineSelection =
         ClipPropertiesStateResolver::resolve(session, library);
     require(!emptyTimelineSelection.editingEnabled
+                && emptyTimelineSelection.target == ClipPropertiesTarget::EmptyTimeline
                 && emptyTimelineSelection.durationFrames == 0,
             "Properties must disable editing when the timeline has no focused clip.");
+
+    session.selectAsset(1);
+    const ClipPropertiesViewState sourceAsset =
+        ClipPropertiesStateResolver::resolve(session, library);
+    require(sourceAsset.target == ClipPropertiesTarget::MediaAsset
+                && !sourceAsset.editingEnabled,
+            "A library selection must be presented as source media, not an editable clip.");
 }
 
 void timelinePresentationResolverBuildsOneCompleteViewSnapshot()
@@ -1521,6 +1541,39 @@ void timelinePresentationResolverBuildsOneCompleteViewSnapshot()
             "The timeline snapshot must contain canvas and toolbar state together.");
 }
 
+void sourcePlaybackDoesNotMoveTheTimelinePlayhead()
+{
+    EditorSession session(1);
+    const int clipId = session.addTimelineClip(
+        1, TimelineTrackType::Video, 0, 180);
+    session.selectTimelineClip(clipId, 0);
+    session.setPlaybackDuration(180, true);
+    session.seekTimeline(75);
+
+    TimelinePresentationState timelineState =
+        TimelinePresentationStateResolver::resolve(session, true);
+    require(timelineState.playback.currentFrame == 75,
+            "The timeline snapshot must initially follow its own playhead.");
+
+    session.selectAsset(0);
+    session.setPlaybackDuration(120, true);
+    session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+    session.advancePlaybackFrame();
+    session.advancePlaybackFrame();
+    require(session.playbackState().currentFrame == 2,
+            "The shared transport must advance the focused source preview.");
+
+    timelineState = TimelinePresentationStateResolver::resolve(session, false);
+    require(timelineState.playback.currentFrame == 75
+                && !timelineState.playback.isPlaying,
+            "Source playback must leave the stored timeline playhead unmoved.");
+
+    session.selectTimelineClip(clipId, 0);
+    session.setPlaybackDuration(180, false);
+    require(session.playbackState().currentFrame == 2,
+            "Explicit clip focus may carry the current transport time into the timeline.");
+}
+
 } // namespace
 
 int main()
@@ -1547,6 +1600,7 @@ int main()
         clipFadesTravelThroughSessionUndoAndProjectFiles();
         clipPropertiesResolverBuildsOneCompleteViewSnapshot();
         timelinePresentationResolverBuildsOneCompleteViewSnapshot();
+        sourcePlaybackDoesNotMoveTheTimelinePlayhead();
         projectDocumentServiceMaintainsProjectAndMediaConsistency();
         internalTimelineClipboardSupportsCopyCutPasteAndDuplicate();
         focusedTimelineClipOwnsIndependentPlacementSettings();

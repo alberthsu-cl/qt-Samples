@@ -12,6 +12,7 @@ ClipPropertiesViewState ClipPropertiesStateResolver::resolve(
     const TimelineClip *selectedClip = session.timelineModel().findClip(
         session.selectedTimelineClipId());
     if (selectedClip != nullptr) {
+        viewState.target = ClipPropertiesTarget::TimelineClip;
         viewState.editingEnabled = true;
         viewState.durationFrames = selectedClip->state.durationFrames;
         if (const LibraryMediaAsset *asset =
@@ -20,6 +21,10 @@ ClipPropertiesViewState ClipPropertiesStateResolver::resolve(
         }
         return viewState;
     }
+
+    viewState.target = session.isTimelineFocused()
+        ? ClipPropertiesTarget::EmptyTimeline
+        : ClipPropertiesTarget::MediaAsset;
 
     const auto &assets = mediaLibrary.assets();
     const int selectedAssetIndex = session.selectedAssetIndex();

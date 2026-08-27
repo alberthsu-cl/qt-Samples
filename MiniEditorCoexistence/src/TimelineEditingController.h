@@ -18,6 +18,7 @@ public:
     void focusEmptyTimeline();
     void selectSourceAsset(int assetIndex);
     void seekFocusedPreview(int frame);
+    bool insertMediaAsset(int mediaAssetId, int startFrame);
 
     bool deleteClip(int clipId);
     bool splitAtHead();

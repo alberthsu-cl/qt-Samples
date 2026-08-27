@@ -90,6 +90,18 @@ void TimelineEditingController::seekFocusedPreview(int frame)
         session_.seekTimeline(frame);
 }
 
+bool TimelineEditingController::insertMediaAsset(int mediaAssetId, int startFrame)
+{
+    const LibraryMediaAsset *asset = mediaLibrary_.findAsset(mediaAssetId);
+    if (asset == nullptr)
+        return false;
+
+    const TimelineTrackType trackType = asset->kind == MediaKind::Audio
+        ? TimelineTrackType::Audio : TimelineTrackType::Video;
+    return finishInsertedClip(session_.addTimelineClip(
+        mediaAssetId, trackType, startFrame, asset->timelineDurationFrames));
+}
+
 bool TimelineEditingController::deleteClip(int clipId)
 {
     const bool removedFocusedClip = session_.selectedTimelineClipId() == clipId;
@@ -214,7 +226,10 @@ bool TimelineEditingController::finishInsertedClip(int clipId)
         return false;
     const int clipStart = clip->state.startFrame;
 
-    synchronizePlaybackDuration(false);
+    // Every user-facing insertion ends in the same state: the new placement
+    // owns focus, Properties edits it, and the playhead shows its first frame.
+    if (!focusClip(clipId, false))
+        return false;
     session_.seekTimeline(clipStart);
     return true;
 }

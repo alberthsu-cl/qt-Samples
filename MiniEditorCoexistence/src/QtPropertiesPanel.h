@@ -5,6 +5,7 @@
 #include "ClipPropertiesStateResolver.h"
 
 class QComboBox;
+class QFormLayout;
 class QLabel;
 class QSlider;
 class QSpinBox;
@@ -39,11 +40,16 @@ private:
     QSlider *scaleSlider_ = nullptr;
     QSpinBox *scaleSpinBox_ = nullptr;
     QComboBox *positionComboBox_ = nullptr;
+    QFormLayout *formLayout_ = nullptr;
+    QWidget *opacityEditor_ = nullptr;
+    QWidget *scaleEditor_ = nullptr;
     QSlider *fadeInSlider_ = nullptr;
     QSpinBox *fadeInSpinBox_ = nullptr;
     QSlider *fadeOutSlider_ = nullptr;
     QSpinBox *fadeOutSpinBox_ = nullptr;
     QLabel *fadeSummaryLabel_ = nullptr;
+    QLabel *selectionMessageLabel_ = nullptr;
+    QWidget *formContainer_ = nullptr;
     int clipDurationFrames_ = 0;
     MediaKind mediaKind_ = MediaKind::Video;
 
@@ -53,5 +59,7 @@ private:
     // other one yields so the pair still fits inside the clip.
     void yieldOppositeFade(bool fadeInChanged);
     void setFadeValues(int fadeInFrames, int fadeOutFrames);
+    void updateTargetPresentation(ClipPropertiesTarget target);
+    void updateMediaSpecificRows();
     void updateFadeSummary();
 };

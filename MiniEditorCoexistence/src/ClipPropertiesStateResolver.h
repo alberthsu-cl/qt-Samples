@@ -6,10 +6,17 @@
 class EditorSession;
 class MediaLibrary;
 
+enum class ClipPropertiesTarget {
+    MediaAsset,
+    TimelineClip,
+    EmptyTimeline
+};
+
 // One complete, framework-neutral snapshot for a Properties view. A host
 // applies this atomically instead of coordinating several partly related UI
 // setters and risking a panel that temporarily shows mixed selection state.
 struct ClipPropertiesViewState {
+    ClipPropertiesTarget target = ClipPropertiesTarget::MediaAsset;
     bool editingEnabled = false;
     MediaKind mediaKind = MediaKind::Video;
     int durationFrames = 0;

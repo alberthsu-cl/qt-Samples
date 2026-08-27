@@ -111,6 +111,11 @@ const PlaybackState &EditorSession::playbackState() const
     return playbackState_;
 }
 
+int EditorSession::timelinePlayheadFrame() const
+{
+    return timelinePlayheadFrame_;
+}
+
 const TimelineViewState &EditorSession::timelineViewState() const
 {
     return timelineViewState_;
@@ -486,6 +491,8 @@ bool EditorSession::isProjectDirty() const
 
 void EditorSession::selectAsset(int assetIndex)
 {
+    if (isTimelineFocused_)
+        timelinePlayheadFrame_ = playbackState_.currentFrame;
     selectedAssetIndex_ = std::clamp(assetIndex, 0,
                                      static_cast<int>(clipSettings_.size()) - 1);
     selectedTimelineClipId_ = 0;
@@ -564,6 +571,7 @@ void EditorSession::replaceProject(const EditorProject &project)
     playbackState_.isPlaying = false;
     playbackState_.isPaused = false;
     playbackState_.currentFrame = kFirstFrame;
+    timelinePlayheadFrame_ = kFirstFrame;
     notifyStateChanged(EditorChange::All);
 }
 
@@ -636,6 +644,9 @@ void EditorSession::handlePlaybackCommand(PlaybackCommand command)
         break;
     }
 
+    if (isTimelineFocused_)
+        timelinePlayheadFrame_ = playbackState_.currentFrame;
+
     notifyStateChanged(EditorChange::Playback);
 }
 
@@ -650,6 +661,8 @@ void EditorSession::advancePlaybackFrame()
         playbackState_.isPlaying = false;
         playbackState_.isPaused = true;
     }
+    if (isTimelineFocused_)
+        timelinePlayheadFrame_ = playbackState_.currentFrame;
     notifyStateChanged(EditorChange::Playback);
 }
 
@@ -657,6 +670,8 @@ void EditorSession::seekTimeline(int frame)
 {
     playbackState_.currentFrame = std::clamp(frame, kFirstFrame,
                                              std::max(0, playbackState_.durationFrames - 1));
+    if (isTimelineFocused_)
+        timelinePlayheadFrame_ = playbackState_.currentFrame;
     notifyStateChanged(EditorChange::Playback);
 }
 
@@ -667,6 +682,8 @@ void EditorSession::setPlaybackDuration(int durationFrames, bool resetToBeginnin
     playbackState_.isPaused = false;
     playbackState_.currentFrame = resetToBeginning
         ? 0 : std::min(playbackState_.currentFrame, playbackState_.durationFrames - 1);
+    if (isTimelineFocused_)
+        timelinePlayheadFrame_ = playbackState_.currentFrame;
     notifyStateChanged(EditorChange::Playback);
 }
 

@@ -129,16 +129,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     });
     timelineCanvasHost_.setMediaAssetDroppedHandler(
         [this](int mediaAssetId, int frame) {
-            const LibraryMediaAsset *asset = mediaLibrary_.findAsset(mediaAssetId);
-            if (asset == nullptr)
-                return;
-
-            const bool isAudio = asset->kind == MediaKind::Audio;
-            editorSession_.addTimelineClip(mediaAssetId,
-                                           isAudio ? TimelineTrackType::Audio
-                                                   : TimelineTrackType::Video,
-                                           frame, asset->timelineDurationFrames);
-            timelineController_.synchronizePlaybackDuration(false);
+            timelineController_.insertMediaAsset(mediaAssetId, frame);
         });
     timelineCanvasHost_.setAssetPresentationResolver(
         [this](int mediaAssetId) -> std::optional<TimelineAssetPresentation> {

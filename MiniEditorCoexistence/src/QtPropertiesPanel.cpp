@@ -52,6 +52,8 @@ QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
     , fadeOutSlider_(new QSlider(Qt::Horizontal, this))
     , fadeOutSpinBox_(new QSpinBox(this))
     , fadeSummaryLabel_(new QLabel(this))
+    , selectionMessageLabel_(new QLabel(this))
+    , formContainer_(new QWidget(this))
 {
     setStyleSheet(QStringLiteral(
         "QtPropertiesPanel { background: #23252b; color: #e6e8ed; }"
@@ -91,6 +93,9 @@ QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
     fadeOutSlider_->setObjectName(QStringLiteral("fadeOutSlider"));
     fadeOutSpinBox_->setObjectName(QStringLiteral("fadeOutSpinBox"));
     fadeSummaryLabel_->setObjectName(QStringLiteral("fadeSummaryLabel"));
+    selectionMessageLabel_->setObjectName(QStringLiteral("selectionMessageLabel"));
+    selectionMessageLabel_->setWordWrap(true);
+    formContainer_->setObjectName(QStringLiteral("propertiesFormContainer"));
 
     opacitySlider_->setRange(0, 100);
     opacitySpinBox_->setRange(0, 100);
@@ -121,23 +126,27 @@ QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
     positionComboBox_->addItem(QStringLiteral("Bottom Right"),
                                 static_cast<int>(ClipPosition::BottomRight));
 
-    auto *formLayout = new QFormLayout;
-    formLayout->setLabelAlignment(Qt::AlignRight);
-    formLayout->addRow(QStringLiteral("Opacity"),
-                       createSliderEditor(opacitySlider_, opacitySpinBox_, this));
-    formLayout->addRow(QStringLiteral("Scale"),
-                       createSliderEditor(scaleSlider_, scaleSpinBox_, this));
-    formLayout->addRow(QStringLiteral("Position"), positionComboBox_);
-    formLayout->addRow(QStringLiteral("Fade in"),
+    formLayout_ = new QFormLayout(formContainer_);
+    formLayout_->setContentsMargins(0, 0, 0, 0);
+    formLayout_->setLabelAlignment(Qt::AlignRight);
+    opacityEditor_ = createSliderEditor(opacitySlider_, opacitySpinBox_, this);
+    opacityEditor_->setObjectName(QStringLiteral("opacityEditor"));
+    scaleEditor_ = createSliderEditor(scaleSlider_, scaleSpinBox_, this);
+    scaleEditor_->setObjectName(QStringLiteral("scaleEditor"));
+    formLayout_->addRow(QStringLiteral("Opacity"), opacityEditor_);
+    formLayout_->addRow(QStringLiteral("Scale"), scaleEditor_);
+    formLayout_->addRow(QStringLiteral("Position"), positionComboBox_);
+    formLayout_->addRow(QStringLiteral("Fade in"),
                        createSliderEditor(fadeInSlider_, fadeInSpinBox_, this));
-    formLayout->addRow(QStringLiteral("Fade out"),
+    formLayout_->addRow(QStringLiteral("Fade out"),
                        createSliderEditor(fadeOutSlider_, fadeOutSpinBox_, this));
-    formLayout->addRow(QString(), fadeSummaryLabel_);
+    formLayout_->addRow(QString(), fadeSummaryLabel_);
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(14, 14, 14, 14);
     layout->addWidget(new QLabel(QStringLiteral("Properties"), this));
-    layout->addLayout(formLayout);
+    layout->addWidget(selectionMessageLabel_);
+    layout->addWidget(formContainer_);
     layout->addStretch();
 
     // Each slider feeds its spin box. The spin box is the one place that
@@ -188,6 +197,7 @@ QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
                 emitCurrentSettings();
             });
     updateFadeSummary();
+    updateTargetPresentation(ClipPropertiesTarget::MediaAsset);
 }
 
 void QtPropertiesPanel::setClipDurationFrames(int durationFrames)
@@ -277,9 +287,34 @@ void QtPropertiesPanel::updateFadeSummary()
                                    .arg(fullLevelText));
 }
 
+void QtPropertiesPanel::updateMediaSpecificRows()
+{
+    const bool hasVisualPlacement = mediaKind_ != MediaKind::Audio;
+    formLayout_->setRowVisible(opacityEditor_, hasVisualPlacement);
+    formLayout_->setRowVisible(scaleEditor_, hasVisualPlacement);
+    formLayout_->setRowVisible(positionComboBox_, hasVisualPlacement);
+}
+
+void QtPropertiesPanel::updateTargetPresentation(ClipPropertiesTarget target)
+{
+    const bool isTimelineClip = target == ClipPropertiesTarget::TimelineClip;
+    formContainer_->setVisible(isTimelineClip);
+    selectionMessageLabel_->setVisible(!isTimelineClip);
+
+    if (target == ClipPropertiesTarget::MediaAsset) {
+        selectionMessageLabel_->setText(QStringLiteral(
+            "Media asset selected.\nAdd it to the timeline to edit clip properties."));
+    } else if (target == ClipPropertiesTarget::EmptyTimeline) {
+        selectionMessageLabel_->setText(QStringLiteral(
+            "Select a timeline clip to edit its properties."));
+    }
+}
+
 void QtPropertiesPanel::setViewState(const ClipPropertiesViewState &viewState)
 {
     mediaKind_ = viewState.mediaKind;
+    updateTargetPresentation(viewState.target);
+    updateMediaSpecificRows();
     setClipDurationFrames(viewState.durationFrames);
     setClipSettings(viewState.settings);
     setEditingEnabled(viewState.editingEnabled);

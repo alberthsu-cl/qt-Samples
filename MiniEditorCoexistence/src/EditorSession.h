@@ -27,6 +27,7 @@ public:
     const ClipSettings &selectedClipSettings() const;
     const TimelineClipState &selectedTimelineClipState() const;
     const PlaybackState &playbackState() const;
+    int timelinePlayheadFrame() const;
     const TimelineViewState &timelineViewState() const;
     EditorProject projectSnapshot() const;
     const TimelineModel &timelineModel() const;
@@ -90,6 +91,9 @@ private:
     int selectedTimelineClipId_ = 0;
     bool isTimelineFocused_ = false;
     PlaybackState playbackState_;
+    // Source preview and timeline preview share transport mechanics, but not
+    // their positions. Library playback must never move the timeline head.
+    int timelinePlayheadFrame_ = 0;
     TimelineViewState timelineViewState_;
     bool projectDirty_ = false;
     EditorHistory history_;

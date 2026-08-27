@@ -42,6 +42,7 @@ void MiniEditorQtWidgetTests::propertiesModelRefreshDoesNotEmitUserEdit()
     QSignalSpy editedSpy(&panel, &QtPropertiesPanel::clipSettingsEdited);
 
     ClipPropertiesViewState viewState;
+    viewState.target = ClipPropertiesTarget::TimelineClip;
     viewState.editingEnabled = true;
     viewState.mediaKind = MediaKind::Audio;
     viewState.durationFrames = 90;
@@ -57,6 +58,32 @@ void MiniEditorQtWidgetTests::propertiesModelRefreshDoesNotEmitUserEdit()
              QStringLiteral("90 f clip, 60 f at full level"));
     QCOMPARE(panel.findChild<QSpinBox *>(QStringLiteral("fadeInSpinBox"))->toolTip(),
              QStringLiteral("Frames the clip takes to ramp up from silence."));
+    QVERIFY(panel.findChild<QWidget *>(QStringLiteral("opacityEditor"))->isHidden());
+    QVERIFY(panel.findChild<QWidget *>(QStringLiteral("scaleEditor"))->isHidden());
+    QVERIFY(panel.findChild<QComboBox *>(
+                QStringLiteral("positionComboBox"))->isHidden());
+    QCOMPARE(editedSpy.count(), 0);
+
+    viewState.target = ClipPropertiesTarget::MediaAsset;
+    panel.setViewState(viewState);
+    QVERIFY(panel.findChild<QWidget *>(
+                QStringLiteral("propertiesFormContainer"))->isHidden());
+    QVERIFY(panel.findChild<QWidget *>(QStringLiteral("opacityEditor"))->isHidden());
+    QCOMPARE(panel.findChild<QLabel *>(QStringLiteral("selectionMessageLabel"))->text(),
+             QStringLiteral("Media asset selected.\nAdd it to the timeline to edit clip properties."));
+    QCOMPARE(editedSpy.count(), 0);
+
+    viewState.target = ClipPropertiesTarget::TimelineClip;
+    viewState.mediaKind = MediaKind::Image;
+    panel.setViewState(viewState);
+    QVERIFY(!panel.findChild<QWidget *>(
+                 QStringLiteral("propertiesFormContainer"))->isHidden());
+    QVERIFY(!panel.findChild<QWidget *>(QStringLiteral("opacityEditor"))->isHidden());
+    QVERIFY(!panel.findChild<QWidget *>(QStringLiteral("scaleEditor"))->isHidden());
+    QVERIFY(!panel.findChild<QComboBox *>(
+                 QStringLiteral("positionComboBox"))->isHidden());
+    QCOMPARE(panel.findChild<QSpinBox *>(QStringLiteral("fadeInSpinBox"))->toolTip(),
+             QStringLiteral("Frames the clip takes to ramp up from transparent."));
     QCOMPARE(editedSpy.count(), 0);
 
     viewState.editingEnabled = false;
