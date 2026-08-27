@@ -353,9 +353,15 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
                       .arg(clip.state.sourceInFrame)
                       .arg(clip.state.sourceInFrame + clip.state.durationFrames)
                       .arg(clip.state.durationFrames);
+            // Each drag readout takes the colour of the edit it reports:
+            // amber here, matching the focus frame of the clip being trimmed.
+            // A near-black panel used to vanish into the timeline background
+            // it floats over.
             const QRect rangeRect(clipRect.left() + 3, 2, 230, 22);
-            painter.fillRect(rangeRect, QColor(18, 20, 24, 235));
-            painter.setPen(QColor(230, 238, 248));
+            painter.fillRect(rangeRect, QColor(255, 196, 72));
+            painter.setPen(QPen(QColor(146, 102, 16), 1));
+            painter.drawRect(rangeRect.adjusted(0, 0, -1, -1));
+            painter.setPen(QColor(32, 24, 6));
             painter.drawText(rangeRect, Qt::AlignCenter, rangeText);
         }
     };
@@ -395,8 +401,10 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
         const QString startLabel = QStringLiteral("Start %1")
             .arg(timeLabelForFrame(mediaDropStartFrame_));
         const QRect labelRect(left + 5, 2, 82, 22);
-        painter.fillRect(labelRect, QColor(18, 20, 24, 230));
-        painter.setPen(QColor(220, 235, 250));
+        painter.fillRect(labelRect, QColor(108, 190, 255));
+        painter.setPen(QPen(QColor(28, 96, 148), 1));
+        painter.drawRect(labelRect.adjusted(0, 0, -1, -1));
+        painter.setPen(QColor(8, 26, 44));
         painter.drawText(labelRect, Qt::AlignCenter, startLabel);
     }
 

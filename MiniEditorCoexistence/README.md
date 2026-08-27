@@ -280,7 +280,10 @@ framework-neutral `TimelineClipEdit` applies media-specific rules: video and
 audio handles update source-in/out within the source duration, while a still
 image's handles adjust when and how long it appears without a source limit.
 The live range label reports source frames for timed media and display frames
-for still images.
+for still images. Each drag readout is painted in the colour of the edit it
+reports - amber for a trim, matching the focus frame, and blue for a media drop,
+matching the insertion guide. They were previously near-black panels, which
+disappeared into the dark timeline they float over.
 
 Because this learning project intentionally supports only one video track and
 one audio track, clips on the same track no longer overlap. The framework-neutral
