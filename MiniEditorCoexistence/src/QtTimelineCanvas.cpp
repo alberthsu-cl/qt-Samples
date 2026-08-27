@@ -56,23 +56,35 @@ QIcon audioTrackEyeIcon(bool isVisible)
 
     QPainter painter(&pixmap);
     painter.setRenderHint(QPainter::Antialiasing);
-    painter.setPen(QPen(QColor(215, 223, 235), 1.7));
+    const QColor iconColor(215, 223, 235);
+    painter.setPen(QPen(iconColor, 1.8, Qt::SolidLine,
+                        Qt::RoundCap, Qt::RoundJoin));
+
+    // Draw the same eye in both states so the toggle remains recognizable.
+    // The hidden state adds the conventional diagonal cancellation stroke.
+    QPainterPath eyeOutline;
+    eyeOutline.moveTo(2, 10);
+    eyeOutline.cubicTo(5, 5, 8, 3.5, 10, 3.5);
+    eyeOutline.cubicTo(12, 3.5, 15, 5, 18, 10);
+    eyeOutline.cubicTo(15, 15, 12, 16.5, 10, 16.5);
+    eyeOutline.cubicTo(8, 16.5, 5, 15, 2, 10);
+    painter.drawPath(eyeOutline);
 
     if (isVisible) {
-        QPainterPath eyeOutline;
-        eyeOutline.moveTo(2, 10);
-        eyeOutline.cubicTo(5, 5, 8, 3.5, 10, 3.5);
-        eyeOutline.cubicTo(12, 3.5, 15, 5, 18, 10);
-        eyeOutline.cubicTo(15, 15, 12, 16.5, 10, 16.5);
-        eyeOutline.cubicTo(8, 16.5, 5, 15, 2, 10);
-        painter.drawPath(eyeOutline);
         painter.setBrush(QColor(215, 223, 235));
         painter.drawEllipse(QPointF(10, 10), 2.3, 2.3);
     } else {
-        // A curved lid plus a diagonal stroke keeps the closed-eye state
-        // readable even in the compact A1 header.
-        painter.drawArc(QRectF(3, 6, 14, 10), 0, 180 * 16);
-        painter.drawLine(QPointF(3, 4), QPointF(17, 16));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawEllipse(QPointF(10, 10), 2.2, 2.2);
+
+        // The dark under-stroke separates the slash from the eye beneath it;
+        // without this gap the small icon becomes one indistinct shape.
+        painter.setPen(QPen(QColor(35, 37, 43), 4.2, Qt::SolidLine,
+                            Qt::RoundCap, Qt::RoundJoin));
+        painter.drawLine(QPointF(3, 3), QPointF(17, 17));
+        painter.setPen(QPen(iconColor, 2.1, Qt::SolidLine,
+                            Qt::RoundCap, Qt::RoundJoin));
+        painter.drawLine(QPointF(3, 3), QPointF(17, 17));
     }
 
     return QIcon(pixmap);
@@ -94,6 +106,7 @@ QtTimelineCanvas::QtTimelineCanvas(QWidget *parent)
     audioTrackVisibilityButton_->setAutoRaise(true);
     audioTrackVisibilityButton_->setCheckable(true);
     audioTrackVisibilityButton_->setFixedSize(26, 26);
+    audioTrackVisibilityButton_->setIconSize(QSize(20, 20));
     audioTrackVisibilityButton_->setStyleSheet(QStringLiteral(
         "QToolButton#audioTrackVisibilityButton { border: 0; background: transparent; }"
         "QToolButton#audioTrackVisibilityButton:hover { background: #3c5572; border-radius: 3px; }"
@@ -107,25 +120,16 @@ QtTimelineCanvas::QtTimelineCanvas(QWidget *parent)
     updateAudioTrackVisibilityButton();
 }
 
-void QtTimelineCanvas::setSelectedAssetIndex(int selectedAssetIndex)
+void QtTimelineCanvas::setPresentationState(
+    const TimelinePresentationState &state)
 {
-    // The current timeline renderer resolves clips by stable media ID. Keep
-    // this legacy selection value only for compatibility with the host API.
-    selectedAssetIndex_ = std::max(0, selectedAssetIndex);
-    update();
-}
-
-void QtTimelineCanvas::setClipSettings(const ClipSettings &settings)
-{
-    clipSettings_ = settings;
-    update();
-}
-
-void QtTimelineCanvas::setTimelineClipState(const TimelineClipState &state)
-{
-    timelineClipState_ = state;
-    if (!isEditingClip())
-        dragPreviewState_ = state;
+    timelineClips_ = state.clips;
+    selectedClipId_ = state.selectedClipId;
+    playbackState_ = state.playback;
+    viewState_ = state.view;
+    timelineDurationFrames_ = std::max(600, state.durationFrames);
+    setMinimumWidth(geometry().contentWidth());
+    updateAudioTrackVisibilityButton();
     update();
 }
 

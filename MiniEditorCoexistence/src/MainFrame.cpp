@@ -3,6 +3,7 @@
 #include "DemoProject.h"
 #include "ClipPropertiesStateResolver.h"
 #include "PreviewStateResolver.h"
+#include "TimelinePresentationStateResolver.h"
 #include "resource.h"
 
 #include <algorithm>
@@ -497,11 +498,8 @@ void MainFrame::applyPlaybackClockAction(PlaybackClockAction action)
 void MainFrame::refreshEditorViews(EditorChange changes)
 {
     const int selectedAssetIndex = editorSession_.selectedAssetIndex();
-    const LibraryMediaAsset &asset = mediaLibrary_.assets()[selectedAssetIndex];
     const ClipSettings &settings = editorSession_.selectedClipSettings();
     const PlaybackState &playbackState = editorSession_.playbackState();
-    const TimelineViewState &timelineViewState = editorSession_.timelineViewState();
-    const TimelineClipState &timelineClipState = editorSession_.selectedTimelineClipState();
     const ClipPropertiesViewState propertiesViewState =
         ClipPropertiesStateResolver::resolve(editorSession_, mediaLibrary_);
     const bool selectionChanged = includesChange(changes, EditorChange::Selection);
@@ -511,12 +509,14 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     const bool timelineClipChanged = includesChange(changes, EditorChange::TimelineClip);
 
 #if MINI_EDITOR_USE_QT
+    const TimelinePresentationState timelinePresentationState =
+        TimelinePresentationStateResolver::resolve(
+            editorSession_, commandController_.canExecute(EditorIntent::SplitClip));
     if (selectionChanged) {
         if (editorSession_.isTimelineFocused())
             mediaLibraryHost_.clearSelection();
         else
             mediaLibraryHost_.setSelectedAssetIndex(selectedAssetIndex);
-        timelineCanvasHost_.setSelectedClipId(editorSession_.selectedTimelineClipId());
     }
     // A trim reports TimelineClip rather than ClipSettings, yet it changes the
     // room available for fades, so the inspector refreshes for that too.
@@ -525,11 +525,11 @@ void MainFrame::refreshEditorViews(EditorChange changes)
         // so an editor-to-view refresh never loops back as a user request.
         propertiesHost_.setViewState(propertiesViewState);
     }
-    if (timelineViewChanged)
-        timelineToolbarHost_.setViewState(timelineViewState);
-    if (selectionChanged || playbackChanged || timelineClipChanged)
-        timelineToolbarHost_.setSplitEnabled(
-            commandController_.canExecute(EditorIntent::SplitClip));
+    if (selectionChanged || clipSettingsChanged || playbackChanged
+        || timelineViewChanged || timelineClipChanged) {
+        timelineCanvasHost_.setPresentationState(timelinePresentationState);
+        timelineToolbarHost_.setPresentationState(timelinePresentationState);
+    }
 #else
     if (selectionChanged) {
         mediaLibraryPane_.setSelectedAssetIndex(selectedAssetIndex);
@@ -542,20 +542,12 @@ void MainFrame::refreshEditorViews(EditorChange changes)
 #if !MINI_EDITOR_USE_QT
         previewCanvas_.setSelectedAssetIndex(std::min(
             selectedAssetIndex, documentService_.protectedMediaAssetCount() - 1));
-#endif
-#if MINI_EDITOR_USE_QT
-        timelineCanvasHost_.setSelectedAssetIndex(selectedAssetIndex);
-#else
         timelinePane_.setSelectedAssetIndex(selectedAssetIndex);
 #endif
     }
     if (selectionChanged || clipSettingsChanged) {
 #if !MINI_EDITOR_USE_QT
         previewCanvas_.setClipSettings(settings);
-#endif
-#if MINI_EDITOR_USE_QT
-        timelineCanvasHost_.setClipSettings(settings);
-#else
         timelinePane_.setClipSettings(settings);
 #endif
     }
@@ -567,16 +559,7 @@ void MainFrame::refreshEditorViews(EditorChange changes)
 #endif
     }
 #if MINI_EDITOR_USE_QT
-    if (timelineClipChanged)
-        timelineCanvasHost_.setTimelineClips(editorSession_.timelineModel().clips());
-    if (timelineClipChanged)
-        timelineCanvasHost_.setTimelineDuration(
-            editorSession_.timelineModel().durationFrames());
-    if (timelineViewChanged)
-        timelineCanvasHost_.setViewState(timelineViewState);
     if (playbackChanged) {
-        if (editorSession_.isTimelineFocused())
-            timelineCanvasHost_.setPlaybackState(playbackState);
         transportHost_.setPlaybackState(playbackState);
     }
 #else

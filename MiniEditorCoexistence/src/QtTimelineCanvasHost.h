@@ -4,6 +4,7 @@
 #include "TimelineClipEdit.h"
 #include "TimelineAssetPresentation.h"
 #include "TimelineModel.h"
+#include "TimelinePresentationStateResolver.h"
 
 #include <afxwin.h>
 
@@ -37,16 +38,9 @@ public:
 
     bool create(void *mfcParentWindowHandle);
     void resize(const CRect &bounds);
-    void setSelectedAssetIndex(int selectedAssetIndex);
-    void setClipSettings(const ClipSettings &settings);
-    void setTimelineClipState(const TimelineClipState &state);
-    void setPlaybackState(const PlaybackState &state);
-    void setViewState(const TimelineViewState &state);
+    void setPresentationState(const TimelinePresentationState &state);
     void setSeekHandler(SeekHandler handler);
     void setTimelineClipEditedHandler(TimelineClipEditedHandler handler);
-    void setTimelineClips(const std::vector<TimelineClip> &clips);
-    void setSelectedClipId(int clipId);
-    void setTimelineDuration(int durationFrames);
     void setMediaAssetDroppedHandler(MediaAssetDroppedHandler handler);
     void setAssetPresentationResolver(AssetPresentationResolver resolver);
     void setTimelineClipDeletedHandler(TimelineClipDeletedHandler handler);

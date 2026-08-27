@@ -9,6 +9,7 @@
 #include "TimelineClipEdit.h"
 #include "TimelineTrackPolicy.h"
 #include "TimelinePlaybackResolver.h"
+#include "TimelinePresentationStateResolver.h"
 #include "TimelineGeometry.h"
 #include "TimelineEditingController.h"
 #include "PreviewStateResolver.h"
@@ -1493,6 +1494,33 @@ void clipPropertiesResolverBuildsOneCompleteViewSnapshot()
             "Properties must disable editing when the timeline has no focused clip.");
 }
 
+void timelinePresentationResolverBuildsOneCompleteViewSnapshot()
+{
+    EditorSession session(1);
+    const int clipId = session.addTimelineClip(
+        17, TimelineTrackType::Video, 45, 90);
+    session.selectTimelineClip(clipId, 0);
+    session.seekTimeline(60);
+    TimelineViewState view;
+    view.zoomPercent = 150;
+    view.isAudioTrackVisible = false;
+    view.isRippleEditingEnabled = true;
+    session.updateTimelineViewState(view);
+
+    const TimelinePresentationState state =
+        TimelinePresentationStateResolver::resolve(session, true);
+    require(state.clips.size() == 1
+                && state.clips.front().id == clipId
+                && state.selectedClipId == clipId
+                && state.durationFrames == 600
+                && state.playback.currentFrame == 60
+                && state.view.zoomPercent == 150
+                && !state.view.isAudioTrackVisible
+                && state.view.isRippleEditingEnabled
+                && state.splitEnabled,
+            "The timeline snapshot must contain canvas and toolbar state together.");
+}
+
 } // namespace
 
 int main()
@@ -1518,6 +1546,7 @@ int main()
         clipFadeOwnsRampPolicyIndependentlyOfAnyRenderer();
         clipFadesTravelThroughSessionUndoAndProjectFiles();
         clipPropertiesResolverBuildsOneCompleteViewSnapshot();
+        timelinePresentationResolverBuildsOneCompleteViewSnapshot();
         projectDocumentServiceMaintainsProjectAndMediaConsistency();
         internalTimelineClipboardSupportsCopyCutPasteAndDuplicate();
         focusedTimelineClipOwnsIndependentPlacementSettings();

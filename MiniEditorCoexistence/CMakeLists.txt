@@ -62,6 +62,8 @@ add_executable(MiniEditorCoexistence WIN32
     src/PreviewStateResolver.cpp
     src/ClipPropertiesStateResolver.h
     src/ClipPropertiesStateResolver.cpp
+    src/TimelinePresentationStateResolver.h
+    src/TimelinePresentationStateResolver.cpp
     src/ProjectDocumentService.h
     src/ProjectDocumentService.cpp
     src/WorkspaceSettings.h
@@ -139,6 +141,8 @@ source_group("Presentation" FILES
     src/PreviewStateResolver.cpp
     src/ClipPropertiesStateResolver.h
     src/ClipPropertiesStateResolver.cpp
+    src/TimelinePresentationStateResolver.h
+    src/TimelinePresentationStateResolver.cpp
 )
 
 source_group("Services" FILES
@@ -182,6 +186,8 @@ if(BUILD_TESTING)
         src/PreviewStateResolver.cpp
         src/ClipPropertiesStateResolver.h
         src/ClipPropertiesStateResolver.cpp
+        src/TimelinePresentationStateResolver.h
+        src/TimelinePresentationStateResolver.cpp
         src/ProjectDocumentService.h
         src/ProjectDocumentService.cpp
         src/WorkspaceLayout.h
@@ -277,6 +283,7 @@ if(MINI_EDITOR_USE_QT)
             src/QtTransportPanel.h
             src/QtTransportPanel.cpp
             src/TimelineAssetPresentation.h
+            src/TimelinePresentationStateResolver.h
             src/TimelineModel.h
             src/TimelineGeometry.h
             src/TimelineGeometry.cpp
@@ -288,6 +295,8 @@ if(MINI_EDITOR_USE_QT)
             src/TimelineTrackPolicy.cpp
             src/QtTimelineCanvas.h
             src/QtTimelineCanvas.cpp
+            src/QtTimelineToolbar.h
+            src/QtTimelineToolbar.cpp
         )
         target_include_directories(MiniEditorQtWidgetTests PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/src"

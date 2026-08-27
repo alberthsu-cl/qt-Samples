@@ -5,6 +5,7 @@
 #include "TimelineClipEdit.h"
 #include "TimelineGeometry.h"
 #include "TimelineModel.h"
+#include "TimelinePresentationStateResolver.h"
 
 #include <QWidget>
 
@@ -33,9 +34,9 @@ public:
 
     explicit QtTimelineCanvas(QWidget *parent = nullptr);
 
-    void setSelectedAssetIndex(int selectedAssetIndex);
-    void setClipSettings(const ClipSettings &settings);
-    void setTimelineClipState(const TimelineClipState &state);
+    void setPresentationState(const TimelinePresentationState &state);
+    // Focused setters remain useful to interaction tests. Production view
+    // refreshes use setPresentationState() to avoid mixed timeline state.
     void setPlaybackState(const PlaybackState &state);
     void setViewState(const TimelineViewState &state);
     void setSeekHandler(SeekHandler handler);
@@ -72,9 +73,6 @@ private:
     bool updateMediaDropPreview(const QMimeData *mimeData, int timelineX);
     void clearMediaDropPreview();
 
-    int selectedAssetIndex_ = 0;
-    ClipSettings clipSettings_;
-    TimelineClipState timelineClipState_;
     PlaybackState playbackState_;
     TimelineViewState viewState_;
     SeekHandler seekHandler_;

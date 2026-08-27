@@ -49,34 +49,11 @@ void QtTimelineCanvasHost::resize(const CRect &bounds)
                        SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
-void QtTimelineCanvasHost::setSelectedAssetIndex(int selectedAssetIndex)
+void QtTimelineCanvasHost::setPresentationState(
+    const TimelinePresentationState &state)
 {
     if (canvas_)
-        canvas_->setSelectedAssetIndex(selectedAssetIndex);
-}
-
-void QtTimelineCanvasHost::setClipSettings(const ClipSettings &settings)
-{
-    if (canvas_)
-        canvas_->setClipSettings(settings);
-}
-
-void QtTimelineCanvasHost::setTimelineClipState(const TimelineClipState &state)
-{
-    if (canvas_)
-        canvas_->setTimelineClipState(state);
-}
-
-void QtTimelineCanvasHost::setPlaybackState(const PlaybackState &state)
-{
-    if (canvas_)
-        canvas_->setPlaybackState(state);
-}
-
-void QtTimelineCanvasHost::setViewState(const TimelineViewState &state)
-{
-    if (canvas_)
-        canvas_->setViewState(state);
+        canvas_->setPresentationState(state);
 }
 
 void QtTimelineCanvasHost::setSeekHandler(SeekHandler handler)
@@ -89,24 +66,6 @@ void QtTimelineCanvasHost::setTimelineClipEditedHandler(TimelineClipEditedHandle
 {
     if (canvas_)
         canvas_->setTimelineClipEditedHandler(std::move(handler));
-}
-
-void QtTimelineCanvasHost::setTimelineClips(const std::vector<TimelineClip> &clips)
-{
-    if (canvas_)
-        canvas_->setTimelineClips(clips);
-}
-
-void QtTimelineCanvasHost::setSelectedClipId(int clipId)
-{
-    if (canvas_)
-        canvas_->setSelectedClipId(clipId);
-}
-
-void QtTimelineCanvasHost::setTimelineDuration(int durationFrames)
-{
-    if (canvas_)
-        canvas_->setTimelineDuration(durationFrames);
 }
 
 void QtTimelineCanvasHost::setMediaAssetDroppedHandler(MediaAssetDroppedHandler handler)

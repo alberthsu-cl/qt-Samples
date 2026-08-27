@@ -60,16 +60,11 @@ void QtTimelineToolbarHost::resize(const CRect &bounds)
                    SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
-void QtTimelineToolbarHost::setViewState(const TimelineViewState &state)
+void QtTimelineToolbarHost::setPresentationState(
+    const TimelinePresentationState &state)
 {
     if (toolbar_)
-        toolbar_->setViewState(state);
-}
-
-void QtTimelineToolbarHost::setSplitEnabled(bool isEnabled)
-{
-    if (toolbar_)
-        toolbar_->setSplitEnabled(isEnabled);
+        toolbar_->setPresentationState(state);
 }
 
 void QtTimelineToolbarHost::setViewStateEditedHandler(ViewStateEditedHandler handler)

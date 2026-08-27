@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ProjectState.h"
+#include "TimelinePresentationStateResolver.h"
 
 #include <QWidget>
 
@@ -8,14 +9,15 @@ class QLabel;
 class QSlider;
 class QToolButton;
 
-// Qt owns only standard timeline controls. It emits user intent and never
-// owns timeline state or the custom MFC drawing surface.
+// Qt owns only standard timeline controls. It emits user intent and presents
+// the same framework-neutral snapshot as the separate timeline canvas.
 class QtTimelineToolbar final : public QWidget
 {
     Q_OBJECT
 
 public:
     explicit QtTimelineToolbar(QWidget *parent = nullptr);
+    void setPresentationState(const TimelinePresentationState &state);
     void setViewState(const TimelineViewState &state);
     void setSplitEnabled(bool isEnabled);
 

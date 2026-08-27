@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ProjectState.h"
+#include "TimelinePresentationStateResolver.h"
 
 #include <afxwin.h>
 
@@ -21,8 +21,7 @@ public:
 
     bool create(void *mfcParentWindowHandle);
     void resize(const CRect &bounds);
-    void setViewState(const TimelineViewState &state);
-    void setSplitEnabled(bool isEnabled);
+    void setPresentationState(const TimelinePresentationState &state);
     void setViewStateEditedHandler(ViewStateEditedHandler handler);
     void setFitTimelineHandler(FitTimelineHandler handler);
     void setSplitClipHandler(SplitClipHandler handler);

@@ -25,15 +25,18 @@ QtTimelineToolbar::QtTimelineToolbar(QWidget *parent)
         "QToolButton:checked { background: #2a88eb; border-color: #69adf5; }"));
 
     zoomSlider_->setRange(50, 200);
+    zoomSlider_->setObjectName(QStringLiteral("timelineZoomSlider"));
     zoomSlider_->setFixedWidth(150);
     zoomLabel_->setMinimumWidth(42);
     fitButton_->setText(QStringLiteral("Fit"));
     fitButton_->setToolTip(QStringLiteral("Reset timeline zoom to 100%"));
     splitButton_->setText(QStringLiteral("Split"));
+    splitButton_->setObjectName(QStringLiteral("timelineSplitButton"));
     splitButton_->setToolTip(QStringLiteral(
         "Split the selected clip at the timeline cursor (Ctrl+B)"));
     splitButton_->setEnabled(false);
     rippleButton_->setText(QStringLiteral("Ripple"));
+    rippleButton_->setObjectName(QStringLiteral("timelineRippleButton"));
     rippleButton_->setToolTip(QStringLiteral(
         "Shift later clips on the same track during insert, trim, and delete"));
     rippleButton_->setCheckable(true);
@@ -71,6 +74,13 @@ QtTimelineToolbar::QtTimelineToolbar(QWidget *parent)
 void QtTimelineToolbar::setSplitEnabled(bool isEnabled)
 {
     splitButton_->setEnabled(isEnabled);
+}
+
+void QtTimelineToolbar::setPresentationState(
+    const TimelinePresentationState &state)
+{
+    setViewState(state.view);
+    setSplitEnabled(state.splitEnabled);
 }
 
 void QtTimelineToolbar::setViewState(const TimelineViewState &state)

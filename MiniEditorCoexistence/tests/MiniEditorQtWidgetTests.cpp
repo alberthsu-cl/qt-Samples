@@ -2,6 +2,7 @@
 #include "QtMediaLibraryPanel.h"
 #include "QtPropertiesPanel.h"
 #include "QtTimelineCanvas.h"
+#include "QtTimelineToolbar.h"
 #include "QtTransportPanel.h"
 #include "TimelineClipEdit.h"
 #include "TimelineGeometry.h"
@@ -32,6 +33,7 @@ private slots:
     void timelineBodyDragEmitsFrameBasedMove();
     void timelineEndTrimEmitsTrimmedState();
     void timelineAudioVisibilitySeparatesRefreshAndUserToggle();
+    void timelinePresentationRefreshUpdatesToolbarAtomically();
 };
 
 void MiniEditorQtWidgetTests::propertiesModelRefreshDoesNotEmitUserEdit()
@@ -213,8 +215,10 @@ void MiniEditorQtWidgetTests::timelineClickSeekFocusAndDeleteUseSemanticHandlers
     canvas.resize(1000, TimelineGeometry::kCanvasHeight);
     const TimelineClip clip{ 7, 101, TimelineTrackType::Video,
                              { 60, 120, 0 }, {} };
-    canvas.setTimelineClips({ clip });
-    canvas.setTimelineDuration(600);
+    TimelinePresentationState presentation;
+    presentation.clips = { clip };
+    presentation.durationFrames = 600;
+    canvas.setPresentationState(presentation);
 
     int selectedClipId = 0;
     int deletedClipId = 0;
@@ -243,7 +247,8 @@ void MiniEditorQtWidgetTests::timelineClickSeekFocusAndDeleteUseSemanticHandlers
     QTest::mouseClick(&canvas, Qt::LeftButton, Qt::NoModifier, rulerPoint);
     QCOMPARE(soughtFrame, geometry.rulerFrameAtX(rulerPoint.x()));
 
-    canvas.setSelectedClipId(clip.id);
+    presentation.selectedClipId = clip.id;
+    canvas.setPresentationState(presentation);
     canvas.setFocus();
     QTest::keyClick(&canvas, Qt::Key_Delete);
     QCOMPARE(deletedClipId, clip.id);
@@ -351,6 +356,8 @@ void MiniEditorQtWidgetTests::timelineAudioVisibilitySeparatesRefreshAndUserTogg
     QToolButton *visibilityButton = canvas.findChild<QToolButton *>(
         QStringLiteral("audioTrackVisibilityButton"));
     QVERIFY(visibilityButton != nullptr);
+    QCOMPARE(visibilityButton->iconSize(), QSize(20, 20));
+    QVERIFY(!visibilityButton->icon().isNull());
     QVERIFY(visibilityButton->isChecked());
     QTest::mouseClick(visibilityButton, Qt::LeftButton);
     QCOMPARE(visibilityEditCount, 1);
@@ -360,6 +367,27 @@ void MiniEditorQtWidgetTests::timelineAudioVisibilitySeparatesRefreshAndUserTogg
     canvas.setViewState(state);
     QCOMPARE(visibilityEditCount, 1);
     QVERIFY(!visibilityButton->isChecked());
+}
+
+void MiniEditorQtWidgetTests::timelinePresentationRefreshUpdatesToolbarAtomically()
+{
+    QtTimelineToolbar toolbar;
+    QSignalSpy editedSpy(&toolbar, &QtTimelineToolbar::viewStateEdited);
+
+    TimelinePresentationState state;
+    state.view.zoomPercent = 175;
+    state.view.isAudioTrackVisible = false;
+    state.view.isRippleEditingEnabled = true;
+    state.splitEnabled = true;
+    toolbar.setPresentationState(state);
+
+    QCOMPARE(editedSpy.count(), 0);
+    QCOMPARE(toolbar.findChild<QSlider *>(
+                 QStringLiteral("timelineZoomSlider"))->value(), 175);
+    QVERIFY(toolbar.findChild<QToolButton *>(
+                QStringLiteral("timelineRippleButton"))->isChecked());
+    QVERIFY(toolbar.findChild<QToolButton *>(
+                QStringLiteral("timelineSplitButton"))->isEnabled());
 }
 
 QTEST_MAIN(MiniEditorQtWidgetTests)
