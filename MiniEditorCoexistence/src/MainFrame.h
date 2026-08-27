@@ -9,6 +9,7 @@
 
 #if MINI_EDITOR_USE_QT
 #include "QtMediaLibraryHost.h"
+#include "QtPreviewHost.h"
 #include "QtPropertiesHost.h"
 #include "QtTimelineCanvasHost.h"
 #include "QtTimelineToolbarHost.h"
@@ -18,8 +19,8 @@
 #include "MfcTransportBar.h"
 #include "MfcPropertiesPane.h"
 #endif
-#include "MfcPreviewCanvas.h"
 #if !MINI_EDITOR_USE_QT
+#include "MfcPreviewCanvas.h"
 #include "MfcTimelinePane.h"
 #endif
 #include "MfcWorkspaceSplitter.h"
@@ -92,6 +93,7 @@ private:
     CStatusBar statusBar_;
 #if MINI_EDITOR_USE_QT
     QtMediaLibraryHost mediaLibraryHost_;
+    QtPreviewHost previewHost_;
     QtPropertiesHost propertiesHost_;
     QtTransportHost transportHost_;
     QtTimelineCanvasHost timelineCanvasHost_;
@@ -100,8 +102,8 @@ private:
     MfcMediaLibraryPane mediaLibraryPane_;
     MfcPropertiesPane propertiesPane_;
     MfcTransportBar transportBar_;
-#endif
     MfcPreviewCanvas previewCanvas_;
+#endif
 #if MINI_EDITOR_USE_QT
     // Timeline is migrated to Qt in the Qt-enabled build.
 #else

@@ -9,8 +9,8 @@ class QLabel;
 class QToolButton;
 class QSlider;
 
-// Qt replacement for only the transport controls under an existing MFC
-// preview surface. It is intentionally unaware of playback implementation.
+// Qt transport controls. The panel is intentionally unaware of playback
+// implementation and works with either preview renderer during migration.
 class QtTransportPanel final : public QWidget
 {
     Q_OBJECT

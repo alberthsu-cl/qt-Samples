@@ -422,6 +422,16 @@ messages. New Project now restores both the default sample catalog and default
 editing state, while Remove prevents an asset from being deleted while a
 timeline placement still references it.
 
+## Qt preview panel
+
+The Qt-enabled build now hosts `QtPreviewPanel` through `QtPreviewHost`. It
+renders the same learning placeholder—thumbnail color, placement settings,
+timecode, and playback diagnostics—as the MFC preview, but consumes only
+`PreviewState` and `PlaybackState`. `MfcPreviewCanvas` and its MFC paint helper
+are now compiled only by the pure-MFC fallback configuration. This is the
+intended migration result: one presentation contract, two temporarily
+independent renderers, and no Qt preview code coupled to MFC drawing types.
+
 ## Phase 12 — Flicker-free MFC playback painting
 
 `MfcDoubleBufferedPaint` draws MFC preview and timeline content to a

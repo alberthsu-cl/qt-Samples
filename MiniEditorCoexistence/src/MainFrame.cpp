@@ -76,8 +76,11 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     statusBar_.SetPaneInfo(0, ID_SEPARATOR, SBPS_STRETCH, 400);
     restoreWorkspaceSettings();
 
-    if (!previewCanvas_.Create(this, IDC_PREVIEW_CANVAS)
-#if !MINI_EDITOR_USE_QT
+    if (
+#if MINI_EDITOR_USE_QT
+        !previewHost_.create(GetSafeHwnd())
+#else
+        !previewCanvas_.Create(this, IDC_PREVIEW_CANVAS)
         || !timelinePane_.Create(this, IDC_TIMELINE)
 #endif
         || !leftSplitter_.Create(MfcWorkspaceSplitter::Orientation::Vertical,
@@ -155,8 +158,8 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     if (!timelineToolbarHost_.create(GetSafeHwnd()))
         return -1;
 
-    // Qt panels emit framework-neutral values. MFC continues to own selection
-    // and clip settings, then redraws the remaining MFC panes from that state.
+    // Qt panels emit framework-neutral values. MainFrame remains the native
+    // host and forwards session state to the migrated Qt panel boundaries.
     mediaLibraryHost_.setAssetSelectedHandler([this](int assetIndex) {
         timelineController_.selectSourceAsset(assetIndex);
     });
@@ -413,11 +416,12 @@ void MainFrame::layoutChildren(int clientWidth, int clientHeight)
     mediaLibraryPane_.MoveWindow(geometry.mediaLibrary.left, geometry.mediaLibrary.top,
                                  geometry.mediaLibrary.width, geometry.mediaLibrary.height);
 #endif
-    previewCanvas_.MoveWindow(geometry.previewCanvas.left, geometry.previewCanvas.top,
-                              geometry.previewCanvas.width, geometry.previewCanvas.height);
 #if MINI_EDITOR_USE_QT
+    previewHost_.resize(toClientRect(geometry.previewCanvas));
     transportHost_.resize(toClientRect(geometry.transport));
 #else
+    previewCanvas_.MoveWindow(geometry.previewCanvas.left, geometry.previewCanvas.top,
+                              geometry.previewCanvas.width, geometry.previewCanvas.height);
     transportBar_.MoveWindow(geometry.transport.left, geometry.transport.top,
                              geometry.transport.width, geometry.transport.height);
 #endif
@@ -506,8 +510,10 @@ void MainFrame::refreshEditorViews(EditorChange changes)
 #endif
 
     if (selectionChanged) {
+#if !MINI_EDITOR_USE_QT
         previewCanvas_.setSelectedAssetIndex(std::min(
             selectedAssetIndex, documentService_.protectedMediaAssetCount() - 1));
+#endif
 #if MINI_EDITOR_USE_QT
         timelineCanvasHost_.setSelectedAssetIndex(selectedAssetIndex);
 #else
@@ -515,15 +521,22 @@ void MainFrame::refreshEditorViews(EditorChange changes)
 #endif
     }
     if (selectionChanged || clipSettingsChanged) {
+#if !MINI_EDITOR_USE_QT
         previewCanvas_.setClipSettings(settings);
+#endif
 #if MINI_EDITOR_USE_QT
         timelineCanvasHost_.setClipSettings(settings);
 #else
         timelinePane_.setClipSettings(settings);
 #endif
     }
-    if (playbackChanged)
+    if (playbackChanged) {
+#if MINI_EDITOR_USE_QT
+        previewHost_.setPlaybackState(playbackState);
+#else
         previewCanvas_.setPlaybackState(playbackState);
+#endif
+    }
 #if MINI_EDITOR_USE_QT
     if (timelineClipChanged)
         timelineCanvasHost_.setTimelineClips(editorSession_.timelineModel().clips());
@@ -543,9 +556,14 @@ void MainFrame::refreshEditorViews(EditorChange changes)
         transportBar_.setPlaybackState(playbackState);
     }
 #endif
-    if (selectionChanged || clipSettingsChanged || playbackChanged || timelineClipChanged)
-        previewCanvas_.setPreviewState(
-            PreviewStateResolver::resolve(editorSession_, mediaLibrary_));
+    if (selectionChanged || clipSettingsChanged || playbackChanged || timelineClipChanged) {
+        const PreviewState preview = PreviewStateResolver::resolve(editorSession_, mediaLibrary_);
+#if MINI_EDITOR_USE_QT
+        previewHost_.setPreviewState(preview);
+#else
+        previewCanvas_.setPreviewState(preview);
+#endif
+    }
     if (selectionChanged || clipSettingsChanged || playbackChanged)
         updateStatusText();
     if (clipSettingsChanged || timelineClipChanged)

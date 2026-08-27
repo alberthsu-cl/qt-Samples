@@ -56,12 +56,6 @@ add_executable(MiniEditorCoexistence WIN32
     src/WorkspaceSettings.cpp
     src/WorkspaceLayout.h
     src/WorkspaceLayout.cpp
-    src/MfcEditorPaneBase.h
-    src/MfcEditorPaneBase.cpp
-    src/MfcDoubleBufferedPaint.h
-    src/MfcDoubleBufferedPaint.cpp
-    src/MfcPreviewCanvas.h
-    src/MfcPreviewCanvas.cpp
     src/MfcWorkspaceSplitter.h
     src/MfcWorkspaceSplitter.cpp
     src/MainFrame.h
@@ -205,6 +199,10 @@ if(MINI_EDITOR_USE_QT)
         src/QtTransportPanel.cpp
         src/QtTransportHost.h
         src/QtTransportHost.cpp
+        src/QtPreviewPanel.h
+        src/QtPreviewPanel.cpp
+        src/QtPreviewHost.h
+        src/QtPreviewHost.cpp
         src/QtTimelineToolbar.h
         src/QtTimelineToolbar.cpp
         src/QtTimelineToolbarHost.h
@@ -237,6 +235,12 @@ else()
     # These are complete MFC fallbacks. They intentionally stay out of the
     # Qt-enabled target, where their corresponding Qt panels are used instead.
     target_sources(MiniEditorCoexistence PRIVATE
+        src/MfcEditorPaneBase.h
+        src/MfcEditorPaneBase.cpp
+        src/MfcDoubleBufferedPaint.h
+        src/MfcDoubleBufferedPaint.cpp
+        src/MfcPreviewCanvas.h
+        src/MfcPreviewCanvas.cpp
         src/MfcMediaLibraryPane.h
         src/MfcMediaLibraryPane.cpp
         src/MfcTransportBar.h
