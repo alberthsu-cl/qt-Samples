@@ -77,9 +77,9 @@ being mistaken for a second user edit returning to MFC.
 CMake cache to rebuild the complete Phase 0 pure-MFC UI; set it to `ON` to
 enable every panel migrated to Qt so far.
 
-The Qt-enabled target contains only MFC files that it still uses:
-`MfcPreviewCanvas`, `MfcTimelineCanvas`, `MfcWorkspaceSplitter`, and their
-shared `MfcEditorPaneBase`. The complete fallback panes are included only in
+The Qt-enabled target contains only MFC infrastructure that it still uses:
+`MfcWorkspaceSplitter` and the MFC frame/menu/status-bar shell. Complete MFC
+fallback panes, including `MfcPreviewCanvas`, are included only in
 the `MINI_EDITOR_USE_QT=OFF` target, so they do not distract from the active
 coexistence project in Visual Studio.
 
@@ -431,6 +431,16 @@ timecode, and playback diagnostics—as the MFC preview, but consumes only
 are now compiled only by the pure-MFC fallback configuration. This is the
 intended migration result: one presentation contract, two temporarily
 independent renderers, and no Qt preview code coupled to MFC drawing types.
+
+## Framework-neutral editor commands
+
+`EditorCommandController` maps intent-level commands—Undo, Redo, timeline
+clipboard actions, Split, and playback—to `EditorSession` and
+`TimelineEditingController`. `MainFrame` maps its MFC menu IDs, accelerator
+commands, Qt Transport commands, and the Qt Split button into this one API.
+The controller returns whether the MFC-owned playback timer must be
+synchronized, so timer ownership remains native-window infrastructure rather
+than editor-command policy.
 
 ## Phase 12 — Flicker-free MFC playback painting
 

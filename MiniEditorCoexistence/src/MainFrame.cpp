@@ -30,11 +30,24 @@ CRect toClientRect(const WorkspaceRect &rect)
     return CRect(rect.left, rect.top, rect.left + rect.width, rect.top + rect.height);
 }
 
+EditorIntent commandForPlayback(PlaybackCommand command)
+{
+    switch (command) {
+    case PlaybackCommand::TogglePlayPause: return EditorIntent::TogglePlayback;
+    case PlaybackCommand::Stop: return EditorIntent::StopPlayback;
+    case PlaybackCommand::StepBackward: return EditorIntent::StepBackward;
+    case PlaybackCommand::StepForward: return EditorIntent::StepForward;
+    }
+
+    return EditorIntent::TogglePlayback;
+}
+
 } // namespace
 
 MainFrame::MainFrame()
     : editorSession_(demoAssets().size()),
       timelineController_(editorSession_, mediaLibrary_),
+      commandController_(editorSession_, timelineController_),
       documentService_(editorSession_, mediaLibrary_)
 {
     // The sample starts with familiar built-in assets, but the Qt media
@@ -170,7 +183,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         editorSession_.updateSelectedClipSettings(settings);
     });
     transportHost_.setPlaybackCommandHandler([this](PlaybackCommand command) {
-        handlePlaybackCommand(command);
+        executeEditorCommand(commandForPlayback(command));
     });
     transportHost_.setPlaybackPositionHandler(
         [this](int frame) { timelineController_.seekFocusedPreview(frame); });
@@ -178,7 +191,8 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         editorSession_.updateTimelineViewState(state);
     });
     timelineToolbarHost_.setFitTimelineHandler([this] { editorSession_.fitTimeline(); });
-    timelineToolbarHost_.setSplitClipHandler([this] { splitSelectedTimelineClip(); });
+    timelineToolbarHost_.setSplitClipHandler(
+            [this] { executeEditorCommand(EditorIntent::SplitClip); });
 #else
     if (!mediaLibraryPane_.Create(this, IDC_MEDIA_LIBRARY)
         || !propertiesPane_.Create(this, IDC_PROPERTIES)
@@ -224,93 +238,88 @@ void MainFrame::OnPlaybackCommand(UINT commandId)
 {
     switch (commandId) {
     case ID_PLAYBACK_TOGGLE:
-        handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+        executeEditorCommand(EditorIntent::TogglePlayback);
         break;
     case ID_PLAYBACK_STOP:
-        handlePlaybackCommand(PlaybackCommand::Stop);
+        executeEditorCommand(EditorIntent::StopPlayback);
         break;
     case ID_PLAYBACK_STEP_BACKWARD:
-        handlePlaybackCommand(PlaybackCommand::StepBackward);
+        executeEditorCommand(EditorIntent::StepBackward);
         break;
     case ID_PLAYBACK_STEP_FORWARD:
-        handlePlaybackCommand(PlaybackCommand::StepForward);
+        executeEditorCommand(EditorIntent::StepForward);
         break;
     }
 }
 
 void MainFrame::OnEditUndo()
 {
-    editorSession_.undo();
+    executeEditorCommand(EditorIntent::Undo);
 }
 
 void MainFrame::OnEditRedo()
 {
-    editorSession_.redo();
+    executeEditorCommand(EditorIntent::Redo);
 }
 
 void MainFrame::OnEditCopyClip()
 {
-    timelineController_.copy();
+    executeEditorCommand(EditorIntent::CopyClip);
 }
 
 void MainFrame::OnEditCutClip()
 {
-    if (!timelineController_.cut())
-        return;
-    KillTimer(kPlaybackTimerId);
+    executeEditorCommand(EditorIntent::CutClip);
 }
 
 void MainFrame::OnEditPasteClip()
 {
-    if (!timelineController_.paste())
-        return;
-    KillTimer(kPlaybackTimerId);
+    executeEditorCommand(EditorIntent::PasteClip);
 }
 
 void MainFrame::OnEditDuplicateClip()
 {
-    if (timelineController_.duplicate())
-        KillTimer(kPlaybackTimerId);
+    executeEditorCommand(EditorIntent::DuplicateClip);
 }
 
 void MainFrame::OnEditSplitClip()
 {
-    splitSelectedTimelineClip();
+    executeEditorCommand(EditorIntent::SplitClip);
 }
 
 void MainFrame::OnUpdateEditUndo(CCmdUI *commandUi)
 {
-    commandUi->Enable(editorSession_.canUndo());
+    commandUi->Enable(commandController_.canExecute(EditorIntent::Undo));
 }
 
 void MainFrame::OnUpdateEditRedo(CCmdUI *commandUi)
 {
-    commandUi->Enable(editorSession_.canRedo());
+    commandUi->Enable(commandController_.canExecute(EditorIntent::Redo));
 }
 
 void MainFrame::OnUpdateEditCopyClip(CCmdUI *commandUi)
 {
-    commandUi->Enable(timelineController_.canCopy());
+    commandUi->Enable(commandController_.canExecute(EditorIntent::CopyClip));
 }
 
 void MainFrame::OnUpdateEditCutClip(CCmdUI *commandUi)
 {
-    commandUi->Enable(timelineController_.canCut());
+    commandUi->Enable(commandController_.canExecute(EditorIntent::CutClip));
 }
 
 void MainFrame::OnUpdateEditPasteClip(CCmdUI *commandUi)
 {
-    commandUi->Enable(timelineController_.canPaste());
+    commandUi->Enable(commandController_.canExecute(EditorIntent::PasteClip));
 }
 
 void MainFrame::OnUpdateEditDuplicateClip(CCmdUI *commandUi)
 {
-    commandUi->Enable(timelineController_.canDuplicate());
+    commandUi->Enable(commandController_.canExecute(EditorIntent::DuplicateClip));
 }
 
 void MainFrame::OnUpdateEditSplitClip(CCmdUI *commandUi)
 {
-    commandUi->Enable(timelineController_.canSplitAtHead());
+    commandUi->Enable(commandController_.canExecute(EditorIntent::SplitClip));
 }
 
 void MainFrame::OnTimer(UINT_PTR timerId)
@@ -459,9 +468,15 @@ int MainFrame::contentBottomForClient(int clientHeight)
     return std::clamp(static_cast<int>(statusRect.top), 0, clientHeight);
 }
 
-void MainFrame::handlePlaybackCommand(PlaybackCommand command)
+void MainFrame::executeEditorCommand(EditorIntent command)
 {
-    editorSession_.handlePlaybackCommand(command);
+    const EditorCommandResult result = commandController_.execute(command);
+    if (result.playbackTimerNeedsSync)
+        synchronizePlaybackTimer();
+}
+
+void MainFrame::synchronizePlaybackTimer()
+{
     if (editorSession_.playbackState().isPlaying)
         SetTimer(kPlaybackTimerId, 33, nullptr);
     else
@@ -499,7 +514,8 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     if (timelineViewChanged)
         timelineToolbarHost_.setViewState(timelineViewState);
     if (selectionChanged || playbackChanged || timelineClipChanged)
-        timelineToolbarHost_.setSplitEnabled(timelineController_.canSplitAtHead());
+        timelineToolbarHost_.setSplitEnabled(
+            commandController_.canExecute(EditorIntent::SplitClip));
 #else
     if (selectionChanged) {
         mediaLibraryPane_.setSelectedAssetIndex(selectedAssetIndex);
@@ -666,12 +682,6 @@ void MainFrame::removeMediaAsset(int assetIndex, int assetId)
     const UINT icon = result.error == ProjectDocumentError::ProtectedMedia
         ? MB_ICONINFORMATION : MB_ICONWARNING;
     AfxMessageBox(CString(result.message.c_str()), icon | MB_OK);
-}
-
-void MainFrame::splitSelectedTimelineClip()
-{
-    if (timelineController_.splitAtHead())
-        KillTimer(kPlaybackTimerId);
 }
 
 bool MainFrame::saveProject(bool chooseFilePath)

@@ -46,6 +46,8 @@ add_executable(MiniEditorCoexistence WIN32
     src/TimelinePlaybackResolver.cpp
     src/EditorSession.h
     src/EditorSession.cpp
+    src/EditorCommandController.h
+    src/EditorCommandController.cpp
     src/TimelineEditingController.h
     src/TimelineEditingController.cpp
     src/PreviewStateResolver.h
@@ -112,6 +114,8 @@ source_group("Playback" FILES
 )
 
 source_group("Controller" FILES
+    src/EditorCommandController.h
+    src/EditorCommandController.cpp
     src/TimelineEditingController.h
     src/TimelineEditingController.cpp
 )
@@ -150,6 +154,8 @@ if(BUILD_TESTING)
         src/TimelinePlaybackResolver.cpp
         src/EditorSession.h
         src/EditorSession.cpp
+        src/EditorCommandController.h
+        src/EditorCommandController.cpp
         src/TimelineEditingController.h
         src/TimelineEditingController.cpp
         src/PreviewStateResolver.h

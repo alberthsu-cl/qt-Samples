@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EditorSession.h"
+#include "EditorCommandController.h"
 #include "MediaLibrary.h"
 #include "ProjectDocumentService.h"
 #include "TimelineEditingController.h"
@@ -74,7 +75,8 @@ protected:
 private:
     void layoutChildren(int clientWidth, int clientHeight);
     int contentBottomForClient(int clientHeight);
-    void handlePlaybackCommand(PlaybackCommand command);
+    void executeEditorCommand(EditorIntent command);
+    void synchronizePlaybackTimer();
     void refreshEditorViews(EditorChange changes);
     void moveLeftSplitter(int parentX);
     void moveRightSplitter(int parentX);
@@ -88,7 +90,6 @@ private:
     void updateWindowTitle();
     void importMediaFile();
     void removeMediaAsset(int assetIndex, int assetId);
-    void splitSelectedTimelineClip();
 
     CStatusBar statusBar_;
 #if MINI_EDITOR_USE_QT
@@ -115,6 +116,7 @@ private:
     MediaLibrary mediaLibrary_;
     EditorSession editorSession_;
     TimelineEditingController timelineController_;
+    EditorCommandController commandController_;
     ProjectDocumentService documentService_;
     EditorSession::ObserverId editorSessionObserverId_ = 0;
     WorkspaceLayout workspaceLayout_;

@@ -1,4 +1,5 @@
 #include "EditorSession.h"
+#include "EditorCommandController.h"
 #include "ProjectSerializer.h"
 #include "MediaLibrary.h"
 #include "TimelineModel.h"
@@ -532,6 +533,49 @@ void timelineEditingControllerCoordinatesFocusAndSplitPolicy()
 
     require(secondVideoId != videoId,
             "Media library IDs used by controller mapping must remain distinct.");
+}
+
+void editorCommandControllerUnifiesEditorIntent()
+{
+    MediaLibrary library;
+    const int videoId = library.addKnownAsset(
+        L"D:/media/video.mp4", MediaKind::Video, 300, 0x5078A0);
+
+    EditorSession session(1);
+    TimelineEditingController timeline(session, library);
+    EditorCommandController commands(session, timeline);
+    const int clipId = session.addTimelineClip(
+        videoId, TimelineTrackType::Video, 0, 100);
+    session.selectTimelineClip(clipId, 0);
+    session.setPlaybackDuration(300, true);
+
+    require(commands.canExecute(EditorIntent::CopyClip)
+                && commands.execute(EditorIntent::CopyClip).executed
+                && commands.canExecute(EditorIntent::PasteClip),
+            "Copy through the command controller must enable Paste through the same policy.");
+    session.seekTimeline(150);
+    const EditorCommandResult pasted = commands.execute(EditorIntent::PasteClip);
+    require(pasted.executed && pasted.playbackTimerNeedsSync
+                && session.timelineModel().clips().size() == 2,
+            "Timeline insertion commands must report both execution and timer synchronization.");
+
+    session.seekTimeline(200);
+    require(commands.canExecute(EditorIntent::SplitClip)
+                && commands.execute(EditorIntent::SplitClip).executed,
+            "Split must use the shared command policy at the current timeline head.");
+    require(commands.canExecute(EditorIntent::Undo)
+                && commands.execute(EditorIntent::Undo).executed,
+            "Undo availability and execution must be centralized with edit commands.");
+
+    const EditorCommandResult play = commands.execute(EditorIntent::TogglePlayback);
+    require(play.executed && play.playbackTimerNeedsSync
+                && session.playbackState().isPlaying,
+            "Playback commands must report that the native playback timer needs synchronization.");
+    const EditorCommandResult stop = commands.execute(EditorIntent::StopPlayback);
+    require(stop.executed && stop.playbackTimerNeedsSync
+                && !session.playbackState().isPlaying
+                && session.playbackState().currentFrame == 0,
+            "Stop must be a shared command rather than a UI-specific playback policy.");
 }
 
 void previewStateResolverKeepsPreviewPolicyFrameworkNeutral()
@@ -1234,6 +1278,7 @@ int main()
         splittingClipPreservesSourceRangesSettingsAndUndoHistory();
         timelineFocusDoesNotRequireASelectedClip();
         timelineEditingControllerCoordinatesFocusAndSplitPolicy();
+        editorCommandControllerUnifiesEditorIntent();
         previewStateResolverKeepsPreviewPolicyFrameworkNeutral();
         projectDocumentServiceMaintainsProjectAndMediaConsistency();
         internalTimelineClipboardSupportsCopyCutPasteAndDuplicate();
