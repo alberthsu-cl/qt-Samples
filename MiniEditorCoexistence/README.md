@@ -438,9 +438,12 @@ independent renderers, and no Qt preview code coupled to MFC drawing types.
 clipboard actions, Split, and playback—to `EditorSession` and
 `TimelineEditingController`. `MainFrame` maps its MFC menu IDs, accelerator
 commands, Qt Transport commands, and the Qt Split button into this one API.
-The controller returns whether the MFC-owned playback timer must be
-synchronized, so timer ownership remains native-window infrastructure rather
-than editor-command policy.
+The controller returns whether its timer host must synchronize.
+
+`PlaybackClockController` then expresses the timer policy as framework-neutral
+`EnsureRunning` or `Stop` actions. `MainFrame` remains the MFC timer host for
+now, but a later Qt-only shell can map the same actions to `QTimer` without
+copying frame-advance or end-of-playback logic.
 
 ## Phase 12 — Flicker-free MFC playback painting
 

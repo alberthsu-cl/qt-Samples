@@ -14,6 +14,7 @@ public:
 
     bool focusClip(int clipId, bool resetToBeginning);
     void focusFrame(int frame);
+    void followPlaybackFrame();
     void focusEmptyTimeline();
     void selectSourceAsset(int assetIndex);
     void seekFocusedPreview(int frame);

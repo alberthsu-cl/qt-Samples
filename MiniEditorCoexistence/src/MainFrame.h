@@ -2,6 +2,7 @@
 
 #include "EditorSession.h"
 #include "EditorCommandController.h"
+#include "PlaybackClockController.h"
 #include "MediaLibrary.h"
 #include "ProjectDocumentService.h"
 #include "TimelineEditingController.h"
@@ -76,6 +77,7 @@ private:
     void layoutChildren(int clientWidth, int clientHeight);
     int contentBottomForClient(int clientHeight);
     void executeEditorCommand(EditorIntent command);
+    void applyPlaybackClockAction(PlaybackClockAction action);
     void synchronizePlaybackTimer();
     void refreshEditorViews(EditorChange changes);
     void moveLeftSplitter(int parentX);
@@ -117,6 +119,7 @@ private:
     EditorSession editorSession_;
     TimelineEditingController timelineController_;
     EditorCommandController commandController_;
+    PlaybackClockController playbackClockController_;
     ProjectDocumentService documentService_;
     EditorSession::ObserverId editorSessionObserverId_ = 0;
     WorkspaceLayout workspaceLayout_;

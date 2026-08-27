@@ -23,8 +23,8 @@ enum class EditorIntent {
 
 struct EditorCommandResult {
     bool executed = false;
-    // MainFrame owns the native timer. It uses this flag to start or stop the
-    // timer after a command changes playback state or stops it incidentally.
+    // The UI timer host must synchronize after a command changes playback
+    // state, or after a timeline edit stops playback incidentally.
     bool playbackTimerNeedsSync = false;
 };
 

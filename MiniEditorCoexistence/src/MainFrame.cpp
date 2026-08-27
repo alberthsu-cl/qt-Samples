@@ -33,10 +33,14 @@ CRect toClientRect(const WorkspaceRect &rect)
 EditorIntent commandForPlayback(PlaybackCommand command)
 {
     switch (command) {
-    case PlaybackCommand::TogglePlayPause: return EditorIntent::TogglePlayback;
-    case PlaybackCommand::Stop: return EditorIntent::StopPlayback;
-    case PlaybackCommand::StepBackward: return EditorIntent::StepBackward;
-    case PlaybackCommand::StepForward: return EditorIntent::StepForward;
+    case PlaybackCommand::TogglePlayPause:
+        return EditorIntent::TogglePlayback;
+    case PlaybackCommand::Stop:
+        return EditorIntent::StopPlayback;
+    case PlaybackCommand::StepBackward:
+        return EditorIntent::StepBackward;
+    case PlaybackCommand::StepForward:
+        return EditorIntent::StepForward;
     }
 
     return EditorIntent::TogglePlayback;
@@ -48,6 +52,7 @@ MainFrame::MainFrame()
     : editorSession_(demoAssets().size()),
       timelineController_(editorSession_, mediaLibrary_),
       commandController_(editorSession_, timelineController_),
+      playbackClockController_(editorSession_),
       documentService_(editorSession_, mediaLibrary_)
 {
     // The sample starts with familiar built-in assets, but the Qt media
@@ -151,7 +156,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     timelineCanvasHost_.setTimelineClipDeletedHandler(
         [this](int clipId) {
             if (timelineController_.deleteClip(clipId))
-                KillTimer(kPlaybackTimerId);
+                synchronizePlaybackTimer();
         });
     timelineCanvasHost_.setTimelineClipSelectedHandler(
         [this](int clipId) { timelineController_.focusClip(clipId, false); });
@@ -324,12 +329,12 @@ void MainFrame::OnUpdateEditSplitClip(CCmdUI *commandUi)
 
 void MainFrame::OnTimer(UINT_PTR timerId)
 {
-    if (timerId == kPlaybackTimerId && editorSession_.playbackState().isPlaying) {
+    if (timerId == kPlaybackTimerId) {
         // This is a deliberately simple MFC timer. In a production editor the
         // media engine would report its clock/playhead instead.
-        editorSession_.advancePlaybackFrame();
-        if (!editorSession_.playbackState().isPlaying)
-            KillTimer(kPlaybackTimerId);
+        applyPlaybackClockAction(playbackClockController_.advanceOneFrame());
+        if (editorSession_.isTimelineFocused())
+            timelineController_.followPlaybackFrame();
         return;
     }
 
@@ -477,8 +482,13 @@ void MainFrame::executeEditorCommand(EditorIntent command)
 
 void MainFrame::synchronizePlaybackTimer()
 {
-    if (editorSession_.playbackState().isPlaying)
-        SetTimer(kPlaybackTimerId, 33, nullptr);
+    applyPlaybackClockAction(playbackClockController_.synchronize());
+}
+
+void MainFrame::applyPlaybackClockAction(PlaybackClockAction action)
+{
+    if (action == PlaybackClockAction::EnsureRunning)
+        SetTimer(kPlaybackTimerId, PlaybackClockController::kTickIntervalMilliseconds, nullptr);
     else
         KillTimer(kPlaybackTimerId);
 }
@@ -718,6 +728,11 @@ bool MainFrame::openProject(const std::filesystem::path &path)
 #if MINI_EDITOR_USE_QT
     mediaLibraryHost_.refreshAssets();
 #endif
+    // Opening a project enters timeline-preview mode. At frame 0 this selects
+    // the first visible clip, or visibly focuses the empty timeline until a
+    // later clip is reached. Playback therefore never starts ambiguously from
+    // a stale library selection.
+    timelineController_.focusFrame(0);
     projectFilePath_ = path;
     updateWindowTitle();
     return true;

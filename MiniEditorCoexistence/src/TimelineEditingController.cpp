@@ -46,6 +46,30 @@ void TimelineEditingController::focusFrame(int frame)
     session_.seekTimeline(frame);
 }
 
+void TimelineEditingController::followPlaybackFrame()
+{
+    // Playback already owns the current frame and duration. Unlike focusFrame,
+    // this only updates visible selection and never resets playback state.
+    const ResolvedTimelineFrame resolved = TimelinePlaybackResolver::resolve(
+        session_.timelineModel(), mediaLibrary_, session_.playbackState().currentFrame);
+
+    if (resolved.video) {
+        const int assetIndex = assetIndexForMediaAsset(resolved.video->mediaAssetId);
+        if (assetIndex >= 0)
+            session_.selectTimelineClip(resolved.video->clipId, assetIndex);
+        return;
+    }
+
+    if (resolved.audio) {
+        const int assetIndex = assetIndexForMediaAsset(resolved.audio->mediaAssetId);
+        if (assetIndex >= 0)
+            session_.selectTimelineClip(resolved.audio->clipId, assetIndex);
+        return;
+    }
+
+    session_.focusTimeline();
+}
+
 void TimelineEditingController::focusEmptyTimeline()
 {
     session_.focusTimeline();

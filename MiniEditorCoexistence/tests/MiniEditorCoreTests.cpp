@@ -1,5 +1,6 @@
 #include "EditorSession.h"
 #include "EditorCommandController.h"
+#include "PlaybackClockController.h"
 #include "ProjectSerializer.h"
 #include "MediaLibrary.h"
 #include "TimelineModel.h"
@@ -517,6 +518,14 @@ void timelineEditingControllerCoordinatesFocusAndSplitPolicy()
                 && session.playbackState().currentFrame == 50,
             "A timeline gap must keep timeline focus while clearing placement focus.");
 
+    session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+    session.seekTimeline(220);
+    controller.followPlaybackFrame();
+    require(session.playbackState().isPlaying
+                && session.selectedTimelineClipId() == audioClipId
+                && session.selectedAssetIndex() == 2,
+            "Playback following must highlight its active placement without pausing or resetting it.");
+
     controller.focusFrame(120);
     require(controller.canCopy() && controller.canCut()
                 && controller.canDuplicate() && controller.canSplitAtHead(),
@@ -576,6 +585,27 @@ void editorCommandControllerUnifiesEditorIntent()
                 && !session.playbackState().isPlaying
                 && session.playbackState().currentFrame == 0,
             "Stop must be a shared command rather than a UI-specific playback policy.");
+}
+
+void playbackClockControllerKeepsTimerPolicyFrameworkNeutral()
+{
+    EditorSession session(1);
+    PlaybackClockController clock(session);
+    session.setPlaybackDuration(2, true);
+
+    require(clock.synchronize() == PlaybackClockAction::Stop,
+            "A stopped session must tell every UI timer host to stop.");
+
+    session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+    require(clock.synchronize() == PlaybackClockAction::EnsureRunning,
+            "Starting playback must request a running UI timer without depending on MFC or Qt.");
+    require(clock.advanceOneFrame() == PlaybackClockAction::EnsureRunning
+                && session.playbackState().currentFrame == 1,
+            "An interior playback tick must advance the playhead and retain the timer.");
+    require(clock.advanceOneFrame() == PlaybackClockAction::Stop
+                && !session.playbackState().isPlaying
+                && session.playbackState().currentFrame == 1,
+            "The final frame must stop the UI timer while preserving the last valid frame.");
 }
 
 void previewStateResolverKeepsPreviewPolicyFrameworkNeutral()
@@ -1279,6 +1309,7 @@ int main()
         timelineFocusDoesNotRequireASelectedClip();
         timelineEditingControllerCoordinatesFocusAndSplitPolicy();
         editorCommandControllerUnifiesEditorIntent();
+        playbackClockControllerKeepsTimerPolicyFrameworkNeutral();
         previewStateResolverKeepsPreviewPolicyFrameworkNeutral();
         projectDocumentServiceMaintainsProjectAndMediaConsistency();
         internalTimelineClipboardSupportsCopyCutPasteAndDuplicate();
