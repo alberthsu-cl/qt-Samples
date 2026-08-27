@@ -98,8 +98,10 @@ bool TimelineEditingController::insertMediaAsset(int mediaAssetId, int startFram
 
     const TimelineTrackType trackType = asset->kind == MediaKind::Audio
         ? TimelineTrackType::Audio : TimelineTrackType::Video;
-    return finishInsertedClip(session_.addTimelineClip(
-        mediaAssetId, trackType, startFrame, asset->timelineDurationFrames));
+    const int assetIndex = assetIndexForMediaAsset(mediaAssetId);
+    return assetIndex >= 0 && session_.insertTimelineClip(
+        mediaAssetId, trackType, startFrame, asset->timelineDurationFrames,
+        assetIndex) != 0;
 }
 
 bool TimelineEditingController::deleteClip(int clipId)

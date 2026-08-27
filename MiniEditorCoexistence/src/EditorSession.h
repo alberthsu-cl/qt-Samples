@@ -35,6 +35,9 @@ public:
     bool isTimelineFocused() const;
     int addTimelineClip(int mediaAssetId, TimelineTrackType trackType, int startFrame,
                         int durationFrames = TimelineClipState{}.durationFrames);
+    int insertTimelineClip(int mediaAssetId, TimelineTrackType trackType,
+                           int startFrame, int durationFrames,
+                           int sourceAssetIndex);
     bool moveTimelineClip(int clipId, const TimelineClipState &state,
                           TimelineClipEditKind editKind = TimelineClipEditKind::Move);
     int splitTimelineClip(int clipId, int splitFrame, MediaKind mediaKind);
@@ -77,9 +80,13 @@ public:
 
 private:
     EditorSelectionState selectionState() const;
+    TimelineInteractionState timelineInteractionState() const;
     EditorCommandContext commandContext();
     void recordTimelineCommand(std::vector<TimelineClip> before,
-                               EditorSelectionState selectionBefore);
+                               TimelineInteractionState interactionBefore);
+    int addTimelineClipInternal(int mediaAssetId, TimelineTrackType trackType,
+                                int startFrame, int durationFrames,
+                                std::optional<int> sourceAssetIndex);
     int insertTimelineClipCopy(const TimelineClip &sourceClip,
                                int sourceAssetIndex, int desiredStartFrame);
     void notifyStateChanged(EditorChange changes);

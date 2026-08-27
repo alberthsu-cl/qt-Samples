@@ -509,8 +509,29 @@ void timelineEditingControllerCoordinatesFocusAndSplitPolicy()
                 && insertedClip->mediaAssetId == secondVideoId
                 && insertedClip->state.startFrame == 300
                 && session.isTimelineFocused()
-                && session.selectedAssetIndex() == 1,
+                && session.selectedAssetIndex() == 1
+                && session.timelinePlayheadFrame() == 300,
             "Drag insertion must focus the new placement for Properties editing.");
+
+    require(session.undo(),
+            "Drag insertion must undo as one interaction transaction.");
+    require(session.timelineModel().findClip(insertedClipId) == nullptr
+                && !session.isTimelineFocused()
+                && session.selectedTimelineClipId() == 0
+                && session.timelinePlayheadFrame() == 0,
+            "Undo must restore clips, previous focus, and the previous playhead together.");
+    require(session.redo(),
+            "Drag insertion must redo as one interaction transaction.");
+    require(session.timelineModel().findClip(insertedClipId) != nullptr
+                && session.isTimelineFocused()
+                && session.selectedTimelineClipId() == insertedClipId
+                && session.selectedAssetIndex() == 1
+                && session.timelinePlayheadFrame() == 300,
+            "Redo must restore the inserted clip, its focus, and its playhead together.");
+    const ClipPropertiesViewState insertedProperties =
+        ClipPropertiesStateResolver::resolve(session, library);
+    require(insertedProperties.target == ClipPropertiesTarget::TimelineClip,
+            "Redoing an insertion must restore its editable Properties target.");
 
     controller.selectSourceAsset(1);
     session.seekTimeline(50);

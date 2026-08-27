@@ -146,34 +146,76 @@ EditorSelectionState EditorSession::selectionState() const
     return { selectedAssetIndex_, selectedTimelineClipId_, isTimelineFocused_ };
 }
 
+TimelineInteractionState EditorSession::timelineInteractionState() const
+{
+    return { selectionState(), playbackState_, timelinePlayheadFrame_ };
+}
+
 EditorCommandContext EditorSession::commandContext()
 {
     return { clipSettings_, timelineClipStates_, timelineModel_,
-             selectedAssetIndex_, selectedTimelineClipId_, isTimelineFocused_ };
+             selectedAssetIndex_, selectedTimelineClipId_, isTimelineFocused_,
+             playbackState_, timelinePlayheadFrame_ };
 }
 
 void EditorSession::recordTimelineCommand(
     std::vector<TimelineClip> before,
-    EditorSelectionState selectionBefore)
+    TimelineInteractionState interactionBefore)
 {
     history_.record(std::make_unique<TimelineSnapshotCommand>(
-        std::move(before), timelineModel_.clips(), selectionBefore,
-        selectionState()));
+        std::move(before), timelineModel_.clips(), interactionBefore,
+        timelineInteractionState()));
     projectDirty_ = true;
 }
 
 int EditorSession::addTimelineClip(int mediaAssetId, TimelineTrackType trackType,
                                    int startFrame, int durationFrames)
 {
+    return addTimelineClipInternal(mediaAssetId, trackType, startFrame,
+                                   durationFrames, std::nullopt);
+}
+
+int EditorSession::insertTimelineClip(int mediaAssetId,
+                                      TimelineTrackType trackType,
+                                      int startFrame, int durationFrames,
+                                      int sourceAssetIndex)
+{
+    return addTimelineClipInternal(mediaAssetId, trackType, startFrame,
+                                   durationFrames, sourceAssetIndex);
+}
+
+int EditorSession::addTimelineClipInternal(
+    int mediaAssetId, TimelineTrackType trackType, int startFrame,
+    int durationFrames, std::optional<int> sourceAssetIndex)
+{
     const std::vector<TimelineClip> before = timelineModel_.clips();
-    const EditorSelectionState selectionBefore = selectionState();
+    const TimelineInteractionState interactionBefore = timelineInteractionState();
     TimelineClipState state;
     state.durationFrames = std::max(1, durationFrames);
     state.startFrame = timelineViewState_.isRippleEditingEnabled
         ? TimelineTrackPolicy::rippleInsertionStart(
               timelineModel_.clips(), trackType, startFrame, 0)
         : TimelineTrackPolicy::nearestAvailableStart(
-              timelineModel_.clips(), trackType, startFrame, state.durationFrames);
+            timelineModel_.clips(), trackType, startFrame, state.durationFrames);
+
+    const auto focusInsertedClip = [this, &state, sourceAssetIndex](int clipId) {
+        if (!sourceAssetIndex)
+            return EditorChange::TimelineClip;
+
+        selectedAssetIndex_ = std::clamp(
+            *sourceAssetIndex, 0, static_cast<int>(clipSettings_.size()) - 1);
+        selectedTimelineClipId_ = clipId;
+        isTimelineFocused_ = true;
+        playbackState_.isPlaying = false;
+        playbackState_.isPaused = false;
+        playbackState_.durationFrames = std::max(
+            1, timelineModel_.contentDurationFrames());
+        playbackState_.currentFrame = std::clamp(
+            state.startFrame, 0, playbackState_.durationFrames - 1);
+        timelinePlayheadFrame_ = playbackState_.currentFrame;
+        return EditorChange::Selection | EditorChange::TimelineClip
+            | EditorChange::Playback;
+    };
 
     if (timelineViewState_.isRippleEditingEnabled) {
         std::vector<TimelineClip> shifted = before;
@@ -188,8 +230,9 @@ int EditorSession::addTimelineClip(int mediaAssetId, TimelineTrackType trackType
             return 0;
         }
 
-        recordTimelineCommand(before, selectionBefore);
-        notifyStateChanged(EditorChange::TimelineClip);
+        const EditorChange changes = focusInsertedClip(clipId);
+        recordTimelineCommand(before, interactionBefore);
+        notifyStateChanged(changes);
         return clipId;
     }
 
@@ -197,8 +240,9 @@ int EditorSession::addTimelineClip(int mediaAssetId, TimelineTrackType trackType
     if (timelineModel_.findClip(clipId) == nullptr)
         return 0;
 
-    recordTimelineCommand(before, selectionBefore);
-    notifyStateChanged(EditorChange::TimelineClip);
+    const EditorChange changes = focusInsertedClip(clipId);
+    recordTimelineCommand(before, interactionBefore);
+    notifyStateChanged(changes);
     return clipId;
 }
 
@@ -211,7 +255,7 @@ bool EditorSession::moveTimelineClip(int clipId, const TimelineClipState &state,
         return false;
 
     const std::vector<TimelineClip> before = timelineModel_.clips();
-    const EditorSelectionState selectionBefore = selectionState();
+    const TimelineInteractionState interactionBefore = timelineInteractionState();
     const TimelineClipState previousState = clip->state;
     if (timelineViewState_.isRippleEditingEnabled
         && editKind == TimelineClipEditKind::Move) {
@@ -238,7 +282,7 @@ bool EditorSession::moveTimelineClip(int clipId, const TimelineClipState &state,
         if (!timelineModel_.replaceClips(after))
             return false;
 
-        recordTimelineCommand(before, selectionBefore);
+        recordTimelineCommand(before, interactionBefore);
         notifyStateChanged(EditorChange::TimelineClip);
         return true;
     }
@@ -266,7 +310,7 @@ bool EditorSession::moveTimelineClip(int clipId, const TimelineClipState &state,
         if (!timelineModel_.replaceClips(after))
             return false;
 
-        recordTimelineCommand(before, selectionBefore);
+        recordTimelineCommand(before, interactionBefore);
         notifyStateChanged(EditorChange::TimelineClip);
         return true;
     }
@@ -274,7 +318,7 @@ bool EditorSession::moveTimelineClip(int clipId, const TimelineClipState &state,
     if (!timelineModel_.moveClip(clipId, updatedState))
         return false;
 
-    recordTimelineCommand(before, selectionBefore);
+    recordTimelineCommand(before, interactionBefore);
     notifyStateChanged(EditorChange::TimelineClip);
     return true;
 }
@@ -286,7 +330,7 @@ bool EditorSession::removeTimelineClip(int clipId)
         return false;
 
     const std::vector<TimelineClip> before = timelineModel_.clips();
-    const EditorSelectionState selectionBefore = selectionState();
+    const TimelineInteractionState interactionBefore = timelineInteractionState();
     const TimelineClip removedClip = *clip;
     if (timelineViewState_.isRippleEditingEnabled) {
         std::vector<TimelineClip> after;
@@ -305,7 +349,7 @@ bool EditorSession::removeTimelineClip(int clipId)
         const bool removedSelection = selectedTimelineClipId_ == clipId;
         if (removedSelection)
             selectedTimelineClipId_ = 0;
-        recordTimelineCommand(before, selectionBefore);
+        recordTimelineCommand(before, interactionBefore);
         notifyStateChanged(EditorChange::TimelineClip
             | (removedSelection ? EditorChange::Selection : EditorChange::None));
         return true;
@@ -317,7 +361,7 @@ bool EditorSession::removeTimelineClip(int clipId)
     const bool removedSelection = selectedTimelineClipId_ == clipId;
     if (removedSelection)
         selectedTimelineClipId_ = 0;
-    recordTimelineCommand(before, selectionBefore);
+    recordTimelineCommand(before, interactionBefore);
     notifyStateChanged(EditorChange::TimelineClip
         | (removedSelection ? EditorChange::Selection : EditorChange::None));
     return true;
@@ -375,7 +419,7 @@ int EditorSession::insertTimelineClipCopy(
     int desiredStartFrame)
 {
     const std::vector<TimelineClip> before = timelineModel_.clips();
-    const EditorSelectionState selectionBefore = selectionState();
+    const TimelineInteractionState interactionBefore = timelineInteractionState();
     TimelineClipState state = sourceClip.state;
     state.startFrame = timelineViewState_.isRippleEditingEnabled
         ? TimelineTrackPolicy::rippleInsertionStart(
@@ -405,7 +449,7 @@ int EditorSession::insertTimelineClipCopy(
         sourceAssetIndex, 0, static_cast<int>(clipSettings_.size()) - 1);
     selectedTimelineClipId_ = newClipId;
     isTimelineFocused_ = true;
-    recordTimelineCommand(before, selectionBefore);
+    recordTimelineCommand(before, interactionBefore);
     notifyStateChanged(EditorChange::Selection | EditorChange::TimelineClip);
     return newClipId;
 }
@@ -423,14 +467,14 @@ int EditorSession::splitTimelineClip(int clipId, int splitFrame,
         return 0;
 
     const std::vector<TimelineClip> before = timelineModel_.clips();
-    const EditorSelectionState selectionBefore = selectionState();
+    const TimelineInteractionState interactionBefore = timelineInteractionState();
     const int rightClipId = timelineModel_.splitClip(clipId, splitFrame, mediaKind);
     if (rightClipId == 0)
         return 0;
 
     selectedTimelineClipId_ = rightClipId;
     isTimelineFocused_ = true;
-    recordTimelineCommand(before, selectionBefore);
+    recordTimelineCommand(before, interactionBefore);
     notifyStateChanged(EditorChange::Selection | EditorChange::TimelineClip);
     return rightClipId;
 }

@@ -13,6 +13,12 @@ struct EditorSelectionState {
     bool isTimelineFocused = false;
 };
 
+struct TimelineInteractionState {
+    EditorSelectionState selection;
+    PlaybackState playback;
+    int timelinePlayheadFrame = 0;
+};
+
 // References to the state that commands are allowed to restore. Commands do
 // not know about EditorSession, MFC, or Qt; the session supplies this narrow
 // context only while Undo or Redo is running.
@@ -23,6 +29,8 @@ struct EditorCommandContext {
     int &selectedAssetIndex;
     int &selectedTimelineClipId;
     bool &isTimelineFocused;
+    PlaybackState &playbackState;
+    int &timelinePlayheadFrame;
 };
 
 class EditorCommand
@@ -92,19 +100,19 @@ class TimelineSnapshotCommand final : public EditorCommand
 public:
     TimelineSnapshotCommand(std::vector<TimelineClip> before,
                             std::vector<TimelineClip> after,
-                            EditorSelectionState selectionBefore,
-                            EditorSelectionState selectionAfter);
+                            TimelineInteractionState interactionBefore,
+                            TimelineInteractionState interactionAfter);
     EditorChange undo(EditorCommandContext &context) override;
     EditorChange redo(EditorCommandContext &context) override;
 
 private:
     EditorChange apply(EditorCommandContext &context,
                        const std::vector<TimelineClip> &clips,
-                       const EditorSelectionState &selection);
+                       const TimelineInteractionState &interaction);
     std::vector<TimelineClip> before_;
     std::vector<TimelineClip> after_;
-    EditorSelectionState selectionBefore_;
-    EditorSelectionState selectionAfter_;
+    TimelineInteractionState interactionBefore_;
+    TimelineInteractionState interactionAfter_;
 };
 
 class EditorHistory final

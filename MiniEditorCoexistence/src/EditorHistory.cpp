@@ -12,6 +12,14 @@ void applySelection(EditorCommandContext &context,
     context.isTimelineFocused = selection.isTimelineFocused;
 }
 
+void applyTimelineInteraction(EditorCommandContext &context,
+                              const TimelineInteractionState &interaction)
+{
+    applySelection(context, interaction.selection);
+    context.playbackState = interaction.playback;
+    context.timelinePlayheadFrame = interaction.timelinePlayheadFrame;
+}
+
 } // namespace
 
 SourceClipSettingsCommand::SourceClipSettingsCommand(
@@ -91,32 +99,33 @@ EditorChange TimelineClipSettingsCommand::apply(
 
 TimelineSnapshotCommand::TimelineSnapshotCommand(
     std::vector<TimelineClip> before, std::vector<TimelineClip> after,
-    EditorSelectionState selectionBefore,
-    EditorSelectionState selectionAfter)
+    TimelineInteractionState interactionBefore,
+    TimelineInteractionState interactionAfter)
     : before_(std::move(before))
     , after_(std::move(after))
-    , selectionBefore_(selectionBefore)
-    , selectionAfter_(selectionAfter)
+    , interactionBefore_(interactionBefore)
+    , interactionAfter_(interactionAfter)
 {
 }
 
 EditorChange TimelineSnapshotCommand::undo(EditorCommandContext &context)
 {
-    return apply(context, before_, selectionBefore_);
+    return apply(context, before_, interactionBefore_);
 }
 
 EditorChange TimelineSnapshotCommand::redo(EditorCommandContext &context)
 {
-    return apply(context, after_, selectionAfter_);
+    return apply(context, after_, interactionAfter_);
 }
 
 EditorChange TimelineSnapshotCommand::apply(
     EditorCommandContext &context, const std::vector<TimelineClip> &clips,
-    const EditorSelectionState &selection)
+    const TimelineInteractionState &interaction)
 {
     context.timelineModel.replaceClips(clips);
-    applySelection(context, selection);
-    return EditorChange::Selection | EditorChange::TimelineClip;
+    applyTimelineInteraction(context, interaction);
+    return EditorChange::Selection | EditorChange::TimelineClip
+        | EditorChange::Playback;
 }
 
 bool EditorHistory::canUndo() const
