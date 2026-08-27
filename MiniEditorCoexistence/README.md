@@ -471,6 +471,10 @@ and timecode, and Media Library selection/import/removal requests. Stable
 widget object names make these controls testable without exposing private
 implementation pointers.
 
+The suite also drives the custom timeline directly: clip selection, empty-area
+focus, ruler seeking, Delete, body dragging, end trimming, and the A1 visibility
+button are verified through the same semantic callbacks used by `MainFrame`.
+
 Build the `check` target to build the application and both test executables,
 then run them through CTest. The test target deploys the Qt offscreen platform
 plugin beside the executable automatically.

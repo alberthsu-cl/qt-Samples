@@ -263,6 +263,16 @@ if(MINI_EDITOR_USE_QT)
             src/QtPropertiesPanel.cpp
             src/QtTransportPanel.h
             src/QtTransportPanel.cpp
+            src/TimelineAssetPresentation.h
+            src/TimelineModel.h
+            src/TimelineGeometry.h
+            src/TimelineGeometry.cpp
+            src/TimelineClipEdit.h
+            src/TimelineClipEdit.cpp
+            src/TimelineTrackPolicy.h
+            src/TimelineTrackPolicy.cpp
+            src/QtTimelineCanvas.h
+            src/QtTimelineCanvas.cpp
         )
         target_include_directories(MiniEditorQtWidgetTests PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/src"
