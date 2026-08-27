@@ -19,6 +19,11 @@ struct ClipSettings {
     int opacityPercent = 100;
     int scalePercent = 100;
     ClipPosition position = ClipPosition::Center;
+    // Fade lengths in frames, measured from each end of the placement. They
+    // are edit decisions, so they travel with the project and take part in
+    // Undo/Redo; ClipFade owns the rules that keep them valid.
+    int fadeInFrames = 0;
+    int fadeOutFrames = 0;
 };
 
 // Playback remains application/MFC-owned during this migration. Qt transport
@@ -45,6 +50,11 @@ struct PreviewState {
     std::wstring displayName;
     std::uint32_t thumbnailColorRgb = 0;
     ClipSettings settings;
+    // settings.opacityPercent modulated by the video clip's fade ramp. The
+    // renderer uses this value; the panel still reports the stored opacity.
+    int effectiveOpacityPercent = 100;
+    int videoFadeGainPercent = 100;
+    int audioFadeGainPercent = 100;
     MediaKind mediaKind = MediaKind::Video;
     int timelineFrame = 0;
     int clipLocalFrame = 0;

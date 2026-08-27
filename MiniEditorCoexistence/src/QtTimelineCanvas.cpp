@@ -1,4 +1,5 @@
 #include "QtTimelineCanvas.h"
+#include "ClipFade.h"
 #include "TimelineTrackPolicy.h"
 
 #include <QMouseEvent>
@@ -7,6 +8,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPixmap>
+#include <QPolygon>
 #include <QResizeEvent>
 #include <QSignalBlocker>
 #include <QToolButton>
@@ -293,48 +295,68 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
         const QColor assetColor = presentation->color.darker(100);
         const QRect clipRect = toQRect(timelineGeometry.clipRectangle(clip));
         painter.fillRect(clipRect, assetColor);
+        // The focus frame reads as selection through its colour, so it stays
+        // thin enough not to eat into the clip's own content.
         const bool selected = clip.id == selectedClipId_;
         painter.setPen(QPen(selected ? QColor(255, 196, 72) : QColor(180, 220, 255),
-                            selected ? 3 : 1));
-        painter.drawRect(clipRect.adjusted(selected ? 1 : 0,
-                                           selected ? 1 : 0,
+                            selected ? 2 : 1));
+        painter.drawRect(clipRect.adjusted(selected ? 1 : 0, selected ? 1 : 0,
                                            selected ? -2 : -1,
                                            selected ? -2 : -1));
+        // The fade ramps are drawn from the same normalized lengths the
+        // preview uses, so the overlay can never disagree with the render.
+        const ClipFadeRange fade = ClipFade::normalize(clip.settings,
+                                                       clip.state.durationFrames);
+        if (fade.fadeInFrames > 0 || fade.fadeOutFrames > 0) {
+            const int clipFrames = std::max(1, clip.state.durationFrames);
+            const auto rampWidth = [&clipRect, clipFrames](int frames) {
+                return std::min(clipRect.width(),
+                                clipRect.width() * frames / clipFrames);
+            };
+            painter.save();
+            painter.setRenderHint(QPainter::Antialiasing, true);
+            painter.setBrush(QColor(16, 18, 22, 150));
+            painter.setPen(QPen(QColor(255, 226, 168), 1.4));
+            if (fade.fadeInFrames > 0) {
+                const int rampRight = clipRect.left() + rampWidth(fade.fadeInFrames);
+                const QPolygon ramp({ QPoint(clipRect.left(), clipRect.top()),
+                                      QPoint(clipRect.left(), clipRect.bottom()),
+                                      QPoint(rampRight, clipRect.bottom()) });
+                painter.drawPolygon(ramp);
+            }
+            if (fade.fadeOutFrames > 0) {
+                const int rampLeft = clipRect.right() - rampWidth(fade.fadeOutFrames);
+                const QPolygon ramp({ QPoint(clipRect.right(), clipRect.top()),
+                                      QPoint(clipRect.right(), clipRect.bottom()),
+                                      QPoint(rampLeft, clipRect.bottom()) });
+                painter.drawPolygon(ramp);
+            }
+            painter.restore();
+        }
+
         painter.setPen(Qt::white);
         painter.drawText(clipRect.adjusted(10, 0, -10, 0),
                          Qt::AlignCenter | Qt::TextSingleLine,
                          presentation->displayName);
 
-        if (selected) {
-            const int handleWidth = std::min(
-                kTrimHandleWidth, std::max(1, clipRect.width() / 2));
-            const QRect startHandle(clipRect.left(), clipRect.top(),
-                                    handleWidth, clipRect.height());
-            const QRect endHandle(clipRect.right() - handleWidth + 1,
-                                  clipRect.top(), handleWidth, clipRect.height());
-            const QColor handleColor(255, 196, 72, 190);
-            painter.fillRect(startHandle, handleColor);
-            painter.fillRect(endHandle, handleColor);
-            painter.setPen(QColor(255, 238, 190));
-            painter.drawLine(startHandle.right(), startHandle.top() + 7,
-                             startHandle.right(), startHandle.bottom() - 7);
-            painter.drawLine(endHandle.left(), endHandle.top() + 7,
-                             endHandle.left(), endHandle.bottom() - 7);
-
-            if (isEditingClip() && clip.id == dragClipId_) {
-                const QString rangeText = dragTrimContext_.mediaKind == MediaKind::Image
-                    ? QStringLiteral("Start %1f  |  Display %2f")
-                          .arg(clip.state.startFrame)
-                          .arg(clip.state.durationFrames)
-                    : QStringLiteral("Source %1f-%2f  |  Duration %3f")
-                          .arg(clip.state.sourceInFrame)
-                          .arg(clip.state.sourceInFrame + clip.state.durationFrames)
-                          .arg(clip.state.durationFrames);
-                const QRect rangeRect(clipRect.left() + 3, 2, 230, 22);
-                painter.fillRect(rangeRect, QColor(18, 20, 24, 235));
-                painter.setPen(QColor(230, 238, 248));
-                painter.drawText(rangeRect, Qt::AlignCenter, rangeText);
-            }
+        // Trim handles are deliberately not drawn. The focus frame already
+        // shows which clip is selected, and the horizontal-resize cursor over
+        // an edge already shows that the edge is grabbable, so painted handles
+        // only cover up the clip. kTrimHandleWidth stays the invisible hit
+        // zone that hitTestClip() and updateMouseCursor() both use.
+        if (selected && isEditingClip() && clip.id == dragClipId_) {
+            const QString rangeText = dragTrimContext_.mediaKind == MediaKind::Image
+                ? QStringLiteral("Start %1f  |  Display %2f")
+                      .arg(clip.state.startFrame)
+                      .arg(clip.state.durationFrames)
+                : QStringLiteral("Source %1f-%2f  |  Duration %3f")
+                      .arg(clip.state.sourceInFrame)
+                      .arg(clip.state.sourceInFrame + clip.state.durationFrames)
+                      .arg(clip.state.durationFrames);
+            const QRect rangeRect(clipRect.left() + 3, 2, 230, 22);
+            painter.fillRect(rangeRect, QColor(18, 20, 24, 235));
+            painter.setPen(QColor(230, 238, 248));
+            painter.drawText(rangeRect, Qt::AlignCenter, rangeText);
         }
     };
     if (!timelineClips_.empty()) {

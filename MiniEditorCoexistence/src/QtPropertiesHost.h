@@ -25,6 +25,7 @@ public:
     bool create(void *mfcParentWindowHandle);
     void resize(const CRect &bounds);
     void setClipSettings(const ClipSettings &settings);
+    void setClipDurationFrames(int durationFrames);
     void setEditingEnabled(bool enabled);
     void setClipSettingsEditedHandler(ClipSettingsEditedHandler handler);
 

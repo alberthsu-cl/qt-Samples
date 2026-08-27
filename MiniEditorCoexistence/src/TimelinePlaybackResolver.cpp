@@ -1,5 +1,7 @@
 #include "TimelinePlaybackResolver.h"
 
+#include "ClipFade.h"
+
 #include <algorithm>
 
 std::optional<ResolvedTimelineMedia> TimelinePlaybackResolver::resolveClip(
@@ -21,9 +23,12 @@ std::optional<ResolvedTimelineMedia> TimelinePlaybackResolver::resolveClip(
         clip.mediaAssetId,
         asset->kind,
         clipLocalFrame,
+        clip.state.durationFrames,
         sourceFrame,
         asset->timelineDurationFrames,
-        clip.settings
+        clip.settings,
+        ClipFade::gainPercentAt(clip.settings, clipLocalFrame,
+                                clip.state.durationFrames)
     };
 }
 

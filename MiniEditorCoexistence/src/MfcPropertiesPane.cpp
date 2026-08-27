@@ -29,7 +29,10 @@ void MfcPropertiesPane::drawContent(CDC &deviceContext, const CRect &clientRect)
             + std::to_wstring(clipSettings().opacityPercent).c_str() + _T("%"),
         CString(_T("Position: ")) + clipPositionDisplayName(clipSettings().position),
         CString(_T("Scale: "))
-            + std::to_wstring(clipSettings().scalePercent).c_str() + _T("%")
+            + std::to_wstring(clipSettings().scalePercent).c_str() + _T("%"),
+        CString(_T("Fade: in "))
+            + std::to_wstring(clipSettings().fadeInFrames).c_str() + _T("f, out ")
+            + std::to_wstring(clipSettings().fadeOutFrames).c_str() + _T("f")
     };
 
     for (int index = 0; index < _countof(rows); ++index) {

@@ -31,12 +31,15 @@ bool QtPropertiesHost::create(void *mfcParentWindowHandle)
 
     QObject::connect(panel_.get(), &QtPropertiesPanel::clipSettingsEdited,
                      panel_.get(),
-                     [this](int opacityPercent, int scalePercent, int positionValue) {
+                     [this](int opacityPercent, int scalePercent, int positionValue,
+                            int fadeInFrames, int fadeOutFrames) {
                          if (clipSettingsEditedHandler_) {
                              clipSettingsEditedHandler_(ClipSettings{
                                  opacityPercent,
                                  scalePercent,
-                                 static_cast<ClipPosition>(positionValue)
+                                 static_cast<ClipPosition>(positionValue),
+                                 fadeInFrames,
+                                 fadeOutFrames
                              });
                          }
                      });
@@ -59,6 +62,12 @@ void QtPropertiesHost::setClipSettings(const ClipSettings &settings)
 {
     if (panel_)
         panel_->setClipSettings(settings);
+}
+
+void QtPropertiesHost::setClipDurationFrames(int durationFrames)
+{
+    if (panel_)
+        panel_->setClipDurationFrames(durationFrames);
 }
 
 void QtPropertiesHost::setEditingEnabled(bool enabled)

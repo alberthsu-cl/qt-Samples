@@ -44,6 +44,8 @@ add_executable(MiniEditorCoexistence WIN32
     src/TimelineGeometry.cpp
     src/TimelineClipEdit.h
     src/TimelineClipEdit.cpp
+    src/ClipFade.h
+    src/ClipFade.cpp
     src/TimelineTrackPolicy.h
     src/TimelineTrackPolicy.cpp
     src/TimelinePlaybackResolver.h
@@ -110,6 +112,8 @@ source_group("Layout" FILES
     src/TimelineGeometry.cpp
     src/TimelineClipEdit.h
     src/TimelineClipEdit.cpp
+    src/ClipFade.h
+    src/ClipFade.cpp
     src/TimelineTrackPolicy.h
     src/TimelineTrackPolicy.cpp
 )
@@ -156,6 +160,8 @@ if(BUILD_TESTING)
         src/TimelineGeometry.cpp
         src/TimelineClipEdit.h
         src/TimelineClipEdit.cpp
+        src/ClipFade.h
+        src/ClipFade.cpp
         src/TimelineTrackPolicy.h
         src/TimelineTrackPolicy.cpp
         src/TimelinePlaybackResolver.h
@@ -269,6 +275,8 @@ if(MINI_EDITOR_USE_QT)
             src/TimelineGeometry.cpp
             src/TimelineClipEdit.h
             src/TimelineClipEdit.cpp
+            src/ClipFade.h
+            src/ClipFade.cpp
             src/TimelineTrackPolicy.h
             src/TimelineTrackPolicy.cpp
             src/QtTimelineCanvas.h

@@ -1,4 +1,6 @@
 #include "TimelineModel.h"
+
+#include "ClipFade.h"
 #include "TimelineTrackPolicy.h"
 
 #include <algorithm>
@@ -88,9 +90,17 @@ int TimelineModel::splitClip(int clipId, int splitFrame, MediaKind mediaKind)
     rightClip.state.sourceInFrame = mediaKind == MediaKind::Image
         ? 0 : iterator->state.sourceInFrame + leftDuration;
 
+    // A fade belongs to an edge of the original clip, so each half keeps only
+    // the ramp it still owns. The new cut point itself is not a fade.
+    rightClip.settings.fadeInFrames = 0;
+    rightClip.settings = ClipFade::clampSettings(rightClip.settings,
+                                                 rightClip.state.durationFrames);
+
     iterator->state.durationFrames = leftDuration;
     if (mediaKind == MediaKind::Image)
         iterator->state.sourceInFrame = 0;
+    iterator->settings.fadeOutFrames = 0;
+    iterator->settings = ClipFade::clampSettings(iterator->settings, leftDuration);
     clips_.push_back(rightClip);
     return rightClip.id;
 }

@@ -92,9 +92,12 @@ void MfcPreviewCanvas::drawContent(CDC &deviceContext, const CRect &clientRect) 
         const BYTE red = static_cast<BYTE>((previewState_.thumbnailColorRgb >> 16) & 0xff);
         const BYTE green = static_cast<BYTE>((previewState_.thumbnailColorRgb >> 8) & 0xff);
         const BYTE blue = static_cast<BYTE>(previewState_.thumbnailColorRgb & 0xff);
-        const COLORREF fadedThumbnailColor = RGB(red * settings.opacityPercent / 100,
-                                                 green * settings.opacityPercent / 100,
-                                                 blue * settings.opacityPercent / 100);
+        // PreviewStateResolver already folded the clip's fade ramp into this
+        // value, so the MFC renderer matches the Qt renderer exactly.
+        const int renderedOpacityPercent = previewState_.effectiveOpacityPercent;
+        const COLORREF fadedThumbnailColor = RGB(red * renderedOpacityPercent / 100,
+                                                 green * renderedOpacityPercent / 100,
+                                                 blue * renderedOpacityPercent / 100);
         deviceContext.FillSolidRect(videoRect, fadedThumbnailColor);
         deviceContext.Draw3dRect(videoRect, RGB(220, 220, 220), RGB(220, 220, 220));
 

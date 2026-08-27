@@ -83,7 +83,9 @@ void QtPreviewPanel::paintEvent(QPaintEvent *)
                          QStringLiteral("No media at this timeline position"));
     } else {
         QColor thumbnailColor = QColor::fromRgb(previewState_.thumbnailColorRgb);
-        thumbnailColor.setAlpha(settings.opacityPercent * 255 / 100);
+        // The fade ramp is already folded into this value by
+        // PreviewStateResolver, so the renderer stays a pure presenter.
+        thumbnailColor.setAlpha(previewState_.effectiveOpacityPercent * 255 / 100);
         painter.fillRect(videoRect, thumbnailColor);
         painter.setPen(QPen(QColor(220, 220, 220), 1));
         painter.drawRect(videoRect.adjusted(0, 0, -1, -1));
@@ -101,6 +103,15 @@ void QtPreviewPanel::paintEvent(QPaintEvent *)
                              .arg(settings.opacityPercent)
                              .arg(settings.scalePercent)
                              .arg(clipPositionText(settings.position)));
+        if (previewState_.videoFadeGainPercent < 100) {
+            painter.setPen(QColor(255, 205, 120));
+            painter.drawText(QRect(availableRect.left(), availableRect.top(),
+                                   availableRect.width(), 22),
+                             Qt::AlignCenter | Qt::TextSingleLine,
+                             QStringLiteral("Fade %1%  ->  %2% opacity")
+                                 .arg(previewState_.videoFadeGainPercent)
+                                 .arg(previewState_.effectiveOpacityPercent));
+        }
     }
 
     if (!playbackState_.isPlaying && !playbackState_.isPaused)
@@ -149,11 +160,12 @@ void QtPreviewPanel::paintEvent(QPaintEvent *)
             overlayLines << QStringLiteral("No video at this position");
         }
         if (previewState_.hasAudio) {
-            overlayLines << QStringLiteral("Audio source %1 / %2")
+            overlayLines << QStringLiteral("Audio source %1 / %2  |  level %3%")
                 .arg(frameTimecode(previewState_.audioSourceFrame,
                                    playbackState_.framesPerSecond))
                 .arg(frameTimecode(previewState_.audioSourceDurationFrames,
-                                   playbackState_.framesPerSecond));
+                                   playbackState_.framesPerSecond))
+                .arg(previewState_.audioFadeGainPercent);
         }
     }
     painter.setPen(Qt::white);

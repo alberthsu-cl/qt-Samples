@@ -1,4 +1,5 @@
 #include "ProjectSerializer.h"
+#include "ClipFade.h"
 #include "TimelineTrackPolicy.h"
 
 #include <fstream>
@@ -13,7 +14,7 @@
 
 namespace {
 
-constexpr int kCurrentFormatVersion = 6;
+constexpr int kCurrentFormatVersion = 7;
 
 std::string utf8FromWide(const std::wstring &value)
 {
@@ -161,6 +162,12 @@ bool ProjectSerializer::save(const std::filesystem::path &path,
             setError(errorMessage, L"A timeline clip has an invalid source range.");
             return false;
         }
+        if (clip.settings.fadeInFrames < 0 || clip.settings.fadeOutFrames < 0
+            || clip.settings.fadeInFrames + clip.settings.fadeOutFrames
+                > clip.state.durationFrames) {
+            setError(errorMessage, L"A timeline clip has a fade longer than the clip.");
+            return false;
+        }
     }
 
     std::vector<TimelineClip> validatedClips;
@@ -203,7 +210,9 @@ bool ProjectSerializer::save(const std::filesystem::path &path,
                << ", \"sourceInFrame\": " << clip.state.sourceInFrame
                << ", \"opacityPercent\": " << clip.settings.opacityPercent
                << ", \"scalePercent\": " << clip.settings.scalePercent
-               << ", \"position\": \"" << positionName(clip.settings.position) << "\" }";
+               << ", \"position\": \"" << positionName(clip.settings.position)
+               << "\", \"fadeInFrames\": " << clip.settings.fadeInFrames
+               << ", \"fadeOutFrames\": " << clip.settings.fadeOutFrames << " }";
         output << (index + 1 == project.timelineItems.size() ? "\n" : ",\n");
     }
     output << "  ]\n"
@@ -363,6 +372,20 @@ std::optional<EditorProject> ProjectSerializer::load(const std::filesystem::path
             }
             settings = { *opacity, *scale, *position };
         }
+        if (*formatVersion >= 7) {
+            const auto fadeIn = integerValue(clipObject, "fadeInFrames");
+            const auto fadeOut = integerValue(clipObject, "fadeOutFrames");
+            if (!fadeIn || *fadeIn < 0 || !fadeOut || *fadeOut < 0) {
+                setError(errorMessage, L"A timeline clip has an invalid fade length.");
+                return std::nullopt;
+            }
+            settings.fadeInFrames = *fadeIn;
+            settings.fadeOutFrames = *fadeOut;
+        }
+        // Version 6 and older predate fades and load with none. A trim made
+        // in a newer build can still shorten a clip below its stored ramps,
+        // so every loaded placement is re-clamped to its own duration.
+        settings = ClipFade::clampSettings(settings, *durationFrames);
         project.timelineItems.push_back({ *id, mediaAssetId, *trackType,
                                           { *startFrame, *durationFrames,
                                             *sourceInFrame }, settings });

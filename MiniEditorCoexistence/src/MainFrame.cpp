@@ -515,9 +515,15 @@ void MainFrame::refreshEditorViews(EditorChange changes)
             mediaLibraryHost_.setSelectedAssetIndex(selectedAssetIndex);
         timelineCanvasHost_.setSelectedClipId(editorSession_.selectedTimelineClipId());
     }
-    if (selectionChanged || clipSettingsChanged) {
+    // A trim reports TimelineClip rather than ClipSettings, yet it changes the
+    // room available for fades, so the inspector refreshes for that too.
+    if (selectionChanged || clipSettingsChanged || timelineClipChanged) {
         // QtPropertiesPanel uses QSignalBlocker while it receives this state,
         // so an editor-to-view refresh never loops back as a user request.
+        const TimelineClip *focusedClip = editorSession_.timelineModel().findClip(
+            editorSession_.selectedTimelineClipId());
+        propertiesHost_.setClipDurationFrames(
+            focusedClip != nullptr ? focusedClip->state.durationFrames : 0);
         propertiesHost_.setClipSettings(settings);
         propertiesHost_.setEditingEnabled(editorSession_.selectedTimelineClipId() != 0);
     }

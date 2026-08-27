@@ -268,9 +268,14 @@ rectangles, canvas sizing, and topmost overlap hit-testing. `QtTimelineCanvas`
 converts these plain rectangles to `QRect` and concentrates on event handling
 and painting. Pure C++ tests cover the geometry without creating a window.
 
-The selected Qt timeline clip displays left and right trim handles. Hovering
-an edge shows the horizontal-resize cursor, dragging paints a live provisional
-range, and releasing commits one `EditorSession` command for Undo/Redo. The
+The selected Qt timeline clip can be trimmed from either edge. The handles are
+intentionally **not painted**: the focus frame already identifies the selected
+clip, and the horizontal-resize cursor already announces that an edge is
+grabbable, so drawn handles would only cover the clip's own content.
+`kTrimHandleWidth` therefore describes an invisible hit zone shared by
+`hitTestClip()` and the cursor update. Dragging an edge paints a live
+provisional range, and releasing commits one `EditorSession` command for
+Undo/Redo. The
 framework-neutral `TimelineClipEdit` applies media-specific rules: video and
 audio handles update source-in/out within the source duration, while a still
 image's handles adjust when and how long it appears without a source limit.
@@ -452,6 +457,62 @@ compatible off-screen bitmap, then copies the completed frame to the window
 with one `BitBlt`. Playback invalidation uses `Invalidate(FALSE)`, and the
 paint handlers suppress the redundant `WM_ERASEBKGND` pass. This prevents the
 background from becoming visible between frequent playback repaints.
+
+## Phase 22 — Clip fades
+
+`ClipFade` is the framework-neutral fade policy. `ClipSettings` gains
+`fadeInFrames` and `fadeOutFrames`, so a fade is an edit decision that travels
+with the placement through Undo/Redo, the internal clipboard, and the project
+file. Nothing about a ramp lives in a renderer.
+
+Three surfaces ask `ClipFade` the same question and therefore cannot disagree:
+
+- `TimelinePlaybackResolver` reports `fadeGainPercent` for the resolved V1 and
+  A1 media at the playhead.
+- `PreviewStateResolver` folds the video gain into `effectiveOpacityPercent`
+  and passes the audio gain through. `QtPreviewPanel` and the MFC fallback
+  preview both render that one value.
+- `QtTimelineCanvas` draws each clip's ramp triangles from the same normalized
+  lengths, so the overlay always matches what the preview shows.
+
+Two rules keep an impossible fade impossible:
+
+- `QtPropertiesPanel` gives each fade a slider plus a spin box, exactly like
+  Opacity and Scale. Both editors span the whole clip, so neither control ever
+  stops responding; when the two ramps would overlap, the fade *not* being
+  dragged yields. The panel receives the placement length through
+  `setClipDurationFrames()`, which `MainFrame` also refreshes on
+  `EditorChange::TimelineClip` because a trim changes the room available for
+  fades.
+- `ClipFade::normalize()` still runs at render time. A trim shortens a clip
+  without touching its settings, so the two stored ramps are shortened
+  proportionally until they exactly meet inside the clip.
+
+While playback is stopped, the focused clip is an edit target rather than a
+rendered timeline frame, so `PreviewStateResolver` deliberately suppresses its
+fade. Otherwise a fade-in would hide the very placement being adjusted.
+
+### Qt lesson: stylesheet vs. style vs. palette
+
+The first version of these controls used only spin boxes, and their up/down
+arrows did not work. The cause is worth remembering: applying **any**
+stylesheet rule to a `QSpinBox` switches that widget to the stylesheet style,
+which then draws the steppers exclusively from `::up-button` / `::down-button`
+rules — and draws no arrow at all unless an `image:` is supplied. The Opacity
+and Scale boxes hid the problem because their sliders did the real work.
+
+The fix is to pick the right tool per widget. The spin boxes are now left out
+of the panel stylesheet and instead get the **Fusion** style plus a dark
+**palette**: Fusion honours palettes, so the fields stay dark while the real
+style keeps drawing working steppers. `QComboBox` keeps its stylesheet rule,
+because its arrow is not an interactive target on its own.
+
+The spin boxes also use `setKeyboardTracking(false)`, so typing `120` is one
+edit and one Undo entry instead of three.
+
+Project format v7 stores both fade lengths per timeline placement. Version 6
+and older documents load with no fades, and every loaded placement is
+re-clamped to its own duration.
 
 ## Build with Visual Studio 2022
 

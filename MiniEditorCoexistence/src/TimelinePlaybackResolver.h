@@ -13,9 +13,13 @@ struct ResolvedTimelineMedia {
     int mediaAssetId = 0;
     MediaKind mediaKind = MediaKind::Video;
     int clipLocalFrame = 0;
+    int clipDurationFrames = 0;
     int sourceFrame = 0;
     int sourceDurationFrames = 0;
     ClipSettings settings;
+    // The clip's own fade ramp evaluated at clipLocalFrame. Video multiplies
+    // it into opacity; audio would multiply it into level.
+    int fadeGainPercent = 100;
 };
 
 struct ResolvedTimelineFrame {

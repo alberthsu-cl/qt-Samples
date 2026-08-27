@@ -1,3 +1,4 @@
+#include "ClipFade.h"
 #include "EditorSession.h"
 #include "EditorCommandController.h"
 #include "PlaybackClockController.h"
@@ -13,10 +14,12 @@
 #include "ProjectDocumentService.h"
 #include "WorkspaceLayout.h"
 
+#include <algorithm>
 #include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -1289,6 +1292,164 @@ void workspaceLayoutProtectsPaneBounds()
     require(geometry.timelineCanvas.height >= 0, "Timeline canvas bounds must stay valid.");
 }
 
+
+void clipFadeOwnsRampPolicyIndependentlyOfAnyRenderer()
+{
+    ClipSettings settings;
+    settings.opacityPercent = 100;
+    settings.fadeInFrames = 10;
+    settings.fadeOutFrames = 20;
+
+    const ClipFadeRange range = ClipFade::normalize(settings, 100);
+    require(range.fadeInFrames == 10 && range.fadeOutFrames == 20,
+            "Fades that fit inside the clip must be used unchanged.");
+
+    require(ClipFade::gainPercentAt(settings, 0, 100) == 0,
+            "A fade-in must start fully transparent.");
+    require(ClipFade::gainPercentAt(settings, 5, 100) == 50,
+            "A fade-in must ramp linearly to full opacity.");
+    require(ClipFade::gainPercentAt(settings, 10, 100) == 100,
+            "A fade-in must reach full opacity when its ramp ends.");
+    require(ClipFade::gainPercentAt(settings, 50, 100) == 100,
+            "Frames between the two ramps must stay at full opacity.");
+    require(ClipFade::gainPercentAt(settings, 80, 100) == 100,
+            "A fade-out must not begin before its own ramp.");
+    require(ClipFade::gainPercentAt(settings, 90, 100) == 50,
+            "A fade-out must ramp down linearly.");
+    require(ClipFade::gainPercentAt(settings, 99, 100) == 5,
+            "A fade-out must approach transparency at the last clip frame.");
+
+    settings.opacityPercent = 50;
+    require(ClipFade::effectiveOpacityPercent(settings, 5, 100) == 25,
+            "The ramp must scale the stored opacity rather than replace it.");
+    require(ClipFade::effectiveOpacityPercent(settings, 50, 100) == 50,
+            "A held frame must render exactly the stored opacity.");
+
+    // A trim can leave a clip shorter than its two ramps combined. Rendering
+    // must stay valid without rewriting the stored edit decision.
+    settings.fadeInFrames = 30;
+    settings.fadeOutFrames = 10;
+    const ClipFadeRange trimmed = ClipFade::normalize(settings, 20);
+    require(trimmed.fadeInFrames == 15 && trimmed.fadeOutFrames == 5,
+            "Overlapping ramps must keep their requested proportions inside the clip.");
+    require(ClipFade::gainPercentAt(settings, 0, 20) == 0
+                && ClipFade::gainPercentAt(settings, 14, 20) == 93,
+            "A normalized ramp pair must still produce a valid gain curve.");
+
+    const ClipSettings clamped = ClipFade::clampSettings(settings, 20);
+    require(clamped.fadeInFrames == 15 && clamped.fadeOutFrames == 5,
+            "Clamping must store fade lengths that already fit the clip.");
+    require(ClipFade::gainPercentAt({}, 0, 100) == 100
+                && !ClipFade::hasFade({}),
+            "A clip without fades must render at full gain everywhere.");
+}
+
+void clipFadesTravelThroughSessionUndoAndProjectFiles()
+{
+    MediaLibrary library;
+    const int videoId = library.addKnownAsset(
+        L"D:/media/video.mp4", MediaKind::Video, 400, 0x5078A0);
+    const int audioId = library.addKnownAsset(
+        L"D:/media/audio.wav", MediaKind::Audio, 400, 0x2878B4);
+
+    EditorSession session(2);
+    const int videoClipId = session.addTimelineClip(
+        videoId, TimelineTrackType::Video, 0, 100);
+    const int audioClipId = session.addTimelineClip(
+        audioId, TimelineTrackType::Audio, 0, 100);
+    session.selectTimelineClip(videoClipId, 0);
+
+    ClipSettings settings;
+    settings.fadeInFrames = 40;
+    settings.fadeOutFrames = 20;
+    session.updateSelectedClipSettings(settings);
+    const TimelineClip *videoClip = session.timelineModel().findClip(videoClipId);
+    require(videoClip != nullptr && videoClip->settings.fadeInFrames == 40
+                && videoClip->settings.fadeOutFrames == 20,
+            "The session must store the requested fade lengths on the focused clip.");
+
+    require(session.undo(), "A fade edit must be undoable.");
+    require(session.timelineModel().findClip(videoClipId)->settings.fadeInFrames == 0,
+            "Undo must restore the previous fade lengths.");
+    require(session.redo(), "A fade edit must be redoable.");
+    require(session.timelineModel().findClip(videoClipId)->settings.fadeInFrames == 40,
+            "Redo must reapply the stored fade lengths.");
+
+    // Splitting divides the clip, so each half keeps only the ramp it owns.
+    const int rightPieceId = session.splitTimelineClip(videoClipId, 60,
+                                                       MediaKind::Video);
+    require(rightPieceId != 0, "The fade test requires a valid split.");
+    const TimelineClip *leftPiece = session.timelineModel().findClip(videoClipId);
+    const TimelineClip *rightPiece = session.timelineModel().findClip(rightPieceId);
+    require(leftPiece->settings.fadeInFrames == 40
+                && leftPiece->settings.fadeOutFrames == 0,
+            "The left split piece must keep the fade-in and lose the fade-out.");
+    require(rightPiece->settings.fadeInFrames == 0
+                && rightPiece->settings.fadeOutFrames == 20,
+            "The right split piece must keep the fade-out and lose the fade-in.");
+    require(session.undo(), "A split must remain undoable with fades present.");
+    require(session.timelineModel().findClip(videoClipId)->settings.fadeOutFrames == 20,
+            "Undoing a split must restore both original fade lengths.");
+
+    session.selectTimelineClip(audioClipId, 1);
+    ClipSettings audioSettings;
+    audioSettings.fadeOutFrames = 50;
+    session.updateSelectedClipSettings(audioSettings);
+
+    session.focusTimeline();
+    session.setPlaybackDuration(session.timelineModel().contentDurationFrames(), false);
+    session.seekTimeline(20);
+    session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+    PreviewState preview = PreviewStateResolver::resolve(session, library);
+    require(preview.videoFadeGainPercent == 50 && preview.effectiveOpacityPercent == 50,
+            "A paused playhead inside a fade-in must report the ramped opacity.");
+    require(preview.hasAudio && preview.audioFadeGainPercent == 100,
+            "An audio clip must keep full level before its fade-out begins.");
+
+    session.seekTimeline(75);
+    preview = PreviewStateResolver::resolve(session, library);
+    require(preview.audioFadeGainPercent == 50,
+            "An audio fade-out must ramp the reported level down.");
+    require(preview.videoFadeGainPercent == 100,
+            "A frame between two ramps must render at full opacity.");
+
+    // Stopped editing shows the focused clip as an edit target, so its own
+    // fade-in must not hide the placement being adjusted.
+    session.selectTimelineClip(videoClipId, 0);
+    session.handlePlaybackCommand(PlaybackCommand::Stop);
+    preview = PreviewStateResolver::resolve(session, library);
+    require(preview.videoFadeGainPercent == 100
+                && preview.effectiveOpacityPercent == preview.settings.opacityPercent,
+            "A stopped focused clip must preview at its stored opacity.");
+
+    EditorProject project = session.projectSnapshot();
+    project.mediaAssets = library.assets();
+    const std::filesystem::path path = std::filesystem::temp_directory_path()
+        / "MiniEditorFadeTests.mini-editor.json";
+    std::wstring errorMessage;
+    require(ProjectSerializer::save(path, project, &errorMessage),
+            "A project containing fades must save.");
+    const std::optional<EditorProject> loaded =
+        ProjectSerializer::load(path, 2, &errorMessage);
+    std::error_code removeError;
+    std::filesystem::remove(path, removeError);
+    require(loaded.has_value(), "A project containing fades must load again.");
+    const auto savedVideoClip = std::find_if(loaded->timelineItems.begin(),
+        loaded->timelineItems.end(),
+        [videoId](const TimelineClip &clip) { return clip.mediaAssetId == videoId; });
+    require(savedVideoClip != loaded->timelineItems.end()
+                && savedVideoClip->settings.fadeInFrames == 40
+                && savedVideoClip->settings.fadeOutFrames == 20,
+            "Format version 7 must round-trip both fade lengths.");
+
+    // The file format keeps the same invariant the session enforces, so an
+    // impossible fade can never reach disk through a hand-edited snapshot.
+    project.timelineItems.front().settings.fadeInFrames = 500;
+    require(!ProjectSerializer::save(path, project, &errorMessage),
+            "Saving a fade longer than its clip must be rejected.");
+}
+
 } // namespace
 
 int main()
@@ -1311,6 +1472,8 @@ int main()
         editorCommandControllerUnifiesEditorIntent();
         playbackClockControllerKeepsTimerPolicyFrameworkNeutral();
         previewStateResolverKeepsPreviewPolicyFrameworkNeutral();
+        clipFadeOwnsRampPolicyIndependentlyOfAnyRenderer();
+        clipFadesTravelThroughSessionUndoAndProjectFiles();
         projectDocumentServiceMaintainsProjectAndMediaConsistency();
         internalTimelineClipboardSupportsCopyCutPasteAndDuplicate();
         focusedTimelineClipOwnsIndependentPlacementSettings();

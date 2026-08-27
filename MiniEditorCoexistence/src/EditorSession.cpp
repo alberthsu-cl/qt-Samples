@@ -1,4 +1,6 @@
 #include "EditorSession.h"
+
+#include "ClipFade.h"
 #include "TimelineTrackPolicy.h"
 
 #include "DemoProject.h"
@@ -21,16 +23,21 @@ bool hasSameClipSettings(const ClipSettings &left, const ClipSettings &right)
 {
     return left.opacityPercent == right.opacityPercent
         && left.scalePercent == right.scalePercent
-        && left.position == right.position;
+        && left.position == right.position
+        && left.fadeInFrames == right.fadeInFrames
+        && left.fadeOutFrames == right.fadeOutFrames;
 }
 
-ClipSettings clampedClipSettings(ClipSettings settings)
+// clipDurationFrames is zero for source-library settings, which have no
+// placement length yet. A timeline placement passes its own duration so a
+// stored fade can never be longer than the clip it belongs to.
+ClipSettings clampedClipSettings(ClipSettings settings, int clipDurationFrames = 0)
 {
     settings.opacityPercent = std::clamp(settings.opacityPercent,
                                          kMinimumOpacityPercent, kMaximumOpacityPercent);
     settings.scalePercent = std::clamp(settings.scalePercent,
                                        kMinimumScalePercent, kMaximumScalePercent);
-    return settings;
+    return ClipFade::clampSettings(settings, clipDurationFrames);
 }
 
 bool hasSameTimelineClipState(const TimelineClipState &left, const TimelineClipState &right)
@@ -490,7 +497,8 @@ void EditorSession::updateSelectedClipSettings(const ClipSettings &settings)
 {
     if (const TimelineClip *clip = timelineModel_.findClip(selectedTimelineClipId_)) {
         const ClipSettings previousSettings = clip->settings;
-        const ClipSettings updatedSettings = clampedClipSettings(settings);
+        const ClipSettings updatedSettings = clampedClipSettings(
+            settings, clip->state.durationFrames);
         if (hasSameClipSettings(previousSettings, updatedSettings))
             return;
         timelineModel_.updateClipSettings(selectedTimelineClipId_, updatedSettings);

@@ -25,6 +25,7 @@ class MiniEditorQtWidgetTests final : public QObject
 private slots:
     void propertiesModelRefreshDoesNotEmitUserEdit();
     void propertiesUserEditEmitsCompleteSettings();
+    void propertiesFadeEditorsRespectTheClipDuration();
     void transportRefreshAndButtonsUseSemanticCommands();
     void mediaLibrarySeparatesProgrammaticAndUserSelection();
     void timelineClickSeekFocusAndDeleteUseSemanticHandlers();
@@ -64,6 +65,66 @@ void MiniEditorQtWidgetTests::propertiesUserEditEmitsCompleteSettings()
     QCOMPARE(arguments[0].toInt(), 65);
     QCOMPARE(arguments[1].toInt(), 125);
     QCOMPARE(arguments[2].toInt(), static_cast<int>(ClipPosition::TopLeft));
+    QCOMPARE(arguments[3].toInt(), 0);
+    QCOMPARE(arguments[4].toInt(), 0);
+}
+
+void MiniEditorQtWidgetTests::propertiesFadeEditorsRespectTheClipDuration()
+{
+    QtPropertiesPanel panel;
+    auto *fadeInSlider = panel.findChild<QSlider *>(QStringLiteral("fadeInSlider"));
+    auto *fadeIn = panel.findChild<QSpinBox *>(QStringLiteral("fadeInSpinBox"));
+    auto *fadeOutSlider = panel.findChild<QSlider *>(QStringLiteral("fadeOutSlider"));
+    auto *fadeOut = panel.findChild<QSpinBox *>(QStringLiteral("fadeOutSpinBox"));
+    auto *summary = panel.findChild<QLabel *>(QStringLiteral("fadeSummaryLabel"));
+    QVERIFY(fadeInSlider != nullptr && fadeIn != nullptr);
+    QVERIFY(fadeOutSlider != nullptr && fadeOut != nullptr && summary != nullptr);
+
+    QSignalSpy editedSpy(&panel, &QtPropertiesPanel::clipSettingsEdited);
+    panel.setClipDurationFrames(90);
+    ClipSettings settings;
+    settings.fadeInFrames = 20;
+    settings.fadeOutFrames = 10;
+    panel.setClipSettings(settings);
+
+    QCOMPARE(fadeIn->value(), 20);
+    QCOMPARE(fadeInSlider->value(), 20);
+    QCOMPARE(fadeOut->value(), 10);
+    QCOMPARE(fadeOutSlider->value(), 10);
+    QCOMPARE(summary->text(), QStringLiteral("90 f clip, 60 f at full opacity"));
+    QCOMPARE(editedSpy.count(), 0);
+
+    // Each editor spans the whole clip, so a stepper or slider never stops
+    // responding because the other fade happens to be long.
+    QCOMPARE(fadeIn->maximum(), 90);
+    QCOMPARE(fadeInSlider->maximum(), 90);
+    QCOMPARE(fadeOut->maximum(), 90);
+    QCOMPARE(fadeOutSlider->maximum(), 90);
+
+    // The fade being dragged wins; the other one yields so the pair still fits.
+    fadeInSlider->setValue(85);
+    QCOMPARE(fadeIn->value(), 85);
+    QCOMPARE(fadeOut->value(), 5);
+    QCOMPARE(fadeOutSlider->value(), 5);
+    QCOMPARE(summary->text(), QStringLiteral("90 f clip, 0 f at full opacity"));
+    QCOMPARE(editedSpy.count(), 1);
+    const QList<QVariant> fadeArguments = editedSpy.takeFirst();
+    QCOMPARE(fadeArguments[3].toInt(), 85);
+    QCOMPARE(fadeArguments[4].toInt(), 5);
+
+    // Trimming the clip shorter keeps the stored pair valid and proportional,
+    // and a model refresh must never look like a user edit.
+    panel.setClipDurationFrames(45);
+    QCOMPARE(fadeIn->value(), 42);
+    QCOMPARE(fadeOut->value(), 3);
+    QCOMPARE(fadeIn->maximum(), 45);
+    QCOMPARE(editedSpy.count(), 0);
+
+    panel.setEditingEnabled(false);
+    QVERIFY(!fadeIn->isEnabled());
+    QVERIFY(!fadeInSlider->isEnabled());
+    QVERIFY(!fadeOut->isEnabled());
+    QVERIFY(!fadeOutSlider->isEnabled());
 }
 
 void MiniEditorQtWidgetTests::transportRefreshAndButtonsUseSemanticCommands()

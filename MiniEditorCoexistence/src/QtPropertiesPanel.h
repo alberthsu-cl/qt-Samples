@@ -19,10 +19,14 @@ public:
     explicit QtPropertiesPanel(QWidget *parent = nullptr);
 
     void setClipSettings(const ClipSettings &settings);
+    // The placement length bounds both fade editors, so the panel can never
+    // request a ramp that ClipFade would silently shorten again.
+    void setClipDurationFrames(int durationFrames);
     void setEditingEnabled(bool enabled);
 
 signals:
-    void clipSettingsEdited(int opacityPercent, int scalePercent, int positionValue);
+    void clipSettingsEdited(int opacityPercent, int scalePercent, int positionValue,
+                            int fadeInFrames, int fadeOutFrames);
 
 private:
     void emitCurrentSettings();
@@ -32,4 +36,18 @@ private:
     QSlider *scaleSlider_ = nullptr;
     QSpinBox *scaleSpinBox_ = nullptr;
     QComboBox *positionComboBox_ = nullptr;
+    QSlider *fadeInSlider_ = nullptr;
+    QSpinBox *fadeInSpinBox_ = nullptr;
+    QSlider *fadeOutSlider_ = nullptr;
+    QSpinBox *fadeOutSpinBox_ = nullptr;
+    QLabel *fadeSummaryLabel_ = nullptr;
+    int clipDurationFrames_ = 0;
+
+    int fadeLimitFrames() const;
+    void applyFadeRanges();
+    // The fade being dragged always moves freely across its whole range; the
+    // other one yields so the pair still fits inside the clip.
+    void yieldOppositeFade(bool fadeInChanged);
+    void setFadeValues(int fadeInFrames, int fadeOutFrames);
+    void updateFadeSummary();
 };
