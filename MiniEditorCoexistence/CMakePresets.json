@@ -8,7 +8,7 @@
       "architecture": "x64",
       "binaryDir": "${sourceDir}/out/build/vs2022-x64",
       "cacheVariables": {
-        "CMAKE_PREFIX_PATH": "D:/Qt/6.11.1/msvc2022_64"
+        "CMAKE_PREFIX_PATH": "C:/Qt/6.11.2/msvc2022_64"
       }
     }
   ],

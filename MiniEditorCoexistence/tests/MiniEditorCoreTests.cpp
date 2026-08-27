@@ -6,6 +6,7 @@
 #include "TimelineTrackPolicy.h"
 #include "TimelinePlaybackResolver.h"
 #include "TimelineGeometry.h"
+#include "TimelineEditingController.h"
 #include "WorkspaceLayout.h"
 
 #include <exception>
@@ -472,6 +473,63 @@ void timelineFocusDoesNotRequireASelectedClip()
     require(session.isTimelineFocused()
                 && session.selectedTimelineClipId() == 0,
             "Deleting the focused clip must leave an unfocused timeline, not select media.");
+}
+
+void timelineEditingControllerCoordinatesFocusAndSplitPolicy()
+{
+    MediaLibrary library;
+    const int videoId = library.addKnownAsset(
+        L"D:/media/video.mp4", MediaKind::Video, 400, 0x5078A0);
+    const int secondVideoId = library.addKnownAsset(
+        L"D:/media/second.mp4", MediaKind::Video, 300, 0x7850A0);
+    const int audioId = library.addKnownAsset(
+        L"D:/media/audio.wav", MediaKind::Audio, 500, 0x2878B4);
+
+    EditorSession session(3);
+    TimelineEditingController controller(session, library);
+    const int videoClipId = session.addTimelineClip(
+        videoId, TimelineTrackType::Video, 100, 100);
+    const int audioClipId = session.addTimelineClip(
+        audioId, TimelineTrackType::Audio, 90, 200);
+
+    controller.selectSourceAsset(1);
+    session.seekTimeline(50);
+    require(controller.focusClip(videoClipId, false)
+                && session.isTimelineFocused()
+                && session.selectedTimelineClipId() == videoClipId
+                && session.selectedAssetIndex() == 0
+                && session.playbackState().currentFrame == 50,
+            "Controller clip focus must map the placement to its source asset without resetting time.");
+
+    controller.focusFrame(120);
+    require(session.selectedTimelineClipId() == videoClipId,
+            "V1 must win focus when video and audio overlap at the timeline head.");
+    controller.focusFrame(220);
+    require(session.selectedTimelineClipId() == audioClipId
+                && session.selectedAssetIndex() == 2,
+            "A1 must receive focus when it is the only placement under the timeline head.");
+    controller.focusFrame(50);
+    require(session.isTimelineFocused()
+                && session.selectedTimelineClipId() == 0
+                && session.playbackState().currentFrame == 50,
+            "A timeline gap must keep timeline focus while clearing placement focus.");
+
+    controller.focusFrame(120);
+    require(controller.canCopy() && controller.canCut()
+                && controller.canDuplicate() && controller.canSplitAtHead(),
+            "Controller command state must follow the placement under the head.");
+    require(controller.splitAtHead(),
+            "Controller must split a selected placement at an interior head position.");
+    const TimelineClip *rightClip = session.timelineModel().findClip(
+        session.selectedTimelineClipId());
+    require(rightClip != nullptr && rightClip->id != videoClipId
+                && rightClip->mediaAssetId == videoId
+                && rightClip->state.startFrame == 120
+                && session.playbackState().currentFrame == 120,
+            "Split must focus the new right placement and preserve the timeline head.");
+
+    require(secondVideoId != videoId,
+            "Media library IDs used by controller mapping must remain distinct.");
 }
 
 void internalTimelineClipboardSupportsCopyCutPasteAndDuplicate()
@@ -1061,6 +1119,7 @@ int main()
         editorSessionUndoRedoTracksClipDeletion();
         splittingClipPreservesSourceRangesSettingsAndUndoHistory();
         timelineFocusDoesNotRequireASelectedClip();
+        timelineEditingControllerCoordinatesFocusAndSplitPolicy();
         internalTimelineClipboardSupportsCopyCutPasteAndDuplicate();
         focusedTimelineClipOwnsIndependentPlacementSettings();
         playbackStopsAtFocusedPreviewDuration();

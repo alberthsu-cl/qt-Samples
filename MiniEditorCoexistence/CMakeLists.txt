@@ -46,6 +46,8 @@ add_executable(MiniEditorCoexistence WIN32
     src/TimelinePlaybackResolver.cpp
     src/EditorSession.h
     src/EditorSession.cpp
+    src/TimelineEditingController.h
+    src/TimelineEditingController.cpp
     src/WorkspaceSettings.h
     src/WorkspaceSettings.cpp
     src/WorkspaceLayout.h
@@ -111,6 +113,11 @@ source_group("Playback" FILES
     src/TimelinePlaybackResolver.cpp
 )
 
+source_group("Controller" FILES
+    src/TimelineEditingController.h
+    src/TimelineEditingController.cpp
+)
+
 if(BUILD_TESTING)
     add_executable(MiniEditorCoreTests
         tests/MiniEditorCoreTests.cpp
@@ -135,6 +142,8 @@ if(BUILD_TESTING)
         src/TimelinePlaybackResolver.cpp
         src/EditorSession.h
         src/EditorSession.cpp
+        src/TimelineEditingController.h
+        src/TimelineEditingController.cpp
         src/WorkspaceLayout.h
         src/WorkspaceLayout.cpp
     )

@@ -33,7 +33,8 @@ CRect toClientRect(const WorkspaceRect &rect)
 } // namespace
 
 MainFrame::MainFrame()
-    : editorSession_(demoAssets().size())
+    : editorSession_(demoAssets().size()),
+      timelineController_(editorSession_, mediaLibrary_)
 {
     // The sample starts with familiar built-in assets, but the Qt media
     // library now reads its display data from MediaLibrary rather than from
@@ -95,12 +96,12 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     if (!timelineCanvasHost_.create(GetSafeHwnd()))
         return -1;
     timelineCanvasHost_.setSeekHandler(
-        [this](int frame) { focusTimelineFrame(frame); });
+        [this](int frame) { timelineController_.focusFrame(frame); });
     timelineCanvasHost_.setTimelineClipEditedHandler(
         [this](int clipId, const TimelineClipState &state,
                TimelineClipEditKind editKind) {
             if (editorSession_.moveTimelineClip(clipId, state, editKind))
-                synchronizePlaybackDurationForFocus(false);
+                timelineController_.synchronizePlaybackDuration(false);
     });
     timelineCanvasHost_.setMediaAssetDroppedHandler(
         [this](int mediaAssetId, int frame) {
@@ -113,7 +114,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
                                            isAudio ? TimelineTrackType::Audio
                                                    : TimelineTrackType::Video,
                                            frame, asset->timelineDurationFrames);
-            synchronizePlaybackDurationForFocus(false);
+            timelineController_.synchronizePlaybackDuration(false);
         });
     timelineCanvasHost_.setAssetPresentationResolver(
         [this](int mediaAssetId) -> std::optional<TimelineAssetPresentation> {
@@ -132,17 +133,13 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         });
     timelineCanvasHost_.setTimelineClipDeletedHandler(
         [this](int clipId) {
-            const bool removedFocusedClip =
-                editorSession_.selectedTimelineClipId() == clipId;
-            if (editorSession_.removeTimelineClip(clipId))
-                synchronizePlaybackDurationForFocus(removedFocusedClip);
+            if (timelineController_.deleteClip(clipId))
+                KillTimer(kPlaybackTimerId);
         });
     timelineCanvasHost_.setTimelineClipSelectedHandler(
-        [this](int clipId) { focusTimelineClip(clipId, false); });
-    timelineCanvasHost_.setTimelineFocusRequestedHandler([this] {
-        editorSession_.focusTimeline();
-        synchronizePlaybackDurationForFocus(true);
-    });
+        [this](int clipId) { timelineController_.focusClip(clipId, false); });
+    timelineCanvasHost_.setTimelineFocusRequestedHandler(
+        [this] { timelineController_.focusEmptyTimeline(); });
     if (!mediaLibraryHost_.create(GetSafeHwnd(), mediaLibrary_))
         return -1;
     if (!propertiesHost_.create(GetSafeHwnd()))
@@ -155,8 +152,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     // Qt panels emit framework-neutral values. MFC continues to own selection
     // and clip settings, then redraws the remaining MFC panes from that state.
     mediaLibraryHost_.setAssetSelectedHandler([this](int assetIndex) {
-        editorSession_.selectAsset(assetIndex);
-        synchronizePlaybackDurationForFocus(true);
+        timelineController_.selectSourceAsset(assetIndex);
     });
     mediaLibraryHost_.setImportHandler([this] { importMediaFile(); });
     mediaLibraryHost_.setRemoveHandler(
@@ -168,7 +164,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         handlePlaybackCommand(command);
     });
     transportHost_.setPlaybackPositionHandler(
-        [this](int frame) { editorSession_.seekTimeline(frame); });
+        [this](int frame) { timelineController_.seekFocusedPreview(frame); });
     timelineToolbarHost_.setViewStateEditedHandler([this](const TimelineViewState &state) {
         editorSession_.updateTimelineViewState(state);
     });
@@ -211,7 +207,8 @@ void MainFrame::OnGetMinMaxInfo(MINMAXINFO *minMaxInfo)
 
 void MainFrame::OnSelectMediaAsset(UINT commandId)
 {
-    editorSession_.selectAsset(static_cast<int>(commandId - ID_MEDIA_ASSET_FIRST));
+    timelineController_.selectSourceAsset(
+        static_cast<int>(commandId - ID_MEDIA_ASSET_FIRST));
 }
 
 void MainFrame::OnPlaybackCommand(UINT commandId)
@@ -244,28 +241,27 @@ void MainFrame::OnEditRedo()
 
 void MainFrame::OnEditCopyClip()
 {
-    editorSession_.copySelectedTimelineClip();
+    timelineController_.copy();
 }
 
 void MainFrame::OnEditCutClip()
 {
-    if (!editorSession_.cutSelectedTimelineClip())
+    if (!timelineController_.cut())
         return;
-    synchronizePlaybackDurationForFocus(true);
     KillTimer(kPlaybackTimerId);
 }
 
 void MainFrame::OnEditPasteClip()
 {
-    if (!canPasteTimelineClip())
+    if (!timelineController_.paste())
         return;
-    finishInsertedTimelineClip(editorSession_.pasteTimelineClip(
-        editorSession_.playbackState().currentFrame));
+    KillTimer(kPlaybackTimerId);
 }
 
 void MainFrame::OnEditDuplicateClip()
 {
-    finishInsertedTimelineClip(editorSession_.duplicateSelectedTimelineClip());
+    if (timelineController_.duplicate())
+        KillTimer(kPlaybackTimerId);
 }
 
 void MainFrame::OnEditSplitClip()
@@ -285,27 +281,27 @@ void MainFrame::OnUpdateEditRedo(CCmdUI *commandUi)
 
 void MainFrame::OnUpdateEditCopyClip(CCmdUI *commandUi)
 {
-    commandUi->Enable(editorSession_.selectedTimelineClipId() != 0);
+    commandUi->Enable(timelineController_.canCopy());
 }
 
 void MainFrame::OnUpdateEditCutClip(CCmdUI *commandUi)
 {
-    commandUi->Enable(editorSession_.selectedTimelineClipId() != 0);
+    commandUi->Enable(timelineController_.canCut());
 }
 
 void MainFrame::OnUpdateEditPasteClip(CCmdUI *commandUi)
 {
-    commandUi->Enable(canPasteTimelineClip());
+    commandUi->Enable(timelineController_.canPaste());
 }
 
 void MainFrame::OnUpdateEditDuplicateClip(CCmdUI *commandUi)
 {
-    commandUi->Enable(editorSession_.selectedTimelineClipId() != 0);
+    commandUi->Enable(timelineController_.canDuplicate());
 }
 
 void MainFrame::OnUpdateEditSplitClip(CCmdUI *commandUi)
 {
-    commandUi->Enable(canSplitSelectedTimelineClip());
+    commandUi->Enable(timelineController_.canSplitAtHead());
 }
 
 void MainFrame::OnTimer(UINT_PTR timerId)
@@ -486,7 +482,7 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     if (timelineViewChanged)
         timelineToolbarHost_.setViewState(timelineViewState);
     if (selectionChanged || playbackChanged || timelineClipChanged)
-        timelineToolbarHost_.setSplitEnabled(canSplitSelectedTimelineClip());
+        timelineToolbarHost_.setSplitEnabled(timelineController_.canSplitAtHead());
 #else
     if (selectionChanged) {
         mediaLibraryPane_.setSelectedAssetIndex(selectedAssetIndex);
@@ -612,21 +608,6 @@ PreviewState MainFrame::currentPreviewState() const
     return preview;
 }
 
-void MainFrame::synchronizePlaybackDurationForFocus(bool resetToBeginning)
-{
-    if (editorSession_.isTimelineFocused()) {
-        editorSession_.setPlaybackDuration(
-            editorSession_.timelineModel().contentDurationFrames(), resetToBeginning);
-        return;
-    }
-
-    const int assetIndex = editorSession_.selectedAssetIndex();
-    if (assetIndex >= 0 && assetIndex < static_cast<int>(mediaLibrary_.assets().size())) {
-        editorSession_.setPlaybackDuration(
-            mediaLibrary_.assets()[assetIndex].timelineDurationFrames, resetToBeginning);
-    }
-}
-
 void MainFrame::moveLeftSplitter(int parentX)
 {
     workspaceLayout_.moveLeftSplitter(parentX);
@@ -734,98 +715,10 @@ void MainFrame::removeMediaAsset(int assetIndex, int assetId)
     }
 }
 
-void MainFrame::focusTimelineClip(int clipId, bool resetToBeginning)
-{
-    const TimelineClip *clip = editorSession_.timelineModel().findClip(clipId);
-    if (clip == nullptr)
-        return;
-
-    const auto &assets = mediaLibrary_.assets();
-    const auto asset = std::find_if(assets.begin(), assets.end(),
-        [clip](const LibraryMediaAsset &candidate) {
-            return candidate.id == clip->mediaAssetId;
-        });
-    if (asset == assets.end())
-        return;
-    editorSession_.selectTimelineClip(
-        clipId, static_cast<int>(asset - assets.begin()));
-    synchronizePlaybackDurationForFocus(resetToBeginning);
-}
-
-void MainFrame::focusTimelineFrame(int frame)
-{
-    const ResolvedTimelineFrame resolved = TimelinePlaybackResolver::resolve(
-        editorSession_.timelineModel(), mediaLibrary_, frame);
-
-    // V1 is the visible editing target when video and audio overlap. If V1 is
-    // empty at this frame, allow the A1 placement to receive focus instead.
-    if (resolved.video)
-        focusTimelineClip(resolved.video->clipId, false);
-    else if (resolved.audio)
-        focusTimelineClip(resolved.audio->clipId, false);
-    else {
-        editorSession_.focusTimeline();
-        synchronizePlaybackDurationForFocus(false);
-    }
-
-    // Focus first so the seek is clamped against timeline duration rather
-    // than the previously focused source asset's duration.
-    editorSession_.seekTimeline(frame);
-}
-
-bool MainFrame::canPasteTimelineClip() const
-{
-    return editorSession_.hasTimelineClipboard()
-        && mediaLibrary_.findAsset(
-               editorSession_.timelineClipboardMediaAssetId()) != nullptr;
-}
-
-void MainFrame::finishInsertedTimelineClip(int clipId)
-{
-    if (clipId == 0)
-        return;
-    const TimelineClip *clip = editorSession_.timelineModel().findClip(clipId);
-    if (clip == nullptr)
-        return;
-
-    synchronizePlaybackDurationForFocus(false);
-    editorSession_.seekTimeline(clip->state.startFrame);
-    KillTimer(kPlaybackTimerId);
-}
-
-bool MainFrame::canSplitSelectedTimelineClip() const
-{
-    const TimelineClip *clip = editorSession_.timelineModel().findClip(
-        editorSession_.selectedTimelineClipId());
-    if (clip == nullptr)
-        return false;
-
-    const int splitFrame = editorSession_.playbackState().currentFrame;
-    return splitFrame > clip->state.startFrame
-        && splitFrame < clip->state.startFrame + clip->state.durationFrames;
-}
-
 void MainFrame::splitSelectedTimelineClip()
 {
-    if (!canSplitSelectedTimelineClip())
-        return;
-
-    const int clipId = editorSession_.selectedTimelineClipId();
-    const TimelineClip *clip = editorSession_.timelineModel().findClip(clipId);
-    if (clip == nullptr)
-        return;
-    const LibraryMediaAsset *asset = mediaLibrary_.findAsset(clip->mediaAssetId);
-    if (asset == nullptr)
-        return;
-
-    const int splitFrame = editorSession_.playbackState().currentFrame;
-    if (editorSession_.splitTimelineClip(clipId, splitFrame, asset->kind) == 0)
-        return;
-
-    // Recalculate preview bounds without moving the timeline cursor. The
-    // newly created right-hand clip becomes the focused placement.
-    synchronizePlaybackDurationForFocus(false);
-    KillTimer(kPlaybackTimerId);
+    if (timelineController_.splitAtHead())
+        KillTimer(kPlaybackTimerId);
 }
 
 bool MainFrame::saveProject(bool chooseFilePath)

@@ -383,6 +383,20 @@ An empty Qt timeline now shows a drag-and-drop hint instead of drawing the
 legacy default asset. The pure-MFC fallback intentionally remains unchanged
 until it is migrated to the new timeline model.
 
+## Application-layer timeline controller
+
+`TimelineEditingController` is the framework-neutral coordinator between UI
+intent and `EditorSession`. It owns the application rules for clip/frame
+focus, source-asset lookup, preview-duration synchronization, Split, Delete,
+and the internal timeline clipboard. `MainFrame` now forwards MFC and Qt
+callbacks to this controller instead of duplicating those policies beside
+native-window and timer code.
+
+The controller is compiled into `MiniEditorCoreTests`, so these interaction
+rules can be exercised without constructing an MFC frame or Qt widget. This
+is also a scalable migration seam: a future all-Qt main window can reuse the
+same controller and session rather than reimplementing editor behavior.
+
 ## Phase 12 — Flicker-free MFC playback painting
 
 `MfcDoubleBufferedPaint` draws MFC preview and timeline content to a

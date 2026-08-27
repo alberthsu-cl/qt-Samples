@@ -3,6 +3,7 @@
 #include "EditorSession.h"
 #include "MediaLibrary.h"
 #include "ProjectSerializer.h"
+#include "TimelineEditingController.h"
 #include "WorkspaceLayout.h"
 #include "WorkspaceSettings.h"
 
@@ -85,14 +86,8 @@ private:
     bool confirmSaveBeforeDestructiveAction();
     void updateWindowTitle();
     PreviewState currentPreviewState() const;
-    void synchronizePlaybackDurationForFocus(bool resetToBeginning);
     void importMediaFile();
     void removeMediaAsset(int assetIndex, int assetId);
-    void focusTimelineClip(int clipId, bool resetToBeginning);
-    void focusTimelineFrame(int frame);
-    bool canPasteTimelineClip() const;
-    void finishInsertedTimelineClip(int clipId);
-    bool canSplitSelectedTimelineClip() const;
     void splitSelectedTimelineClip();
 
     CStatusBar statusBar_;
@@ -119,6 +114,7 @@ private:
     MediaLibrary mediaLibrary_;
     int builtInMediaAssetCount_ = 0;
     EditorSession editorSession_;
+    TimelineEditingController timelineController_;
     EditorSession::ObserverId editorSessionObserverId_ = 0;
     WorkspaceLayout workspaceLayout_;
     std::filesystem::path projectFilePath_;
