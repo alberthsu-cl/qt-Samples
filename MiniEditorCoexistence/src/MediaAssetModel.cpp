@@ -5,6 +5,8 @@
 #include <QColor>
 #include <QMimeData>
 
+#include <filesystem>
+
 namespace {
 constexpr char kMediaAssetMimeType[] = "application/x-mini-editor-media-id";
 }
@@ -52,6 +54,11 @@ QVariant MediaAssetModel::data(const QModelIndex &index, int role) const
                   .arg((asset.timelineDurationFrames / 30) % 60, 2, 10, QLatin1Char('0'));
     case ThumbnailColorRole:
         return QColor::fromRgb(asset.thumbnailColorRgb);
+    case AssetIsRealRole: {
+        std::error_code error;
+        return !asset.filePath.empty()
+            && std::filesystem::is_regular_file(asset.filePath, error);
+    }
     default:
         return {};
     }

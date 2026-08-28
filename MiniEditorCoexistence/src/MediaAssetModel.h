@@ -15,7 +15,8 @@ public:
         AssetIdRole,
         AssetKindRole,
         AssetDurationRole,
-        ThumbnailColorRole
+        ThumbnailColorRole,
+        AssetIsRealRole
     };
 
     explicit MediaAssetModel(const MediaLibrary &mediaLibrary, QObject *parent = nullptr);

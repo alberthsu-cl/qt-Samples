@@ -14,6 +14,7 @@
 #include <QPushButton>
 #include <QPainter>
 #include <QPen>
+#include <QSortFilterProxyModel>
 #include <QStyledItemDelegate>
 #include <QSignalBlocker>
 #include <QStyleOptionViewItem>
@@ -22,6 +23,47 @@
 namespace {
 
 constexpr int kDragPixmapWidth = 84;
+
+enum class MediaSourceFilter {
+    AllItems,
+    RealItems,
+    FakeItems
+};
+
+class MediaSourceFilterModel final : public QSortFilterProxyModel
+{
+public:
+    explicit MediaSourceFilterModel(QObject *parent = nullptr)
+        : QSortFilterProxyModel(parent)
+    {
+    }
+
+    void setMediaSourceFilter(MediaSourceFilter filter)
+    {
+        if (filter_ == filter)
+            return;
+
+        filter_ = filter;
+        invalidateFilter();
+    }
+
+protected:
+    bool filterAcceptsRow(int sourceRow,
+                          const QModelIndex &sourceParent) const override
+    {
+        if (filter_ == MediaSourceFilter::AllItems)
+            return true;
+
+        const QModelIndex sourceIndex = sourceModel()->index(sourceRow, 0,
+                                                              sourceParent);
+        const bool isReal = sourceIndex.data(MediaAssetModel::AssetIsRealRole)
+                                .toBool();
+        return filter_ == MediaSourceFilter::RealItems ? isReal : !isReal;
+    }
+
+private:
+    MediaSourceFilter filter_ = MediaSourceFilter::AllItems;
+};
 
 class MediaAssetListView final : public QListView
 {
@@ -113,26 +155,27 @@ public:
 QtMediaLibraryPanel::QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidget *parent)
     : QWidget(parent)
     , assetModel_(new MediaAssetModel(mediaLibrary, this))
+    , assetFilterModel_(new MediaSourceFilterModel(this))
     , assetView_(new MediaAssetListView(this))
 {
     setStyleSheet(QStringLiteral(
         "QtMediaLibraryPanel { background: #272a31; }"
-        "QComboBox, QLineEdit { background: #31353e; color: #e6e8ed; "
+        "QComboBox { background: #31353e; color: #e6e8ed; "
         "border: 1px solid #4a4f5a; padding: 5px; }"
         "QListView { background: #202228; border: none; }"));
 
-    auto *categorySelector = new QComboBox(this);
-    categorySelector->addItems({ QStringLiteral("My Media"),
-                                 QStringLiteral("Stock Media"),
-                                 QStringLiteral("Backgrounds") });
-
-    auto *searchBox = new QLineEdit(this);
-    searchBox->setPlaceholderText(QStringLiteral("Search media"));
+    auto *sourceFilterSelector = new QComboBox(this);
+    sourceFilterSelector->setObjectName(QStringLiteral("mediaSourceFilterComboBox"));
+    sourceFilterSelector->addItem(QStringLiteral("All items"),
+                                  static_cast<int>(MediaSourceFilter::AllItems));
+    sourceFilterSelector->addItem(QStringLiteral("Real items"),
+                                  static_cast<int>(MediaSourceFilter::RealItems));
+    sourceFilterSelector->addItem(QStringLiteral("Fake items"),
+                                  static_cast<int>(MediaSourceFilter::FakeItems));
 
     auto *headerLayout = new QHBoxLayout;
     headerLayout->setContentsMargins(0, 0, 0, 0);
-    headerLayout->addWidget(categorySelector, 1);
-    headerLayout->addWidget(searchBox, 1);
+    headerLayout->addWidget(sourceFilterSelector, 1);
 
     auto *importButton = new QPushButton(QStringLiteral("Import"), this);
     auto *removeButton = new QPushButton(QStringLiteral("Remove"), this);
@@ -141,7 +184,8 @@ QtMediaLibraryPanel::QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidg
     headerLayout->addWidget(importButton);
     headerLayout->addWidget(removeButton);
 
-    assetView_->setModel(assetModel_);
+    assetFilterModel_->setSourceModel(assetModel_);
+    assetView_->setModel(assetFilterModel_);
     assetView_->setObjectName(QStringLiteral("assetView"));
     assetView_->setItemDelegate(new MediaAssetDelegate(assetView_));
     assetView_->setViewMode(QListView::IconMode);
@@ -165,11 +209,20 @@ QtMediaLibraryPanel::QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidg
                     emit assetSelected(current.data(MediaAssetModel::AssetIndexRole).toInt());
             });
     connect(importButton, &QPushButton::clicked, this, &QtMediaLibraryPanel::importRequested);
+    connect(sourceFilterSelector, &QComboBox::currentIndexChanged, this,
+            [this, sourceFilterSelector](int index) {
+                const auto filter = static_cast<MediaSourceFilter>(
+                    sourceFilterSelector->itemData(index).toInt());
+                clearSelection();
+                static_cast<MediaSourceFilterModel *>(assetFilterModel_)
+                    ->setMediaSourceFilter(filter);
+            });
     connect(removeButton, &QPushButton::clicked, this, [this] {
         const QModelIndex current = assetView_->currentIndex();
         if (!current.isValid())
             return;
-        emit removeRequested(current.row(), current.data(MediaAssetModel::AssetIdRole).toInt());
+        emit removeRequested(current.data(MediaAssetModel::AssetIndexRole).toInt(),
+                             current.data(MediaAssetModel::AssetIdRole).toInt());
     });
 }
 
@@ -187,7 +240,8 @@ void QtMediaLibraryPanel::clearSelection()
 
 void QtMediaLibraryPanel::setSelectedAssetIndex(int assetIndex)
 {
-    const QModelIndex index = assetModel_->index(assetIndex, 0);
+    const QModelIndex index = assetFilterModel_->mapFromSource(
+        assetModel_->index(assetIndex, 0));
     if (!index.isValid())
         return;
 

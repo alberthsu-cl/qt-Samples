@@ -10,6 +10,7 @@
 #include <QComboBox>
 #include <QLabel>
 #include <QListView>
+#include <QComboBox>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QSlider>
@@ -224,6 +225,13 @@ void MiniEditorQtWidgetTests::mediaLibrarySeparatesProgrammaticAndUserSelection(
 
     QListView *assetView = panel.findChild<QListView *>(QStringLiteral("assetView"));
     QVERIFY(assetView != nullptr);
+    auto *sourceFilter = panel.findChild<QComboBox *>(
+        QStringLiteral("mediaSourceFilterComboBox"));
+    QVERIFY(sourceFilter != nullptr);
+    QCOMPARE(sourceFilter->count(), 3);
+    QCOMPARE(sourceFilter->itemText(0), QStringLiteral("All items"));
+    QCOMPARE(sourceFilter->itemText(1), QStringLiteral("Real items"));
+    QCOMPARE(sourceFilter->itemText(2), QStringLiteral("Fake items"));
     assetView->setCurrentIndex(assetView->model()->index(1, 0));
     QCOMPARE(selectedSpy.count(), 1);
     QCOMPARE(selectedSpy.takeFirst()[0].toInt(), 1);

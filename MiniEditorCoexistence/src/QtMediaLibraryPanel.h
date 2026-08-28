@@ -5,6 +5,7 @@
 class MediaAssetModel;
 class QListView;
 class MediaLibrary;
+class QSortFilterProxyModel;
 
 // The Phase 1 replacement for MfcMediaLibraryPane. It owns only Qt widgets and
 // emits an asset index; MFC remains responsible for the selected project data.
@@ -26,5 +27,6 @@ signals:
 
 private:
     MediaAssetModel *assetModel_ = nullptr;
+    QSortFilterProxyModel *assetFilterModel_ = nullptr;
     QListView *assetView_ = nullptr;
 };
