@@ -24,6 +24,11 @@ ClipPropertiesViewState ClipPropertiesStateResolver::resolve(
         return viewState;
     }
 
+    if (!session.isTimelineFocused() && session.selectedAssetIndex() < 0) {
+        viewState.target = ClipPropertiesTarget::NoSelection;
+        return viewState;
+    }
+
     viewState.target = session.isTimelineFocused()
         ? ClipPropertiesTarget::EmptyTimeline
         : ClipPropertiesTarget::MediaAsset;

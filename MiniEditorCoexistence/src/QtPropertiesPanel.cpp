@@ -335,6 +335,9 @@ void QtPropertiesPanel::updateTargetPresentation(
     } else if (target == ClipPropertiesTarget::EmptyTimeline) {
         selectionMessageLabel_->setText(QStringLiteral(
             "Select a timeline clip to edit its properties."));
+    } else {
+        selectionMessageLabel_->setText(QStringLiteral(
+            "Select media or a timeline clip to view its properties."));
     }
 }
 

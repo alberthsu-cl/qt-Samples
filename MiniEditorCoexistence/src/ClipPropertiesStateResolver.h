@@ -7,6 +7,7 @@ class EditorSession;
 class MediaLibrary;
 
 enum class ClipPropertiesTarget {
+    NoSelection,
     MediaAsset,
     TimelineClip,
     EmptyTimeline

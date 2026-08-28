@@ -49,6 +49,14 @@ void MfcPropertiesPane::drawContent(CDC &deviceContext, const CRect &clientRect)
         return;
     }
 
+    if (viewState_.target == ClipPropertiesTarget::NoSelection) {
+        const CString message = _T("Select media or a timeline clip to view its properties.");
+        drawText(deviceContext, message,
+                 CRect(left, top, clientRect.right - left, top + 64),
+                 EditorUi::kSecondaryText, DT_LEFT | DT_TOP | DT_WORDBREAK);
+        return;
+    }
+
     if (viewState_.target == ClipPropertiesTarget::MediaAsset) {
         const CString displayName = viewState_.mediaDisplayName.empty()
             ? _T("Unknown media") : viewState_.mediaDisplayName.c_str();

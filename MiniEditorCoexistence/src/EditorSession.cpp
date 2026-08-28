@@ -98,11 +98,22 @@ const ClipSettings &EditorSession::selectedClipSettings() const
 {
     if (const TimelineClip *clip = timelineModel_.findClip(selectedTimelineClipId_))
         return clip->settings;
+
+    static const ClipSettings noSelectionSettings;
+    if (selectedAssetIndex_ < 0
+        || selectedAssetIndex_ >= static_cast<int>(clipSettings_.size())) {
+        return noSelectionSettings;
+    }
     return clipSettings_[selectedAssetIndex_];
 }
 
 const TimelineClipState &EditorSession::selectedTimelineClipState() const
 {
+    static const TimelineClipState noSelectionState;
+    if (selectedAssetIndex_ < 0
+        || selectedAssetIndex_ >= static_cast<int>(timelineClipStates_.size())) {
+        return noSelectionState;
+    }
     return timelineClipStates_[selectedAssetIndex_];
 }
 
@@ -573,6 +584,11 @@ void EditorSession::updateSelectedClipSettings(const ClipSettings &settings)
         return;
     }
 
+    if (selectedAssetIndex_ < 0
+        || selectedAssetIndex_ >= static_cast<int>(clipSettings_.size())) {
+        return;
+    }
+
     const ClipSettings previousSettings = clipSettings_[selectedAssetIndex_];
     const ClipSettings updatedSettings = clampedClipSettings(settings);
     if (hasSameClipSettings(previousSettings, updatedSettings))
@@ -587,6 +603,11 @@ void EditorSession::updateSelectedClipSettings(const ClipSettings &settings)
 
 void EditorSession::updateSelectedTimelineClipState(const TimelineClipState &state)
 {
+    if (selectedAssetIndex_ < 0
+        || selectedAssetIndex_ >= static_cast<int>(timelineClipStates_.size())) {
+        return;
+    }
+
     const TimelineClipState previousState = timelineClipStates_[selectedAssetIndex_];
     const TimelineClipState updatedState = clampedTimelineClipState(state);
     if (hasSameTimelineClipState(previousState, updatedState))
@@ -617,8 +638,7 @@ void EditorSession::replaceProject(const EditorProject &project)
         timelineClipStates_[index] = clampedTimelineClipState(project.timelineClips[index]);
     }
     timelineModel_ = std::move(restoredTimeline);
-    selectedAssetIndex_ = std::clamp(selectedAssetIndex_, 0,
-                                     static_cast<int>(clipSettings_.size()) - 1);
+    selectedAssetIndex_ = -1;
     selectedTimelineClipId_ = 0;
     isTimelineFocused_ = false;
     projectDirty_ = false;
@@ -774,11 +794,11 @@ void EditorSession::fitTimeline()
     notifyStateChanged(EditorChange::TimelineView);
 }
 
-void EditorSession::restoreWorkspaceState(int selectedAssetIndex,
-                                          const TimelineViewState &timelineViewState)
+void EditorSession::restoreWorkspaceState(const TimelineViewState &timelineViewState)
 {
-    selectedAssetIndex_ = std::clamp(selectedAssetIndex, 0,
-                                     static_cast<int>(clipSettings_.size()) - 1);
+    selectedAssetIndex_ = -1;
+    selectedTimelineClipId_ = 0;
+    isTimelineFocused_ = false;
     timelineViewState_ = timelineViewState;
     timelineViewState_.zoomPercent = std::clamp(timelineViewState_.zoomPercent,
                                                  kMinimumTimelineZoom,

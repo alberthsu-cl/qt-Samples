@@ -11,7 +11,6 @@ struct WorkspaceSettings {
     int mediaLibraryWidth = 340;
     int propertiesWidth = 310;
     int timelineHeight = 270;
-    int selectedAssetIndex = 0;
     TimelineViewState timelineViewState;
 };
 

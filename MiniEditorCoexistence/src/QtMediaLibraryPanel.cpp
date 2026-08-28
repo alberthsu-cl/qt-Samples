@@ -8,7 +8,6 @@
 #include <QDrag>
 #include <QHBoxLayout>
 #include <QItemSelectionModel>
-#include <QLabel>
 #include <QListView>
 #include <QMimeData>
 #include <QPushButton>
@@ -17,8 +16,10 @@
 #include <QSortFilterProxyModel>
 #include <QStyledItemDelegate>
 #include <QSignalBlocker>
+#include <QStyle>
 #include <QStyleOptionViewItem>
 #include <QStackedLayout>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 namespace {
@@ -63,7 +64,9 @@ protected:
     }
 
 private:
-    MediaSourceFilter filter_ = MediaSourceFilter::AllItems;
+    // Imported project media is the useful starting point. Sample/fake media
+    // remains available through the filter when it is deliberately needed.
+    MediaSourceFilter filter_ = MediaSourceFilter::RealItems;
 };
 
 class MediaAssetListView final : public QListView
@@ -168,7 +171,7 @@ QtMediaLibraryPanel::QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidg
     , assetModel_(new MediaAssetModel(mediaLibrary, this))
     , assetFilterModel_(new MediaSourceFilterModel(this))
     , assetView_(new MediaAssetListView(this))
-    , emptyStateLabel_(new QLabel(this))
+    , emptyImportButton_(new QToolButton(this))
     , assetContentLayout_(new QStackedLayout)
 {
     setStyleSheet(QStringLiteral(
@@ -179,12 +182,13 @@ QtMediaLibraryPanel::QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidg
 
     auto *sourceFilterSelector = new QComboBox(this);
     sourceFilterSelector->setObjectName(QStringLiteral("mediaSourceFilterComboBox"));
-    sourceFilterSelector->addItem(QStringLiteral("All items"),
+    sourceFilterSelector->addItem(QStringLiteral("All"),
                                   static_cast<int>(MediaSourceFilter::AllItems));
-    sourceFilterSelector->addItem(QStringLiteral("Real items"),
+    sourceFilterSelector->addItem(QStringLiteral("Real"),
                                   static_cast<int>(MediaSourceFilter::RealItems));
-    sourceFilterSelector->addItem(QStringLiteral("Fake items"),
+    sourceFilterSelector->addItem(QStringLiteral("Fake"),
                                   static_cast<int>(MediaSourceFilter::FakeItems));
+    sourceFilterSelector->setCurrentIndex(1);
 
     auto *headerLayout = new QHBoxLayout;
     headerLayout->setContentsMargins(0, 0, 0, 0);
@@ -209,17 +213,21 @@ QtMediaLibraryPanel::QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidg
     assetView_->setDragEnabled(true);
     assetView_->setDragDropMode(QAbstractItemView::DragOnly);
 
-    emptyStateLabel_->setObjectName(QStringLiteral("mediaLibraryEmptyState"));
-    emptyStateLabel_->setAlignment(Qt::AlignCenter);
-    emptyStateLabel_->setWordWrap(true);
-    emptyStateLabel_->setText(QStringLiteral(
-        "No matching media items.\nChoose another filter or import a file."));
-    emptyStateLabel_->setStyleSheet(QStringLiteral(
-        "QLabel { background: #202228; color: #a6abb7; padding: 24px; }"));
+    // Keep the empty library quiet and direct: the centered folder icon is
+    // the only action. There is no explanatory link or drag/drop affordance.
+    emptyImportButton_->setObjectName(QStringLiteral("emptyImportButton"));
+    emptyImportButton_->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
+    emptyImportButton_->setIconSize(QSize(32, 32));
+    emptyImportButton_->setFixedSize(64, 64);
+    emptyImportButton_->setToolTip(QStringLiteral("Import media"));
+    emptyImportButton_->setStyleSheet(QStringLiteral(
+        "QToolButton { background: #30343d; border: 1px solid #525865; }"
+        "QToolButton:hover { background: #3c5572; border-color: #69adf5; }"));
 
     assetContentLayout_->setContentsMargins(0, 0, 0, 0);
     assetContentLayout_->addWidget(assetView_);
-    assetContentLayout_->addWidget(emptyStateLabel_);
+    assetContentLayout_->addWidget(emptyImportButton_);
+    assetContentLayout_->setAlignment(emptyImportButton_, Qt::AlignCenter);
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(10, 10, 10, 10);
@@ -234,6 +242,8 @@ QtMediaLibraryPanel::QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidg
                     emit assetSelected(current.data(MediaAssetModel::AssetIndexRole).toInt());
             });
     connect(importButton, &QPushButton::clicked, this, &QtMediaLibraryPanel::importRequested);
+    connect(emptyImportButton_, &QToolButton::clicked,
+            this, &QtMediaLibraryPanel::importRequested);
     connect(sourceFilterSelector, &QComboBox::currentIndexChanged, this,
             [this, sourceFilterSelector](int index) {
                 const auto filter = static_cast<MediaSourceFilter>(
@@ -292,6 +302,6 @@ void QtMediaLibraryPanel::setSelectedAssetIndex(int assetIndex)
 void QtMediaLibraryPanel::updateEmptyState()
 {
     assetContentLayout_->setCurrentWidget(assetFilterModel_->rowCount() == 0
-        ? static_cast<QWidget *>(emptyStateLabel_)
+        ? static_cast<QWidget *>(emptyImportButton_)
         : static_cast<QWidget *>(assetView_));
 }

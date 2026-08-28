@@ -72,7 +72,6 @@ std::optional<WorkspaceSettings> WorkspaceSettingsStore::load()
     const auto mediaLibraryWidth = integerValue(json, "mediaLibraryWidth");
     const auto propertiesWidth = integerValue(json, "propertiesWidth");
     const auto timelineHeight = integerValue(json, "timelineHeight");
-    const auto selectedAssetIndex = integerValue(json, "selectedAssetIndex");
     const auto zoomPercent = integerValue(json, "timelineZoomPercent");
     const auto isAudioTrackVisible = booleanValue(json, "isAudioTrackVisible");
     const auto isRippleEditingEnabled = booleanValue(json, "isRippleEditingEnabled");
@@ -85,8 +84,6 @@ std::optional<WorkspaceSettings> WorkspaceSettingsStore::load()
         settings.propertiesWidth = *propertiesWidth;
     if (timelineHeight)
         settings.timelineHeight = *timelineHeight;
-    if (selectedAssetIndex)
-        settings.selectedAssetIndex = *selectedAssetIndex;
     if (zoomPercent)
         settings.timelineViewState.zoomPercent = *zoomPercent;
     if (isAudioTrackVisible)
@@ -117,7 +114,6 @@ bool WorkspaceSettingsStore::save(const WorkspaceSettings &settings)
            << "  \"mediaLibraryWidth\": " << settings.mediaLibraryWidth << ",\n"
            << "  \"propertiesWidth\": " << settings.propertiesWidth << ",\n"
            << "  \"timelineHeight\": " << settings.timelineHeight << ",\n"
-           << "  \"selectedAssetIndex\": " << settings.selectedAssetIndex << ",\n"
            << "  \"timelineZoomPercent\": " << settings.timelineViewState.zoomPercent << ",\n"
            << "  \"isAudioTrackVisible\": "
            << (settings.timelineViewState.isAudioTrackVisible ? "true" : "false") << ",\n"

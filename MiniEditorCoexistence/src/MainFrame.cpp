@@ -7,6 +7,7 @@
 #include "resource.h"
 
 #include <algorithm>
+#include <array>
 #include <cwchar>
 #include <filesystem>
 
@@ -516,6 +517,8 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     if (selectionChanged) {
         if (editorSession_.isTimelineFocused())
             mediaLibraryHost_.clearSelection();
+        else if (selectedAssetIndex < 0)
+            mediaLibraryHost_.clearSelection();
         else
             mediaLibraryHost_.setSelectedAssetIndex(selectedAssetIndex);
     }
@@ -612,7 +615,14 @@ void MainFrame::moveTimelineSplitter(int parentY)
 
 void MainFrame::updateStatusText()
 {
-    const LibraryMediaAsset &asset = mediaLibrary_.assets()[editorSession_.selectedAssetIndex()];
+    const int selectedAssetIndex = editorSession_.selectedAssetIndex();
+    if (selectedAssetIndex < 0
+        || selectedAssetIndex >= static_cast<int>(mediaLibrary_.assets().size())) {
+        statusBar_.SetPaneText(0, _T("No item selected"));
+        return;
+    }
+
+    const LibraryMediaAsset &asset = mediaLibrary_.assets()[selectedAssetIndex];
     CString statusText;
     const ClipSettings &settings = editorSession_.selectedClipSettings();
     statusText.Format(_T("Selected: %s (%s) | Opacity %d%% | Scale %d%% | %s | Frame %d"),
@@ -633,8 +643,7 @@ void MainFrame::restoreWorkspaceSettings()
     workspaceLayout_.setState({ settings->mediaLibraryWidth,
                                 settings->propertiesWidth,
                                 settings->timelineHeight });
-    editorSession_.restoreWorkspaceState(settings->selectedAssetIndex,
-                                         settings->timelineViewState);
+    editorSession_.restoreWorkspaceState(settings->timelineViewState);
 }
 
 void MainFrame::saveWorkspaceSettings() const
@@ -644,28 +653,48 @@ void MainFrame::saveWorkspaceSettings() const
     settings.mediaLibraryWidth = layoutState.mediaLibraryWidth;
     settings.propertiesWidth = layoutState.propertiesWidth;
     settings.timelineHeight = layoutState.timelineHeight;
-    settings.selectedAssetIndex = editorSession_.selectedAssetIndex();
     settings.timelineViewState = editorSession_.timelineViewState();
     WorkspaceSettingsStore::save(settings);
 }
 
 void MainFrame::importMediaFile()
 {
-    CFileDialog dialog(TRUE, nullptr, nullptr, OFN_FILEMUSTEXIST | OFN_HIDEREADONLY,
+    // MFC requires caller-owned storage for the null-separated file list that
+    // OFN_ALLOWMULTISELECT returns. The normal CFileDialog buffer is only
+    // large enough for one path.
+    std::array<wchar_t, 64 * 1024> selectedFileBuffer{};
+    CFileDialog dialog(TRUE, nullptr, nullptr,
+        OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_ALLOWMULTISELECT | OFN_EXPLORER,
         L"Media files (*.mp4;*.mov;*.mkv;*.avi;*.mp3;*.wav;*.m4a;*.aac;*.jpg;*.jpeg;*.png;*.bmp)|*.mp4;*.mov;*.mkv;*.avi;*.mp3;*.wav;*.m4a;*.aac;*.jpg;*.jpeg;*.png;*.bmp||",
         this);
+    dialog.m_ofn.lpstrFile = selectedFileBuffer.data();
+    dialog.m_ofn.nMaxFile = static_cast<DWORD>(selectedFileBuffer.size());
     if (dialog.DoModal() != IDOK)
         return;
 
-    const ProjectDocumentResult result = documentService_.importMedia(
-        std::filesystem::path(static_cast<LPCTSTR>(dialog.GetPathName())));
-    if (!result.succeeded()) {
-        AfxMessageBox(CString(result.message.c_str()), MB_ICONWARNING | MB_OK);
-        return;
+    int importedFileCount = 0;
+    CString failures;
+    for (POSITION position = dialog.GetStartPosition(); position != nullptr;) {
+        const std::filesystem::path path(
+            static_cast<LPCTSTR>(dialog.GetNextPathName(position)));
+        const ProjectDocumentResult result = documentService_.importMedia(path);
+        if (result.succeeded()) {
+            ++importedFileCount;
+        } else {
+            if (!failures.IsEmpty())
+                failures += _T("\n");
+            failures += path.filename().c_str();
+            failures += _T(": ");
+            failures += result.message.c_str();
+        }
     }
+
 #if MINI_EDITOR_USE_QT
-    mediaLibraryHost_.refreshAssets();
+    if (importedFileCount > 0)
+        mediaLibraryHost_.refreshAssets();
 #endif
+    if (!failures.IsEmpty())
+        AfxMessageBox(failures, MB_ICONWARNING | MB_OK);
 }
 
 void MainFrame::removeMediaAsset(int assetIndex, int assetId)

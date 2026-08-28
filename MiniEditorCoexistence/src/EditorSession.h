@@ -76,8 +76,7 @@ public:
 
     // Restoring settings happens before views are constructed, so this does
     // not notify. The caller performs one initial view refresh afterwards.
-    void restoreWorkspaceState(int selectedAssetIndex,
-                               const TimelineViewState &timelineViewState);
+    void restoreWorkspaceState(const TimelineViewState &timelineViewState);
     ObserverId addObserver(StateChangedHandler handler);
     void removeObserver(ObserverId observerId);
 
@@ -99,7 +98,9 @@ private:
     std::vector<ClipSettings> clipSettings_;
     std::vector<TimelineClipState> timelineClipStates_;
     TimelineModel timelineModel_;
-    int selectedAssetIndex_ = 0;
+    // Selection is transient UI state. A new application session starts with
+    // no source asset or timeline clip focused.
+    int selectedAssetIndex_ = -1;
     int selectedTimelineClipId_ = 0;
     bool isTimelineFocused_ = false;
     PlaybackState sourcePlaybackState_;

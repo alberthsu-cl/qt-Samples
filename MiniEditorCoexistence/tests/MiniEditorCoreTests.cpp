@@ -659,10 +659,14 @@ void previewStateResolverKeepsPreviewPolicyFrameworkNeutral()
         L"D:/media/still.png", MediaKind::Image, 90, 0x7850A0);
 
     EditorSession session(3);
+    PreviewState preview = PreviewStateResolver::resolve(session, library);
+    require(preview.mode == PreviewMode::Source && !preview.hasMedia,
+            "A fresh editor session must not preview an arbitrary library asset.");
+
     session.selectAsset(0);
     session.setPlaybackDuration(400, true);
     session.seekTimeline(50);
-    PreviewState preview = PreviewStateResolver::resolve(session, library);
+    preview = PreviewStateResolver::resolve(session, library);
     require(preview.mode == PreviewMode::Source && preview.hasMedia
                 && preview.mediaAssetId == videoId && preview.sourceFrame == 50,
             "Source preview must resolve the selected timed asset at its playback frame.");

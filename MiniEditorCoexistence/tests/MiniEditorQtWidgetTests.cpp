@@ -11,7 +11,6 @@
 #include <QComboBox>
 #include <QLabel>
 #include <QListView>
-#include <QComboBox>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QSlider>
@@ -252,11 +251,11 @@ void MiniEditorQtWidgetTests::mediaLibrarySeparatesProgrammaticAndUserSelection(
         QStringLiteral("mediaSourceFilterComboBox"));
     QVERIFY(sourceFilter != nullptr);
     QCOMPARE(sourceFilter->count(), 3);
-    QCOMPARE(sourceFilter->itemText(0), QStringLiteral("All items"));
-    QCOMPARE(sourceFilter->itemText(1), QStringLiteral("Real items"));
-    QCOMPARE(sourceFilter->itemText(2), QStringLiteral("Fake items"));
-    QCOMPARE(assetView->model()->rowCount(), 3);
-    sourceFilter->setCurrentIndex(1);
+    QCOMPARE(sourceFilter->itemText(0), QStringLiteral("All"));
+    QCOMPARE(sourceFilter->itemText(1), QStringLiteral("Real"));
+    QCOMPARE(sourceFilter->itemText(2), QStringLiteral("Fake"));
+    // The library opens on real project media, not the fake/sample assets.
+    QCOMPARE(sourceFilter->currentIndex(), 1);
     QCOMPARE(assetView->model()->rowCount(), 1);
     QCOMPARE(assetView->model()->index(0, 0)
                  .data(MediaAssetModel::AssetIndexRole).toInt(), 2);
@@ -279,6 +278,16 @@ void MiniEditorQtWidgetTests::mediaLibrarySeparatesProgrammaticAndUserSelection(
     panel.clearSelection();
     QCOMPARE(selectedSpy.count(), 0);
     QVERIFY(!assetView->currentIndex().isValid());
+
+    MediaLibrary emptyLibrary;
+    QtMediaLibraryPanel emptyPanel(emptyLibrary);
+    auto *emptyImportButton = emptyPanel.findChild<QToolButton *>(
+        QStringLiteral("emptyImportButton"));
+    QVERIFY(emptyImportButton != nullptr);
+    QVERIFY(emptyImportButton->text().isEmpty());
+    QSignalSpy emptyImportSpy(&emptyPanel, &QtMediaLibraryPanel::importRequested);
+    QTest::mouseClick(emptyImportButton, Qt::LeftButton);
+    QCOMPARE(emptyImportSpy.count(), 1);
 }
 
 void MiniEditorQtWidgetTests::timelineClickSeekFocusAndDeleteUseSemanticHandlers()
