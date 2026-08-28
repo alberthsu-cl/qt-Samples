@@ -20,8 +20,12 @@ bool TimelineEditingController::focusClip(int clipId, bool resetToBeginning)
     if (assetIndex < 0)
         return false;
 
+    const bool wasSourceFocused = !session_.isTimelineFocused();
+    const int previousPreviewFrame = session_.playbackState().currentFrame;
     session_.selectTimelineClip(clipId, assetIndex);
     synchronizePlaybackDuration(resetToBeginning);
+    if (wasSourceFocused && !resetToBeginning)
+        session_.seekTimeline(previousPreviewFrame);
     return true;
 }
 

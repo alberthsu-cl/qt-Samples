@@ -15,8 +15,8 @@ struct EditorSelectionState {
 
 struct TimelineInteractionState {
     EditorSelectionState selection;
-    PlaybackState playback;
-    int timelinePlayheadFrame = 0;
+    PlaybackState sourcePlayback;
+    PlaybackState timelinePlayback;
 };
 
 // References to the state that commands are allowed to restore. Commands do
@@ -29,8 +29,8 @@ struct EditorCommandContext {
     int &selectedAssetIndex;
     int &selectedTimelineClipId;
     bool &isTimelineFocused;
-    PlaybackState &playbackState;
-    int &timelinePlayheadFrame;
+    PlaybackState &sourcePlaybackState;
+    PlaybackState &timelinePlaybackState;
 };
 
 class EditorCommand

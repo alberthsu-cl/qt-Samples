@@ -108,12 +108,27 @@ const TimelineClipState &EditorSession::selectedTimelineClipState() const
 
 const PlaybackState &EditorSession::playbackState() const
 {
-    return playbackState_;
+    return activePlaybackState();
 }
 
-int EditorSession::timelinePlayheadFrame() const
+const PlaybackState &EditorSession::sourcePlaybackState() const
 {
-    return timelinePlayheadFrame_;
+    return sourcePlaybackState_;
+}
+
+const PlaybackState &EditorSession::timelinePlaybackState() const
+{
+    return timelinePlaybackState_;
+}
+
+PlaybackState &EditorSession::activePlaybackState()
+{
+    return isTimelineFocused_ ? timelinePlaybackState_ : sourcePlaybackState_;
+}
+
+const PlaybackState &EditorSession::activePlaybackState() const
+{
+    return isTimelineFocused_ ? timelinePlaybackState_ : sourcePlaybackState_;
 }
 
 const TimelineViewState &EditorSession::timelineViewState() const
@@ -148,14 +163,14 @@ EditorSelectionState EditorSession::selectionState() const
 
 TimelineInteractionState EditorSession::timelineInteractionState() const
 {
-    return { selectionState(), playbackState_, timelinePlayheadFrame_ };
+    return { selectionState(), sourcePlaybackState_, timelinePlaybackState_ };
 }
 
 EditorCommandContext EditorSession::commandContext()
 {
     return { clipSettings_, timelineClipStates_, timelineModel_,
              selectedAssetIndex_, selectedTimelineClipId_, isTimelineFocused_,
-             playbackState_, timelinePlayheadFrame_ };
+             sourcePlaybackState_, timelinePlaybackState_ };
 }
 
 void EditorSession::recordTimelineCommand(
@@ -206,13 +221,12 @@ int EditorSession::addTimelineClipInternal(
             *sourceAssetIndex, 0, static_cast<int>(clipSettings_.size()) - 1);
         selectedTimelineClipId_ = clipId;
         isTimelineFocused_ = true;
-        playbackState_.isPlaying = false;
-        playbackState_.isPaused = false;
-        playbackState_.durationFrames = std::max(
+        timelinePlaybackState_.isPlaying = false;
+        timelinePlaybackState_.isPaused = false;
+        timelinePlaybackState_.durationFrames = std::max(
             1, timelineModel_.contentDurationFrames());
-        playbackState_.currentFrame = std::clamp(
-            state.startFrame, 0, playbackState_.durationFrames - 1);
-        timelinePlayheadFrame_ = playbackState_.currentFrame;
+        timelinePlaybackState_.currentFrame = std::clamp(
+            state.startFrame, 0, timelinePlaybackState_.durationFrames - 1);
         return EditorChange::Selection | EditorChange::TimelineClip
             | EditorChange::Playback;
     };
@@ -535,8 +549,6 @@ bool EditorSession::isProjectDirty() const
 
 void EditorSession::selectAsset(int assetIndex)
 {
-    if (isTimelineFocused_)
-        timelinePlayheadFrame_ = playbackState_.currentFrame;
     selectedAssetIndex_ = std::clamp(assetIndex, 0,
                                      static_cast<int>(clipSettings_.size()) - 1);
     selectedTimelineClipId_ = 0;
@@ -612,10 +624,8 @@ void EditorSession::replaceProject(const EditorProject &project)
     projectDirty_ = false;
     history_.clear();
     timelineClipboard_.reset();
-    playbackState_.isPlaying = false;
-    playbackState_.isPaused = false;
-    playbackState_.currentFrame = kFirstFrame;
-    timelinePlayheadFrame_ = kFirstFrame;
+    sourcePlaybackState_ = {};
+    timelinePlaybackState_ = {};
     notifyStateChanged(EditorChange::All);
 }
 
@@ -660,74 +670,70 @@ bool EditorSession::redo()
 
 void EditorSession::handlePlaybackCommand(PlaybackCommand command)
 {
+    PlaybackState &playback = activePlaybackState();
+
     switch (command) {
     case PlaybackCommand::TogglePlayPause:
-        if (playbackState_.isPlaying) {
-            playbackState_.isPlaying = false;
-            playbackState_.isPaused = true;
+        if (playback.isPlaying) {
+            playback.isPlaying = false;
+            playback.isPaused = true;
         } else {
-            playbackState_.isPlaying = true;
-            playbackState_.isPaused = false;
+            playback.isPlaying = true;
+            playback.isPaused = false;
         }
         break;
     case PlaybackCommand::Stop:
-        playbackState_.isPlaying = false;
-        playbackState_.isPaused = false;
-        playbackState_.currentFrame = kFirstFrame;
+        playback.isPlaying = false;
+        playback.isPaused = false;
+        playback.currentFrame = kFirstFrame;
         break;
     case PlaybackCommand::StepBackward:
-        playbackState_.isPlaying = false;
-        playbackState_.isPaused = true;
-        playbackState_.currentFrame = std::max(kFirstFrame, playbackState_.currentFrame - 1);
+        playback.isPlaying = false;
+        playback.isPaused = true;
+        playback.currentFrame = std::max(kFirstFrame, playback.currentFrame - 1);
         break;
     case PlaybackCommand::StepForward:
-        playbackState_.isPlaying = false;
-        playbackState_.isPaused = true;
-        playbackState_.currentFrame = std::min(playbackState_.durationFrames - 1,
-                                               playbackState_.currentFrame + 1);
+        playback.isPlaying = false;
+        playback.isPaused = true;
+        playback.currentFrame = std::min(playback.durationFrames - 1,
+                                         playback.currentFrame + 1);
         break;
     }
-
-    if (isTimelineFocused_)
-        timelinePlayheadFrame_ = playbackState_.currentFrame;
 
     notifyStateChanged(EditorChange::Playback);
 }
 
 void EditorSession::advancePlaybackFrame()
 {
-    if (!playbackState_.isPlaying)
+    PlaybackState &playback = activePlaybackState();
+    if (!playback.isPlaying)
         return;
 
-    ++playbackState_.currentFrame;
-    if (playbackState_.currentFrame >= playbackState_.durationFrames) {
-        playbackState_.currentFrame = std::max(0, playbackState_.durationFrames - 1);
-        playbackState_.isPlaying = false;
-        playbackState_.isPaused = true;
+    ++playback.currentFrame;
+    if (playback.currentFrame >= playback.durationFrames) {
+        playback.currentFrame = std::max(0, playback.durationFrames - 1);
+        playback.isPlaying = false;
+        playback.isPaused = true;
     }
-    if (isTimelineFocused_)
-        timelinePlayheadFrame_ = playbackState_.currentFrame;
     notifyStateChanged(EditorChange::Playback);
 }
 
 void EditorSession::seekTimeline(int frame)
 {
-    playbackState_.currentFrame = std::clamp(frame, kFirstFrame,
-                                             std::max(0, playbackState_.durationFrames - 1));
-    if (isTimelineFocused_)
-        timelinePlayheadFrame_ = playbackState_.currentFrame;
+    PlaybackState &playback = activePlaybackState();
+    playback.currentFrame = std::clamp(
+        frame, kFirstFrame, std::max(0, playback.durationFrames - 1));
     notifyStateChanged(EditorChange::Playback);
 }
 
 void EditorSession::setPlaybackDuration(int durationFrames, bool resetToBeginning)
 {
-    playbackState_.durationFrames = std::max(1, durationFrames);
-    playbackState_.isPlaying = false;
-    playbackState_.isPaused = false;
-    playbackState_.currentFrame = resetToBeginning
-        ? 0 : std::min(playbackState_.currentFrame, playbackState_.durationFrames - 1);
-    if (isTimelineFocused_)
-        timelinePlayheadFrame_ = playbackState_.currentFrame;
+    PlaybackState &playback = activePlaybackState();
+    playback.durationFrames = std::max(1, durationFrames);
+    playback.isPlaying = false;
+    playback.isPaused = false;
+    playback.currentFrame = resetToBeginning
+        ? 0 : std::min(playback.currentFrame, playback.durationFrames - 1);
     notifyStateChanged(EditorChange::Playback);
 }
 

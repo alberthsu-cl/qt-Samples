@@ -510,7 +510,7 @@ void timelineEditingControllerCoordinatesFocusAndSplitPolicy()
                 && insertedClip->state.startFrame == 300
                 && session.isTimelineFocused()
                 && session.selectedAssetIndex() == 1
-                && session.timelinePlayheadFrame() == 300,
+                && session.timelinePlaybackState().currentFrame == 300,
             "Drag insertion must focus the new placement for Properties editing.");
 
     require(session.undo(),
@@ -518,7 +518,7 @@ void timelineEditingControllerCoordinatesFocusAndSplitPolicy()
     require(session.timelineModel().findClip(insertedClipId) == nullptr
                 && !session.isTimelineFocused()
                 && session.selectedTimelineClipId() == 0
-                && session.timelinePlayheadFrame() == 0,
+                && session.timelinePlaybackState().currentFrame == 0,
             "Undo must restore clips, previous focus, and the previous playhead together.");
     require(session.redo(),
             "Drag insertion must redo as one interaction transaction.");
@@ -526,7 +526,7 @@ void timelineEditingControllerCoordinatesFocusAndSplitPolicy()
                 && session.isTimelineFocused()
                 && session.selectedTimelineClipId() == insertedClipId
                 && session.selectedAssetIndex() == 1
-                && session.timelinePlayheadFrame() == 300,
+                && session.timelinePlaybackState().currentFrame == 300,
             "Redo must restore the inserted clip, its focus, and its playhead together.");
     const ClipPropertiesViewState insertedProperties =
         ClipPropertiesStateResolver::resolve(session, library);
@@ -1581,8 +1581,9 @@ void sourcePlaybackDoesNotMoveTheTimelinePlayhead()
     session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
     session.advancePlaybackFrame();
     session.advancePlaybackFrame();
-    require(session.playbackState().currentFrame == 2,
-            "The shared transport must advance the focused source preview.");
+    require(session.playbackState().currentFrame == 2
+                && session.sourcePlaybackState().currentFrame == 2,
+            "The active transport must advance the focused source preview.");
 
     timelineState = TimelinePresentationStateResolver::resolve(session, false);
     require(timelineState.playback.currentFrame == 75
@@ -1591,8 +1592,10 @@ void sourcePlaybackDoesNotMoveTheTimelinePlayhead()
 
     session.selectTimelineClip(clipId, 0);
     session.setPlaybackDuration(180, false);
-    require(session.playbackState().currentFrame == 2,
-            "Explicit clip focus may carry the current transport time into the timeline.");
+    require(session.playbackState().currentFrame == 75
+                && session.timelinePlaybackState().currentFrame == 75
+                && session.sourcePlaybackState().currentFrame == 2,
+            "Returning to timeline focus must restore its independent transport state.");
 }
 
 } // namespace

@@ -27,7 +27,8 @@ public:
     const ClipSettings &selectedClipSettings() const;
     const TimelineClipState &selectedTimelineClipState() const;
     const PlaybackState &playbackState() const;
-    int timelinePlayheadFrame() const;
+    const PlaybackState &sourcePlaybackState() const;
+    const PlaybackState &timelinePlaybackState() const;
     const TimelineViewState &timelineViewState() const;
     EditorProject projectSnapshot() const;
     const TimelineModel &timelineModel() const;
@@ -87,6 +88,8 @@ private:
     int addTimelineClipInternal(int mediaAssetId, TimelineTrackType trackType,
                                 int startFrame, int durationFrames,
                                 std::optional<int> sourceAssetIndex);
+    PlaybackState &activePlaybackState();
+    const PlaybackState &activePlaybackState() const;
     int insertTimelineClipCopy(const TimelineClip &sourceClip,
                                int sourceAssetIndex, int desiredStartFrame);
     void notifyStateChanged(EditorChange changes);
@@ -97,10 +100,8 @@ private:
     int selectedAssetIndex_ = 0;
     int selectedTimelineClipId_ = 0;
     bool isTimelineFocused_ = false;
-    PlaybackState playbackState_;
-    // Source preview and timeline preview share transport mechanics, but not
-    // their positions. Library playback must never move the timeline head.
-    int timelinePlayheadFrame_ = 0;
+    PlaybackState sourcePlaybackState_;
+    PlaybackState timelinePlaybackState_;
     TimelineViewState timelineViewState_;
     bool projectDirty_ = false;
     EditorHistory history_;

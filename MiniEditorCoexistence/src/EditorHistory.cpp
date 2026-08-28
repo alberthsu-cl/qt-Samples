@@ -16,8 +16,8 @@ void applyTimelineInteraction(EditorCommandContext &context,
                               const TimelineInteractionState &interaction)
 {
     applySelection(context, interaction.selection);
-    context.playbackState = interaction.playback;
-    context.timelinePlayheadFrame = interaction.timelinePlayheadFrame;
+    context.sourcePlaybackState = interaction.sourcePlayback;
+    context.timelinePlaybackState = interaction.timelinePlayback;
 }
 
 } // namespace
