@@ -39,6 +39,14 @@ QStyle *paletteAwareInputStyle()
     return style;
 }
 
+QString frameCountText(int frameCount)
+{
+    const int nonNegativeFrameCount = std::max(0, frameCount);
+    const QString unit = nonNegativeFrameCount == 1
+        ? QStringLiteral("frame") : QStringLiteral("frames");
+    return QStringLiteral("%1 %2").arg(nonNegativeFrameCount).arg(unit);
+}
+
 } // namespace
 
 QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
@@ -94,6 +102,7 @@ QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
     fadeOutSlider_->setObjectName(QStringLiteral("fadeOutSlider"));
     fadeOutSpinBox_->setObjectName(QStringLiteral("fadeOutSpinBox"));
     fadeSummaryLabel_->setObjectName(QStringLiteral("fadeSummaryLabel"));
+    fadeSummaryLabel_->setAlignment(Qt::AlignHCenter);
     selectionMessageLabel_->setObjectName(QStringLiteral("selectionMessageLabel"));
     selectionMessageLabel_->setWordWrap(true);
     formContainer_->setObjectName(QStringLiteral("propertiesFormContainer"));
@@ -106,8 +115,6 @@ QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
     scaleSpinBox_->setRange(25, 200);
     scaleSpinBox_->setSuffix(QStringLiteral(" %"));
 
-    fadeInSpinBox_->setSuffix(QStringLiteral(" f"));
-    fadeOutSpinBox_->setSuffix(QStringLiteral(" f"));
     fadeInSpinBox_->setToolTip(QStringLiteral(
         "Frames the clip takes to ramp up from transparent."));
     fadeOutSpinBox_->setToolTip(QStringLiteral(
@@ -138,10 +145,12 @@ QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
     formLayout_->addRow(QStringLiteral("Scale"), scaleEditor_);
     formLayout_->addRow(QStringLiteral("Position"), positionComboBox_);
     formLayout_->addRow(QStringLiteral("Fade in"),
-                       createSliderEditor(fadeInSlider_, fadeInSpinBox_, this));
+                        createSliderEditor(fadeInSlider_, fadeInSpinBox_, this));
     formLayout_->addRow(QStringLiteral("Fade out"),
-                       createSliderEditor(fadeOutSlider_, fadeOutSpinBox_, this));
-    formLayout_->addRow(QString(), fadeSummaryLabel_);
+                        createSliderEditor(fadeOutSlider_, fadeOutSpinBox_, this));
+    // A one-widget QFormLayout row spans both columns. This keeps the summary
+    // aligned with the left edge of the captions instead of the input fields.
+    formLayout_->addRow(fadeSummaryLabel_);
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(14, 14, 14, 14);
@@ -282,9 +291,9 @@ void QtPropertiesPanel::updateFadeSummary()
                                      - fadeOutSpinBox_->value());
     const QString fullLevelText = mediaKind_ == MediaKind::Audio
         ? QStringLiteral("full level") : QStringLiteral("full opacity");
-    fadeSummaryLabel_->setText(QStringLiteral("%1 f clip, %2 f at %3")
-                                   .arg(clipDurationFrames_)
+    fadeSummaryLabel_->setText(QStringLiteral("%1 of %2 at %3")
                                    .arg(held)
+                                   .arg(frameCountText(clipDurationFrames_))
                                    .arg(fullLevelText));
 }
 

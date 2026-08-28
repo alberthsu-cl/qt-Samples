@@ -5,6 +5,18 @@
 #include <string>
 #include <vector>
 
+namespace {
+
+CString frameCountText(int frameCount)
+{
+    CString text;
+    text.Format(_T("%d %s"), frameCount,
+                frameCount == 1 ? _T("frame") : _T("frames"));
+    return text;
+}
+
+} // namespace
+
 bool MfcPropertiesPane::Create(CWnd *parent, UINT controlId)
 {
     return createPane(parent, controlId);
@@ -76,9 +88,9 @@ void MfcPropertiesPane::drawContent(CDC &deviceContext, const CRect &clientRect)
             + std::to_wstring(viewState_.settings.scalePercent).c_str() + _T("%"));
     }
     rows.push_back(CString(viewState_.mediaKind == MediaKind::Audio
-                              ? _T("Level fade: in ") : _T("Fade: in "))
-        + std::to_wstring(viewState_.settings.fadeInFrames).c_str() + _T("f, out ")
-        + std::to_wstring(viewState_.settings.fadeOutFrames).c_str() + _T("f"));
+                               ? _T("Level fade: in ") : _T("Fade: in "))
+        + frameCountText(viewState_.settings.fadeInFrames) + _T(", out ")
+        + frameCountText(viewState_.settings.fadeOutFrames));
 
     for (std::size_t index = 0; index < rows.size(); ++index) {
         const CRect rowRect(left, top, clientRect.right - left, top + 31);

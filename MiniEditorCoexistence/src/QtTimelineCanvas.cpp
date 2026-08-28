@@ -350,18 +350,21 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
         // zone that hitTestClip() and updateMouseCursor() both use.
         if (selected && isEditingClip() && clip.id == dragClipId_) {
             const QString rangeText = dragTrimContext_.mediaKind == MediaKind::Image
-                ? QStringLiteral("Start %1f  |  Display %2f")
-                      .arg(clip.state.startFrame)
-                      .arg(clip.state.durationFrames)
-                : QStringLiteral("Source %1f-%2f  |  Duration %3f")
-                      .arg(clip.state.sourceInFrame)
-                      .arg(clip.state.sourceInFrame + clip.state.durationFrames)
-                      .arg(clip.state.durationFrames);
+                ? QStringLiteral("Start %1 frames  |  Display %2 frames")
+                       .arg(clip.state.startFrame)
+                       .arg(clip.state.durationFrames)
+                : QStringLiteral("Source %1-%2 frames  |  Duration %3 frames")
+                       .arg(clip.state.sourceInFrame)
+                       .arg(clip.state.sourceInFrame + clip.state.durationFrames)
+                       .arg(clip.state.durationFrames);
             // Each drag readout takes the colour of the edit it reports:
             // amber here, matching the focus frame of the clip being trimmed.
             // A near-black panel used to vanish into the timeline background
             // it floats over.
-            const QRect rangeRect(clipRect.left() + 3, 2, 230, 22);
+            const int requiredWidth = painter.fontMetrics().horizontalAdvance(rangeText) + 16;
+            const int availableWidth = std::max(0, width() - clipRect.left() - 6);
+            const QRect rangeRect(clipRect.left() + 3, 2,
+                                  std::min(requiredWidth, availableWidth), 22);
             painter.fillRect(rangeRect, QColor(255, 196, 72));
             painter.setPen(QPen(QColor(146, 102, 16), 1));
             painter.drawRect(rangeRect.adjusted(0, 0, -1, -1));

@@ -55,7 +55,7 @@ void MiniEditorQtWidgetTests::propertiesModelRefreshDoesNotEmitUserEdit()
     QCOMPARE(panel.findChild<QComboBox *>(QStringLiteral("positionComboBox"))->currentData().toInt(),
              static_cast<int>(ClipPosition::BottomRight));
     QCOMPARE(panel.findChild<QLabel *>(QStringLiteral("fadeSummaryLabel"))->text(),
-             QStringLiteral("90 f clip, 60 f at full level"));
+             QStringLiteral("60 of 90 frames at full level"));
     QCOMPARE(panel.findChild<QSpinBox *>(QStringLiteral("fadeInSpinBox"))->toolTip(),
              QStringLiteral("Frames the clip takes to ramp up from silence."));
     QVERIFY(panel.findChild<QWidget *>(QStringLiteral("opacityEditor"))->isHidden());
@@ -135,7 +135,8 @@ void MiniEditorQtWidgetTests::propertiesFadeEditorsRespectTheClipDuration()
     QCOMPARE(fadeInSlider->value(), 20);
     QCOMPARE(fadeOut->value(), 10);
     QCOMPARE(fadeOutSlider->value(), 10);
-    QCOMPARE(summary->text(), QStringLiteral("90 f clip, 60 f at full opacity"));
+    QCOMPARE(summary->text(),
+             QStringLiteral("60 of 90 frames at full opacity"));
     QCOMPARE(editedSpy.count(), 0);
 
     // Each editor spans the whole clip, so a stepper or slider never stops
@@ -150,7 +151,8 @@ void MiniEditorQtWidgetTests::propertiesFadeEditorsRespectTheClipDuration()
     QCOMPARE(fadeIn->value(), 85);
     QCOMPARE(fadeOut->value(), 5);
     QCOMPARE(fadeOutSlider->value(), 5);
-    QCOMPARE(summary->text(), QStringLiteral("90 f clip, 0 f at full opacity"));
+    QCOMPARE(summary->text(),
+             QStringLiteral("0 of 90 frames at full opacity"));
     QCOMPARE(editedSpy.count(), 1);
     const QList<QVariant> fadeArguments = editedSpy.takeFirst();
     QCOMPARE(fadeArguments[3].toInt(), 85);
