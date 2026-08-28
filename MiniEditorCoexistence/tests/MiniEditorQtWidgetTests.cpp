@@ -1,4 +1,5 @@
 #include "MediaLibrary.h"
+#include "MediaAssetModel.h"
 #include "QtMediaLibraryPanel.h"
 #include "QtPropertiesPanel.h"
 #include "QtTimelineCanvas.h"
@@ -15,10 +16,12 @@
 #include <QSignalSpy>
 #include <QSlider>
 #include <QSpinBox>
+#include <QTemporaryFile>
 #include <QToolButton>
 #include <QtTest>
 
 #include <optional>
+#include <filesystem>
 
 class MiniEditorQtWidgetTests final : public QObject
 {
@@ -213,7 +216,12 @@ void MiniEditorQtWidgetTests::mediaLibrarySeparatesProgrammaticAndUserSelection(
         L"D:/media/video.mp4", MediaKind::Video, 300, 0x5078A0);
     const int imageId = library.addKnownAsset(
         L"D:/media/image.png", MediaKind::Image, 90, 0x7850A0);
-    QVERIFY(videoId != imageId);
+    QTemporaryFile realMediaFile;
+    QVERIFY(realMediaFile.open());
+    const int realVideoId = library.addKnownAsset(
+        std::filesystem::path(realMediaFile.fileName().toStdWString()),
+        MediaKind::Video, 300, 0x4f91b8);
+    QVERIFY(videoId != imageId && imageId != realVideoId);
 
     QtMediaLibraryPanel panel(library);
     QSignalSpy selectedSpy(&panel, &QtMediaLibraryPanel::assetSelected);
@@ -232,6 +240,14 @@ void MiniEditorQtWidgetTests::mediaLibrarySeparatesProgrammaticAndUserSelection(
     QCOMPARE(sourceFilter->itemText(0), QStringLiteral("All items"));
     QCOMPARE(sourceFilter->itemText(1), QStringLiteral("Real items"));
     QCOMPARE(sourceFilter->itemText(2), QStringLiteral("Fake items"));
+    QCOMPARE(assetView->model()->rowCount(), 3);
+    sourceFilter->setCurrentIndex(1);
+    QCOMPARE(assetView->model()->rowCount(), 1);
+    QCOMPARE(assetView->model()->index(0, 0)
+                 .data(MediaAssetModel::AssetIndexRole).toInt(), 2);
+    sourceFilter->setCurrentIndex(2);
+    QCOMPARE(assetView->model()->rowCount(), 2);
+    sourceFilter->setCurrentIndex(0);
     assetView->setCurrentIndex(assetView->model()->index(1, 0));
     QCOMPARE(selectedSpy.count(), 1);
     QCOMPARE(selectedSpy.takeFirst()[0].toInt(), 1);

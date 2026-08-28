@@ -8,7 +8,7 @@
 #include <QDrag>
 #include <QHBoxLayout>
 #include <QItemSelectionModel>
-#include <QLineEdit>
+#include <QLabel>
 #include <QListView>
 #include <QMimeData>
 #include <QPushButton>
@@ -18,6 +18,7 @@
 #include <QStyledItemDelegate>
 #include <QSignalBlocker>
 #include <QStyleOptionViewItem>
+#include <QStackedLayout>
 #include <QVBoxLayout>
 
 namespace {
@@ -135,6 +136,16 @@ public:
         painter->setPen(QColor(235, 237, 242));
         painter->drawText(badgeRect, Qt::AlignCenter, kind);
 
+        const bool isReal = index.data(MediaAssetModel::AssetIsRealRole).toBool();
+        const QRect sourceBadgeRect(thumbnailRect.right() - 51, thumbnailRect.top() + 5,
+                                    46, 20);
+        painter->fillRect(sourceBadgeRect,
+                          isReal ? QColor(39, 115, 75) : QColor(110, 77, 48));
+        painter->setPen(QColor(235, 237, 242));
+        painter->drawText(sourceBadgeRect, Qt::AlignCenter,
+                          isReal ? QStringLiteral("Real")
+                                 : QStringLiteral("Fake"));
+
         painter->setPen(QColor(235, 237, 242));
         const QRect nameRect(itemRect.left() + 5, itemRect.top() + 74,
                              itemRect.width() - 10, 22);
@@ -157,6 +168,8 @@ QtMediaLibraryPanel::QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidg
     , assetModel_(new MediaAssetModel(mediaLibrary, this))
     , assetFilterModel_(new MediaSourceFilterModel(this))
     , assetView_(new MediaAssetListView(this))
+    , emptyStateLabel_(new QLabel(this))
+    , assetContentLayout_(new QStackedLayout)
 {
     setStyleSheet(QStringLiteral(
         "QtMediaLibraryPanel { background: #272a31; }"
@@ -196,11 +209,23 @@ QtMediaLibraryPanel::QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidg
     assetView_->setDragEnabled(true);
     assetView_->setDragDropMode(QAbstractItemView::DragOnly);
 
+    emptyStateLabel_->setObjectName(QStringLiteral("mediaLibraryEmptyState"));
+    emptyStateLabel_->setAlignment(Qt::AlignCenter);
+    emptyStateLabel_->setWordWrap(true);
+    emptyStateLabel_->setText(QStringLiteral(
+        "No matching media items.\nChoose another filter or import a file."));
+    emptyStateLabel_->setStyleSheet(QStringLiteral(
+        "QLabel { background: #202228; color: #a6abb7; padding: 24px; }"));
+
+    assetContentLayout_->setContentsMargins(0, 0, 0, 0);
+    assetContentLayout_->addWidget(assetView_);
+    assetContentLayout_->addWidget(emptyStateLabel_);
+
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(10, 10, 10, 10);
     layout->setSpacing(8);
     layout->addLayout(headerLayout);
-    layout->addWidget(assetView_, 1);
+    layout->addLayout(assetContentLayout_, 1);
 
     connect(assetView_->selectionModel(), &QItemSelectionModel::currentChanged,
             this,
@@ -216,6 +241,7 @@ QtMediaLibraryPanel::QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidg
                 clearSelection();
                 static_cast<MediaSourceFilterModel *>(assetFilterModel_)
                     ->setMediaSourceFilter(filter);
+                updateEmptyState();
             });
     connect(removeButton, &QPushButton::clicked, this, [this] {
         const QModelIndex current = assetView_->currentIndex();
@@ -224,11 +250,20 @@ QtMediaLibraryPanel::QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidg
         emit removeRequested(current.data(MediaAssetModel::AssetIndexRole).toInt(),
                              current.data(MediaAssetModel::AssetIdRole).toInt());
     });
+
+    connect(assetFilterModel_, &QAbstractItemModel::modelReset,
+            this, &QtMediaLibraryPanel::updateEmptyState);
+    connect(assetFilterModel_, &QAbstractItemModel::rowsInserted,
+            this, [this] { updateEmptyState(); });
+    connect(assetFilterModel_, &QAbstractItemModel::rowsRemoved,
+            this, [this] { updateEmptyState(); });
+    updateEmptyState();
 }
 
 void QtMediaLibraryPanel::refreshAssets()
 {
     assetModel_->refresh();
+    updateEmptyState();
 }
 
 void QtMediaLibraryPanel::clearSelection()
@@ -252,4 +287,11 @@ void QtMediaLibraryPanel::setSelectedAssetIndex(int assetIndex)
     assetView_->selectionModel()->select(index,
                                          QItemSelectionModel::ClearAndSelect
                                              | QItemSelectionModel::Rows);
+}
+
+void QtMediaLibraryPanel::updateEmptyState()
+{
+    assetContentLayout_->setCurrentWidget(assetFilterModel_->rowCount() == 0
+        ? static_cast<QWidget *>(emptyStateLabel_)
+        : static_cast<QWidget *>(assetView_));
 }
