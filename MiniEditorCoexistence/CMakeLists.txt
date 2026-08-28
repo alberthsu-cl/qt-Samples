@@ -19,11 +19,9 @@ option(MINI_EDITOR_USE_QT
 
 if(MINI_EDITOR_USE_QT)
     if(BUILD_TESTING)
-        find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia
-                                           MultimediaWidgets Test)
+        find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia Test)
     else()
-        find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia
-                                           MultimediaWidgets)
+        find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
     endif()
 endif()
 
@@ -267,7 +265,6 @@ if(MINI_EDITOR_USE_QT)
     target_link_libraries(MiniEditorCoexistence PRIVATE
         Qt6::Widgets
         Qt6::Multimedia
-        Qt6::MultimediaWidgets
     )
     set_target_properties(MiniEditorCoexistence PROPERTIES
         AUTOMOC ON
@@ -298,6 +295,8 @@ if(MINI_EDITOR_USE_QT)
             src/QtMediaLibraryPanel.cpp
             src/QtPropertiesPanel.h
             src/QtPropertiesPanel.cpp
+            src/QtPreviewPanel.h
+            src/QtPreviewPanel.cpp
             src/ClipPropertiesStateResolver.h
             src/QtTransportPanel.h
             src/QtTransportPanel.cpp
@@ -322,6 +321,7 @@ if(MINI_EDITOR_USE_QT)
         )
         target_link_libraries(MiniEditorQtWidgetTests PRIVATE
             Qt6::Widgets
+            Qt6::Multimedia
             Qt6::Test
         )
         set_target_properties(MiniEditorQtWidgetTests PROPERTIES AUTOMOC ON)

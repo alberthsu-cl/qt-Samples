@@ -60,6 +60,10 @@ QtMediaPlaybackBackend::QtMediaPlaybackBackend(
             setDecodedVideoVisible(false);
         } else if (status == QMediaPlayer::LoadedMedia
                    && pauseAfterFirstSourceVideoFrame_) {
+            // Some multimedia backends discard a seek issued while the source
+            // is still loading. Seek again after LoadedMedia, then decode one
+            // frame and pause it in the video-sink callback.
+            player_.setPosition(0);
             player_.play();
         }
     });
@@ -231,6 +235,9 @@ bool QtMediaPlaybackBackend::ensureSelectedSourceLoaded()
         return false;
 
     if (loadedAssetId_ != asset->id || loadedForTimeline_) {
+        // Drop the previous timeline frame while the newly selected source
+        // loads. The preview will show the new frame only after it arrives.
+        setDecodedVideoVisible(false);
         player_.stop();
         loadedAssetId_ = asset->id;
         loadedTimelineClipId_ = 0;
@@ -281,6 +288,7 @@ bool QtMediaPlaybackBackend::ensureTimelineVideoLoaded(bool seekToTimelineFrame)
     const bool changedClip = !loadedForTimeline_
         || loadedAssetId_ != asset->id || loadedTimelineClipId_ != video->clipId;
     if (changedClip) {
+        setDecodedVideoVisible(false);
         pauseAfterFirstSourceVideoFrame_ = false;
         player_.stop();
         loadedAssetId_ = asset->id;

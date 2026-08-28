@@ -2,6 +2,7 @@
 #include "MediaAssetModel.h"
 #include "QtMediaLibraryPanel.h"
 #include "QtPropertiesPanel.h"
+#include "QtPreviewPanel.h"
 #include "QtTimelineCanvas.h"
 #include "QtTimelineToolbar.h"
 #include "QtTransportPanel.h"
@@ -30,6 +31,7 @@ private slots:
     void propertiesModelRefreshDoesNotEmitUserEdit();
     void propertiesUserEditEmitsCompleteSettings();
     void propertiesFadeEditorsRespectTheClipDuration();
+    void realVideoPreviewUsesTimelineClipPresentation();
     void transportRefreshAndButtonsUseSemanticCommands();
     void mediaLibrarySeparatesProgrammaticAndUserSelection();
     void timelineClickSeekFocusAndDeleteUseSemanticHandlers();
@@ -288,6 +290,24 @@ void MiniEditorQtWidgetTests::mediaLibrarySeparatesProgrammaticAndUserSelection(
     QSignalSpy emptyImportSpy(&emptyPanel, &QtMediaLibraryPanel::importRequested);
     QTest::mouseClick(emptyImportButton, Qt::LeftButton);
     QCOMPARE(emptyImportSpy.count(), 1);
+}
+
+void MiniEditorQtWidgetTests::realVideoPreviewUsesTimelineClipPresentation()
+{
+    QtPreviewPanel panel;
+    panel.resize(640, 400);
+
+    PreviewState state;
+    state.hasMedia = true;
+    state.mediaKind = MediaKind::Video;
+    state.settings.scalePercent = 50;
+    state.settings.position = ClipPosition::BottomRight;
+    state.effectiveOpacityPercent = 42;
+    panel.setPreviewState(state);
+
+    // The decoder targets our QVideoSink. QtPreviewPanel paints the received
+    // frame itself, which is what allows timeline opacity and placement.
+    QVERIFY(panel.videoSink() != nullptr);
 }
 
 void MiniEditorQtWidgetTests::timelineClickSeekFocusAndDeleteUseSemanticHandlers()

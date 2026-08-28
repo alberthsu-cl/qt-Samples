@@ -2,10 +2,10 @@
 
 #include "ProjectState.h"
 
+#include <QVideoFrame>
 #include <QWidget>
 
 class QVideoSink;
-class QVideoWidget;
 
 // Qt rendering replacement for the learning sample's MFC preview placeholder.
 // It consumes framework-neutral presentation data; it does not decode video,
@@ -22,12 +22,13 @@ public:
 
 protected:
     void paintEvent(QPaintEvent *event) override;
-    void resizeEvent(QResizeEvent *event) override;
 
 private:
     static QString frameTimecode(int frame, int framesPerSecond);
 
     PreviewState previewState_;
     PlaybackState playbackState_;
-    QVideoWidget *videoWidget_ = nullptr;
+    QVideoSink *videoSink_ = nullptr;
+    QVideoFrame decodedVideoFrame_;
+    bool isDecodedVideoVisible_ = false;
 };

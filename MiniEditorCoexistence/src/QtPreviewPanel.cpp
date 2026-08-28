@@ -1,10 +1,10 @@
 #include "QtPreviewPanel.h"
 
+#include <QImage>
 #include <QPainter>
-#include <QResizeEvent>
 #include <QStringList>
+#include <QVideoFrame>
 #include <QVideoSink>
-#include <QVideoWidget>
 
 #include <algorithm>
 
@@ -15,61 +15,8 @@ QString clipPositionText(ClipPosition position)
     return QString::fromWCharArray(clipPositionDisplayName(position));
 }
 
-} // namespace
-
-QtPreviewPanel::QtPreviewPanel(QWidget *parent)
-    : QWidget(parent)
-    , videoWidget_(new QVideoWidget(this))
+QRect videoRectangle(const QRect &availableRect, const ClipSettings &settings)
 {
-    setMinimumSize(200, 150);
-    setAutoFillBackground(false);
-    videoWidget_->setAspectRatioMode(Qt::KeepAspectRatio);
-    videoWidget_->setStyleSheet(QStringLiteral("background: #181a1e;"));
-    videoWidget_->hide();
-}
-
-void QtPreviewPanel::setPreviewState(const PreviewState &state)
-{
-    previewState_ = state;
-    update();
-}
-
-void QtPreviewPanel::setPlaybackState(const PlaybackState &state)
-{
-    playbackState_ = state;
-    update();
-}
-
-QVideoSink *QtPreviewPanel::videoSink() const
-{
-    return videoWidget_->videoSink();
-}
-
-void QtPreviewPanel::setDecodedVideoVisible(bool visible)
-{
-    videoWidget_->setVisible(visible);
-    if (visible)
-        videoWidget_->raise();
-}
-
-void QtPreviewPanel::resizeEvent(QResizeEvent *event)
-{
-    QWidget::resizeEvent(event);
-    videoWidget_->setGeometry(rect().adjusted(20, 20, -20, -12));
-}
-
-void QtPreviewPanel::paintEvent(QPaintEvent *)
-{
-    QPainter painter(this);
-    painter.fillRect(rect(), QColor(37, 39, 45));
-
-    const QRect availableRect(20, 20,
-                              std::max(0, width() - 40),
-                              std::max(0, height() - 32));
-    if (availableRect.width() <= 0 || availableRect.height() <= 0)
-        return;
-
-    const ClipSettings &settings = previewState_.settings;
     const int baseVideoHeight = std::min(availableRect.height(),
                                          availableRect.width() * 9 / 16);
     const int videoHeight = std::max(1, std::min(availableRect.height(),
@@ -100,26 +47,97 @@ void QtPreviewPanel::paintEvent(QPaintEvent *)
         break;
     }
 
-    const QRect videoRect(videoLeft, videoTop, videoWidth, videoHeight);
+    return { videoLeft, videoTop, videoWidth, videoHeight };
+}
+
+} // namespace
+
+QtPreviewPanel::QtPreviewPanel(QWidget *parent)
+    : QWidget(parent)
+    , videoSink_(new QVideoSink(this))
+{
+    setMinimumSize(200, 150);
+    setAutoFillBackground(false);
+
+    connect(videoSink_, &QVideoSink::videoFrameChanged, this,
+            [this](const QVideoFrame &frame) {
+                decodedVideoFrame_ = frame;
+                update();
+            });
+}
+
+void QtPreviewPanel::setPreviewState(const PreviewState &state)
+{
+    previewState_ = state;
+    update();
+}
+
+void QtPreviewPanel::setPlaybackState(const PlaybackState &state)
+{
+    playbackState_ = state;
+    update();
+}
+
+QVideoSink *QtPreviewPanel::videoSink() const
+{
+    return videoSink_;
+}
+
+void QtPreviewPanel::setDecodedVideoVisible(bool visible)
+{
+    isDecodedVideoVisible_ = visible;
+    if (!visible)
+        decodedVideoFrame_ = {};
+    update();
+}
+
+void QtPreviewPanel::paintEvent(QPaintEvent *)
+{
+    QPainter painter(this);
+    painter.fillRect(rect(), QColor(37, 39, 45));
+
+    const QRect availableRect(20, 20,
+                              std::max(0, width() - 40),
+                              std::max(0, height() - 32));
+    if (availableRect.width() <= 0 || availableRect.height() <= 0)
+        return;
+
+    const ClipSettings &settings = previewState_.settings;
+    const QRect videoRect = videoRectangle(availableRect, settings);
     painter.fillRect(availableRect, QColor(24, 26, 30));
     if (!previewState_.hasMedia) {
         painter.setPen(QColor(166, 171, 183));
         painter.drawText(availableRect, Qt::AlignCenter,
                          QStringLiteral("No media at this timeline position"));
     } else {
-        QColor thumbnailColor = QColor::fromRgb(previewState_.thumbnailColorRgb);
-        // The fade ramp is already folded into this value by
-        // PreviewStateResolver, so the renderer stays a pure presenter.
-        thumbnailColor.setAlpha(previewState_.effectiveOpacityPercent * 255 / 100);
-        painter.fillRect(videoRect, thumbnailColor);
-        painter.setPen(QPen(QColor(220, 220, 220), 1));
-        painter.drawRect(videoRect.adjusted(0, 0, -1, -1));
+        const QImage decodedImage = decodedVideoFrame_.toImage();
+        const bool canPaintDecodedVideo = isDecodedVideoVisible_
+            && previewState_.mediaKind == MediaKind::Video
+            && !decodedImage.isNull();
+        painter.save();
+        painter.setOpacity(std::clamp(
+            previewState_.effectiveOpacityPercent / 100.0, 0.0, 1.0));
+        if (canPaintDecodedVideo) {
+            const QSize imageSize = decodedImage.size().scaled(
+                videoRect.size(), Qt::KeepAspectRatio);
+            const QRect imageRect(videoRect.left() + (videoRect.width() - imageSize.width()) / 2,
+                                  videoRect.top() + (videoRect.height() - imageSize.height()) / 2,
+                                  imageSize.width(), imageSize.height());
+            painter.drawImage(imageRect, decodedImage);
+        } else {
+            painter.fillRect(videoRect, QColor::fromRgb(previewState_.thumbnailColorRgb));
+        }
+        painter.restore();
+        if (!canPaintDecodedVideo) {
+            painter.setPen(QPen(QColor(220, 220, 220), 1));
+            painter.drawRect(videoRect.adjusted(0, 0, -1, -1));
 
-        painter.setPen(Qt::white);
-        painter.drawText(videoRect.adjusted(12, videoRect.height() - 38,
-                                             -12, -12),
-                         Qt::AlignCenter | Qt::TextSingleLine,
-                         QString::fromStdWString(previewState_.displayName));
+            painter.setPen(Qt::white);
+            painter.drawText(videoRect.adjusted(12, videoRect.height() - 38,
+                                                 -12, -12),
+                             Qt::AlignCenter | Qt::TextSingleLine,
+                             QString::fromStdWString(previewState_.displayName));
+        }
         painter.setPen(QColor(166, 171, 183));
         painter.drawText(QRect(availableRect.left(), availableRect.bottom() - 23,
                                availableRect.width(), 22),
@@ -128,7 +146,7 @@ void QtPreviewPanel::paintEvent(QPaintEvent *)
                              .arg(settings.opacityPercent)
                              .arg(settings.scalePercent)
                              .arg(clipPositionText(settings.position)));
-        if (previewState_.videoFadeGainPercent < 100) {
+        if (!canPaintDecodedVideo && previewState_.videoFadeGainPercent < 100) {
             painter.setPen(QColor(255, 205, 120));
             painter.drawText(QRect(availableRect.left(), availableRect.top(),
                                    availableRect.width(), 22),
@@ -139,8 +157,13 @@ void QtPreviewPanel::paintEvent(QPaintEvent *)
         }
     }
 
-    if (!playbackState_.isPlaying && !playbackState_.isPaused)
+    // Real video is already communicating motion through its decoded frames.
+    // Keep the frame-time overlay for the sample renderer only; placing it on
+    // top of real footage is visual noise during normal playback.
+    if (isDecodedVideoVisible_
+        || (!playbackState_.isPlaying && !playbackState_.isPaused)) {
         return;
+    }
 
     const QRect overlayBase = previewState_.hasMedia ? videoRect : availableRect;
     const int overlayWidth = std::min(480, std::max(220, overlayBase.width() - 24));
