@@ -2,15 +2,54 @@
 
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMouseEvent>
 #include <QResizeEvent>
 #include <QSignalBlocker>
 #include <QSizePolicy>
 #include <QSlider>
+#include <QStyle>
+#include <QStyleOptionSlider>
 #include <QToolButton>
 
 #include <algorithm>
 
 namespace {
+
+class ClickSeekSlider final : public QSlider
+{
+public:
+    using QSlider::QSlider;
+
+protected:
+    void mousePressEvent(QMouseEvent *event) override
+    {
+        if (event->button() != Qt::LeftButton) {
+            QSlider::mousePressEvent(event);
+            return;
+        }
+
+        QStyleOptionSlider option;
+        initStyleOption(&option);
+        const QRect handle = style()->subControlRect(
+            QStyle::CC_Slider, &option, QStyle::SC_SliderHandle, this);
+        if (handle.contains(event->position().toPoint())) {
+            QSlider::mousePressEvent(event);
+            return;
+        }
+
+        const int sliderLength = handle.width();
+        const int availableLength = std::max(1, width() - sliderLength);
+        const int clickPosition = std::clamp(
+            qRound(event->position().x()) - sliderLength / 2,
+            0, availableLength);
+        const int clickedValue = QStyle::sliderValueFromPosition(
+            minimum(), maximum(), clickPosition, availableLength,
+            option.upsideDown);
+        setValue(clickedValue);
+        emit sliderMoved(clickedValue);
+        event->accept();
+    }
+};
 
 QToolButton *createTransportButton(const QString &text, const QString &toolTip,
                                    const QSize &size, QWidget *parent)
@@ -38,7 +77,7 @@ QtTransportPanel::QtTransportPanel(QWidget *parent)
     , stopButton_(createTransportButton(QStringLiteral("Stop"),
                                         QStringLiteral("Stop playback"),
                                         QSize(54, 30), this))
-    , positionSlider_(new QSlider(Qt::Horizontal, this))
+    , positionSlider_(new ClickSeekSlider(Qt::Horizontal, this))
     , timecodeLabel_(new QLabel(this))
 {
     stepBackwardButton_->setObjectName(QStringLiteral("stepBackwardButton"));

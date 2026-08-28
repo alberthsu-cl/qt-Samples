@@ -63,7 +63,8 @@ QtMediaPlaybackBackend::QtMediaPlaybackBackend(
             // Some multimedia backends discard a seek issued while the source
             // is still loading. Seek again after LoadedMedia, then decode one
             // frame and pause it in the video-sink callback.
-            player_.setPosition(0);
+            player_.setPosition(positionMillisecondsForFrame(
+                pendingSourceSeekFrame_));
             player_.play();
         }
     });
@@ -179,6 +180,31 @@ PlaybackClockAction QtMediaPlaybackBackend::synchronize()
         : PlaybackClockAction::Stop;
 }
 
+PlaybackClockAction QtMediaPlaybackBackend::seekToCurrentFrame()
+{
+    if (session_.isTimelineFocused()) {
+        ensureTimelineVideoLoaded(true);
+        return synchronizeTimelinePlayback();
+    }
+
+    const LibraryMediaAsset *asset = selectedRealSource();
+    if (asset == nullptr)
+        return simulatedBackend_.seekToCurrentFrame();
+
+    pendingSourceSeekFrame_ = session_.playbackState().currentFrame;
+    if (!ensureSelectedSourceLoaded())
+        return simulatedBackend_.seekToCurrentFrame();
+
+    player_.setPosition(positionMillisecondsForFrame(pendingSourceSeekFrame_));
+    if (asset->kind == MediaKind::Video && !session_.playbackState().isPlaying) {
+        // Decode the newly requested paused frame. The video-sink callback
+        // pauses the player as soon as that frame becomes available.
+        pauseAfterFirstSourceVideoFrame_ = true;
+        player_.play();
+    }
+    return synchronize();
+}
+
 PlaybackClockAction QtMediaPlaybackBackend::advanceOneFrame()
 {
     if (session_.isTimelineFocused()) {
@@ -243,6 +269,7 @@ bool QtMediaPlaybackBackend::ensureSelectedSourceLoaded()
         loadedTimelineClipId_ = 0;
         loadedForTimeline_ = false;
         pauseAfterFirstSourceVideoFrame_ = asset->kind == MediaKind::Video;
+        pendingSourceSeekFrame_ = session_.playbackState().currentFrame;
         player_.setSource(QUrl::fromLocalFile(
             QString::fromStdWString(asset->filePath.wstring())));
         // A paused QMediaPlayer does not necessarily decode until it receives

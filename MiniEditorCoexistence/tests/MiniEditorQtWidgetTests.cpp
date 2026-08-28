@@ -230,6 +230,17 @@ void MiniEditorQtWidgetTests::transportRefreshAndButtonsUseSemanticCommands()
     QCOMPARE(panel.findChild<QLabel *>(QStringLiteral("timecodeLabel"))->text(),
              QStringLiteral("00:00:01:15"));
 
+    QSlider *positionSlider = panel.findChild<QSlider *>(
+        QStringLiteral("positionSlider"));
+    panel.resize(700, 50);
+    panel.show();
+    QCoreApplication::processEvents();
+    QTest::mouseClick(positionSlider, Qt::LeftButton, Qt::NoModifier,
+                      QPoint(positionSlider->width() * 3 / 4,
+                             positionSlider->height() / 2));
+    QCOMPARE(positionSpy.count(), 1);
+    QVERIFY(positionSpy.takeFirst()[0].toInt() > 60);
+
     panel.show();
     panel.resize(350, 52);
     QVERIFY(panel.findChild<QToolButton *>(QStringLiteral("stepBackwardButton"))->isHidden());

@@ -32,6 +32,7 @@ public:
 
     unsigned int tickIntervalMilliseconds() const override;
     PlaybackClockAction executeCommand(PlaybackCommand command) override;
+    PlaybackClockAction seekToCurrentFrame() override;
     PlaybackClockAction synchronize() override;
     PlaybackClockAction advanceOneFrame() override;
 
@@ -62,6 +63,7 @@ private:
     int loadedTimelineClipId_ = 0;
     bool loadedForTimeline_ = false;
     bool pauseAfterFirstSourceVideoFrame_ = false;
+    int pendingSourceSeekFrame_ = 0;
     bool decodedVideoVisible_ = false;
     VideoVisibilityHandler videoVisibilityHandler_;
     SourceMetadataChangedHandler sourceMetadataChangedHandler_;

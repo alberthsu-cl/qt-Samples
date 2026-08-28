@@ -40,4 +40,5 @@ private:
     QMediaPlayer videoPlayer_;
     QVideoSink videoSink_;
     int currentVideoAssetId_ = 0;
+    bool isAcceptingCurrentVideoFrames_ = false;
 };

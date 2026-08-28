@@ -201,7 +201,10 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         executeEditorCommand(commandForPlayback(command));
     });
     transportHost_.setPlaybackPositionHandler(
-        [this](int frame) { timelineController_.seekFocusedPreview(frame); });
+        [this](int frame) {
+            timelineController_.seekFocusedPreview(frame);
+            applyPlaybackClockAction(playbackBackend_.seekToCurrentFrame());
+        });
     timelineToolbarHost_.setViewStateEditedHandler([this](const TimelineViewState &state) {
         editorSession_.updateTimelineViewState(state);
     });

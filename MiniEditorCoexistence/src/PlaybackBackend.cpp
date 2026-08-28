@@ -25,6 +25,11 @@ PlaybackClockAction SimulatedPlaybackBackend::synchronize()
     return clock_.synchronize();
 }
 
+PlaybackClockAction SimulatedPlaybackBackend::seekToCurrentFrame()
+{
+    return synchronize();
+}
+
 PlaybackClockAction SimulatedPlaybackBackend::advanceOneFrame()
 {
     return clock_.advanceOneFrame();

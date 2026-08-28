@@ -16,6 +16,7 @@ public:
 
     virtual unsigned int tickIntervalMilliseconds() const = 0;
     virtual PlaybackClockAction executeCommand(PlaybackCommand command) = 0;
+    virtual PlaybackClockAction seekToCurrentFrame() = 0;
     virtual PlaybackClockAction synchronize() = 0;
     virtual PlaybackClockAction advanceOneFrame() = 0;
 };
@@ -29,6 +30,7 @@ public:
 
     unsigned int tickIntervalMilliseconds() const override;
     PlaybackClockAction executeCommand(PlaybackCommand command) override;
+    PlaybackClockAction seekToCurrentFrame() override;
     PlaybackClockAction synchronize() override;
     PlaybackClockAction advanceOneFrame() override;
 

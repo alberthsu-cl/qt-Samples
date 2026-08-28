@@ -3,6 +3,7 @@
 #include "MediaLibrary.h"
 
 #include <QImageReader>
+#include <QTimer>
 #include <QUrl>
 #include <QVideoFrame>
 
@@ -13,8 +14,10 @@ QtThumbnailCache::QtThumbnailCache(QObject *parent)
 
     connect(&videoSink_, &QVideoSink::videoFrameChanged, this,
             [this](const QVideoFrame &frame) {
-                if (currentVideoAssetId_ == 0 || !frame.isValid())
+                if (currentVideoAssetId_ == 0 || !isAcceptingCurrentVideoFrames_
+                    || !frame.isValid()) {
                     return;
+                }
 
                 const QImage image = frame.toImage();
                 if (image.isNull())
@@ -29,6 +32,10 @@ QtThumbnailCache::QtThumbnailCache(QObject *parent)
     connect(&videoPlayer_, &QMediaPlayer::mediaStatusChanged, this,
             [this](QMediaPlayer::MediaStatus status) {
                 if (status == QMediaPlayer::LoadedMedia && currentVideoAssetId_ != 0) {
+                    // Frames are accepted only after this specific source has
+                    // finished loading. Buffered callbacks from the previous
+                    // source arrive while this flag is false and are ignored.
+                    isAcceptingCurrentVideoFrames_ = true;
                     videoPlayer_.setPosition(0);
                     videoPlayer_.play();
                 } else if (status == QMediaPlayer::InvalidMedia
@@ -43,6 +50,7 @@ void QtThumbnailCache::refresh(const MediaLibrary &mediaLibrary)
     videoPlayer_.stop();
     videoPlayer_.setSource({});
     currentVideoAssetId_ = 0;
+    isAcceptingCurrentVideoFrames_ = false;
     pendingVideos_.clear();
     images_.clear();
     for (const LibraryMediaAsset &asset : mediaLibrary.assets()) {
@@ -74,13 +82,19 @@ void QtThumbnailCache::startNextVideo()
 
     const PendingVideo request = pendingVideos_.dequeue();
     currentVideoAssetId_ = request.mediaAssetId;
+    isAcceptingCurrentVideoFrames_ = false;
     videoPlayer_.setSource(QUrl::fromLocalFile(request.filePath));
 }
 
 void QtThumbnailCache::finishCurrentVideo()
 {
+    isAcceptingCurrentVideoFrames_ = false;
     videoPlayer_.stop();
     videoPlayer_.setSource({});
+    videoSink_.setVideoFrame({});
     currentVideoAssetId_ = 0;
-    startNextVideo();
+    // Let queued sink callbacks from the old decoder drain while there is no
+    // asset ID to receive them. Starting synchronously can assign an old
+    // buffered frame to the next queued video.
+    QTimer::singleShot(50, this, [this] { startNextVideo(); });
 }
