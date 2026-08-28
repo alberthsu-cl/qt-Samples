@@ -4,6 +4,7 @@
 #include <QLabel>
 #include <QResizeEvent>
 #include <QSignalBlocker>
+#include <QSizePolicy>
 #include <QSlider>
 #include <QToolButton>
 
@@ -63,18 +64,15 @@ QtTransportPanel::QtTransportPanel(QWidget *parent)
         "QToolButton#playPauseButton:hover { background: #4796ec; }"
         "QToolButton#playPauseButton:checked { background: #b96b2c; "
         "border-color: #e7a45d; }"
-        "QSlider::groove:horizontal { height: 5px; margin: 0 9px; "
-        "background: #59616e; border-radius: 2px; }"
-        "QSlider::sub-page:horizontal { background: #2f8ee5; }"
-        "QSlider::handle:horizontal { width: 13px; margin: -5px 0; "
-        "background: #e6e8ed; border-radius: 6px; }"
         "QLabel { background: #101114; color: #e6e8ed; padding: 6px; "
         "border: 1px solid #30343d; border-radius: 3px; "
         "font-family: Consolas, monospace; }"));
 
     playPauseButton_->setCheckable(true);
     positionSlider_->setMinimumWidth(80);
-    positionSlider_->setMinimumHeight(30);
+    // The native Windows slider positions its groove correctly at its natural
+    // height. Keep that height and center the whole slider beside the buttons.
+    positionSlider_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     timecodeLabel_->setMinimumWidth(130);
     timecodeLabel_->setAlignment(Qt::AlignCenter);
 
@@ -88,16 +86,6 @@ QtTransportPanel::QtTransportPanel(QWidget *parent)
     controlsLayout->addWidget(stepForwardButton_);
     controlsLayout->addWidget(stopButton_);
 
-    // QSlider places its handle flush against its own edge at the minimum and
-    // maximum values. The surrounding gutters make both endpoints look the
-    // same, instead of letting the final-frame thumb appear clipped.
-    auto *seekContainer = new QWidget(this);
-    seekContainer->setObjectName(QStringLiteral("seekContainer"));
-    auto *seekLayout = new QHBoxLayout(seekContainer);
-    seekLayout->setContentsMargins(10, 0, 10, 0);
-    seekLayout->setSpacing(0);
-    seekLayout->addWidget(positionSlider_);
-
     auto *layout = new QHBoxLayout(this);
     // This panel is hosted in an MFC-managed rectangle that can become as
     // narrow as the preview's minimum width. Do not let fixed transport
@@ -106,7 +94,9 @@ QtTransportPanel::QtTransportPanel(QWidget *parent)
     layout->setContentsMargins(10, 6, 10, 6);
     layout->setSpacing(8);
     layout->addWidget(transportControls);
-    layout->addWidget(seekContainer, 1);
+    // Use Qt's native slider appearance, exactly like the Zoom control. It
+    // supplies matching minimum/maximum endpoint spacing by itself.
+    layout->addWidget(positionSlider_, 1, Qt::AlignVCenter);
     layout->addWidget(timecodeLabel_);
 
     connect(stepBackwardButton_, &QToolButton::clicked, this,

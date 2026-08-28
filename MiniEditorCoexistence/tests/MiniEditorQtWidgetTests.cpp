@@ -195,7 +195,6 @@ void MiniEditorQtWidgetTests::transportRefreshAndButtonsUseSemanticCommands()
     QCOMPARE(panel.findChild<QToolButton *>(QStringLiteral("playPauseButton"))->text(),
              QStringLiteral("Pause"));
     QVERIFY(panel.findChild<QWidget *>(QStringLiteral("transportControls")) != nullptr);
-    QVERIFY(panel.findChild<QWidget *>(QStringLiteral("seekContainer")) != nullptr);
     QCOMPARE(panel.findChild<QToolButton *>(QStringLiteral("stepBackwardButton"))->text(),
              QStringLiteral("<"));
     QCOMPARE(panel.findChild<QToolButton *>(QStringLiteral("stepForwardButton"))->text(),
