@@ -59,7 +59,7 @@ private:
     // other one yields so the pair still fits inside the clip.
     void yieldOppositeFade(bool fadeInChanged);
     void setFadeValues(int fadeInFrames, int fadeOutFrames);
-    void updateTargetPresentation(ClipPropertiesTarget target);
+    void updateTargetPresentation(const ClipPropertiesViewState &viewState);
     void updateMediaSpecificRows();
     void updateFadeSummary();
 };

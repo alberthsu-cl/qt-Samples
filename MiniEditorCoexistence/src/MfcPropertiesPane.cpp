@@ -27,19 +27,38 @@ void MfcPropertiesPane::drawContent(CDC &deviceContext, const CRect &clientRect)
     const CString mediaKind = viewState_.mediaKind == MediaKind::Audio
         ? _T("Audio") : (viewState_.mediaKind == MediaKind::Image
             ? _T("Image") : _T("Video"));
-    const CString editState = viewState_.editingEnabled
-        ? _T("Timeline clip") : _T("Select a timeline clip to edit");
-
-    if (viewState_.target != ClipPropertiesTarget::TimelineClip) {
-        const CString message = viewState_.target == ClipPropertiesTarget::MediaAsset
-            ? _T("Media asset selected. Add it to the timeline to edit clip properties.")
-            : _T("Select a timeline clip to edit its properties.");
+    if (viewState_.target == ClipPropertiesTarget::EmptyTimeline) {
+        const CString message = _T("Select a timeline clip to edit its properties.");
         drawText(deviceContext, message,
                  CRect(left, top, clientRect.right - left, top + 64),
                  EditorUi::kSecondaryText, DT_LEFT | DT_TOP | DT_WORDBREAK);
         return;
     }
 
+    if (viewState_.target == ClipPropertiesTarget::MediaAsset) {
+        const CString displayName = viewState_.mediaDisplayName.empty()
+            ? _T("Unknown media") : viewState_.mediaDisplayName.c_str();
+        const CString filePath = viewState_.mediaFilePath.empty()
+            ? _T("Unavailable") : viewState_.mediaFilePath.c_str();
+        const std::vector<CString> rows{
+            CString(_T("Name: ")) + displayName,
+            CString(_T("Type: ")) + mediaKind,
+            CString(_T("Duration: "))
+                + std::to_wstring(viewState_.durationFrames).c_str() + _T(" f"),
+            CString(_T("Source: ")) + filePath,
+            _T("Add this media to the timeline to edit placement properties.")
+        };
+        for (const CString &row : rows) {
+            const CRect rowRect(left, top, clientRect.right - left, top + 31);
+            deviceContext.FillSolidRect(rowRect, RGB(45, 48, 56));
+            drawText(deviceContext, row, rowRect, EditorUi::kSecondaryText,
+                     DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+            top += 39;
+        }
+        return;
+    }
+
+    const CString editState = _T("Timeline clip");
     std::vector<CString> rows{
         editState,
         CString(_T("Type: ")) + mediaKind,

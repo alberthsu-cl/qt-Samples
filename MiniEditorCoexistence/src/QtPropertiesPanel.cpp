@@ -197,7 +197,7 @@ QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
                 emitCurrentSettings();
             });
     updateFadeSummary();
-    updateTargetPresentation(ClipPropertiesTarget::MediaAsset);
+    updateTargetPresentation({});
 }
 
 void QtPropertiesPanel::setClipDurationFrames(int durationFrames)
@@ -295,15 +295,31 @@ void QtPropertiesPanel::updateMediaSpecificRows()
     formLayout_->setRowVisible(positionComboBox_, hasVisualPlacement);
 }
 
-void QtPropertiesPanel::updateTargetPresentation(ClipPropertiesTarget target)
+void QtPropertiesPanel::updateTargetPresentation(
+    const ClipPropertiesViewState &viewState)
 {
+    const ClipPropertiesTarget target = viewState.target;
     const bool isTimelineClip = target == ClipPropertiesTarget::TimelineClip;
     formContainer_->setVisible(isTimelineClip);
     selectionMessageLabel_->setVisible(!isTimelineClip);
 
     if (target == ClipPropertiesTarget::MediaAsset) {
+        const QString displayName = viewState.mediaDisplayName.empty()
+            ? QStringLiteral("Unknown media")
+            : QString::fromStdWString(viewState.mediaDisplayName);
+        const QString type = viewState.mediaKind == MediaKind::Video
+            ? QStringLiteral("Video")
+            : viewState.mediaKind == MediaKind::Audio
+                ? QStringLiteral("Audio") : QStringLiteral("Image");
+        const QString sourcePath = viewState.mediaFilePath.empty()
+            ? QStringLiteral("Unavailable")
+            : QString::fromStdWString(viewState.mediaFilePath);
         selectionMessageLabel_->setText(QStringLiteral(
-            "Media asset selected.\nAdd it to the timeline to edit clip properties."));
+            "Name: %1\nType: %2\nDuration: %3 f\nSource: %4\n\n"
+            "Add this media to the timeline to edit placement properties.")
+            .arg(displayName, type)
+            .arg(viewState.durationFrames)
+            .arg(sourcePath));
     } else if (target == ClipPropertiesTarget::EmptyTimeline) {
         selectionMessageLabel_->setText(QStringLiteral(
             "Select a timeline clip to edit its properties."));
@@ -313,7 +329,7 @@ void QtPropertiesPanel::updateTargetPresentation(ClipPropertiesTarget target)
 void QtPropertiesPanel::setViewState(const ClipPropertiesViewState &viewState)
 {
     mediaKind_ = viewState.mediaKind;
-    updateTargetPresentation(viewState.target);
+    updateTargetPresentation(viewState);
     updateMediaSpecificRows();
     setClipDurationFrames(viewState.durationFrames);
     setClipSettings(viewState.settings);

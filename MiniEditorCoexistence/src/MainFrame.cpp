@@ -53,8 +53,8 @@ EditorIntent commandForPlayback(PlaybackCommand command)
 MainFrame::MainFrame()
     : editorSession_(demoAssets().size()),
       timelineController_(editorSession_, mediaLibrary_),
-      commandController_(editorSession_, timelineController_),
-      playbackClockController_(editorSession_),
+      playbackBackend_(editorSession_),
+      commandController_(editorSession_, timelineController_, playbackBackend_),
       documentService_(editorSession_, mediaLibrary_)
 {
     // The sample starts with familiar built-in assets, but the Qt media
@@ -325,7 +325,7 @@ void MainFrame::OnTimer(UINT_PTR timerId)
     if (timerId == kPlaybackTimerId) {
         // This is a deliberately simple MFC timer. In a production editor the
         // media engine would report its clock/playhead instead.
-        applyPlaybackClockAction(playbackClockController_.advanceOneFrame());
+        applyPlaybackClockAction(playbackBackend_.advanceOneFrame());
         if (editorSession_.isTimelineFocused())
             timelineController_.followPlaybackFrame();
         return;
@@ -475,13 +475,13 @@ void MainFrame::executeEditorCommand(EditorIntent command)
 
 void MainFrame::synchronizePlaybackTimer()
 {
-    applyPlaybackClockAction(playbackClockController_.synchronize());
+    applyPlaybackClockAction(playbackBackend_.synchronize());
 }
 
 void MainFrame::applyPlaybackClockAction(PlaybackClockAction action)
 {
     if (action == PlaybackClockAction::EnsureRunning)
-        SetTimer(kPlaybackTimerId, PlaybackClockController::kTickIntervalMilliseconds, nullptr);
+        SetTimer(kPlaybackTimerId, playbackBackend_.tickIntervalMilliseconds(), nullptr);
     else
         KillTimer(kPlaybackTimerId);
 }

@@ -71,8 +71,15 @@ public:
         const QRect itemRect = option.rect.adjusted(4, 4, -4, -4);
         const bool selected = option.state.testFlag(QStyle::State_Selected);
 
-        painter->fillRect(itemRect, selected ? QColor(33, 96, 167) : QColor(35, 37, 43));
-        painter->setPen(QPen(selected ? QColor(83, 166, 255) : QColor(35, 37, 43), 2));
+        // Asset cards need their own surface. Using the same color as the
+        // surrounding dark workspace made unselected media look like loose
+        // text floating on the window rather than selectable library items.
+        const QColor cardBackground = selected
+            ? QColor(33, 96, 167) : QColor(45, 48, 56);
+        const QColor cardBorder = selected
+            ? QColor(83, 166, 255) : QColor(57, 61, 71);
+        painter->fillRect(itemRect, cardBackground);
+        painter->setPen(QPen(cardBorder, 2));
         painter->drawRect(itemRect.adjusted(1, 1, -1, -1));
 
         const QRect thumbnailRect(itemRect.left() + 5, itemRect.top() + 5,
@@ -109,10 +116,10 @@ QtMediaLibraryPanel::QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidg
     , assetView_(new MediaAssetListView(this))
 {
     setStyleSheet(QStringLiteral(
-        "QtMediaLibraryPanel { background: #23252b; }"
+        "QtMediaLibraryPanel { background: #272a31; }"
         "QComboBox, QLineEdit { background: #31353e; color: #e6e8ed; "
         "border: 1px solid #4a4f5a; padding: 5px; }"
-        "QListView { background: #1f2126; border: none; }"));
+        "QListView { background: #202228; border: none; }"));
 
     auto *categorySelector = new QComboBox(this);
     categorySelector->addItems({ QStringLiteral("My Media"),

@@ -2,6 +2,7 @@
 
 class EditorSession;
 class TimelineEditingController;
+class IPlaybackBackend;
 
 // Intent-level commands shared by native MFC menus/accelerators and Qt
 // controls. These names deliberately do not contain Win32 command IDs or Qt
@@ -32,7 +33,8 @@ class EditorCommandController final
 {
 public:
     EditorCommandController(EditorSession &session,
-                            TimelineEditingController &timelineController);
+                            TimelineEditingController &timelineController,
+                            IPlaybackBackend &playbackBackend);
 
     bool canExecute(EditorIntent command) const;
     EditorCommandResult execute(EditorIntent command);
@@ -40,4 +42,5 @@ public:
 private:
     EditorSession &session_;
     TimelineEditingController &timelineController_;
+    IPlaybackBackend &playbackBackend_;
 };

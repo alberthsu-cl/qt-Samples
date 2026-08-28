@@ -1,11 +1,15 @@
 #include "EditorCommandController.h"
 
 #include "EditorSession.h"
+#include "PlaybackBackend.h"
 #include "TimelineEditingController.h"
 
 EditorCommandController::EditorCommandController(
-    EditorSession &session, TimelineEditingController &timelineController)
-    : session_(session), timelineController_(timelineController)
+    EditorSession &session, TimelineEditingController &timelineController,
+    IPlaybackBackend &playbackBackend)
+    : session_(session)
+    , timelineController_(timelineController)
+    , playbackBackend_(playbackBackend)
 {
 }
 
@@ -57,16 +61,16 @@ EditorCommandResult EditorCommandController::execute(EditorIntent command)
     case EditorIntent::SplitClip:
         return { timelineController_.splitAtHead(), true };
     case EditorIntent::TogglePlayback:
-        session_.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+        playbackBackend_.executeCommand(PlaybackCommand::TogglePlayPause);
         return { true, true };
     case EditorIntent::StopPlayback:
-        session_.handlePlaybackCommand(PlaybackCommand::Stop);
+        playbackBackend_.executeCommand(PlaybackCommand::Stop);
         return { true, true };
     case EditorIntent::StepBackward:
-        session_.handlePlaybackCommand(PlaybackCommand::StepBackward);
+        playbackBackend_.executeCommand(PlaybackCommand::StepBackward);
         return { true, true };
     case EditorIntent::StepForward:
-        session_.handlePlaybackCommand(PlaybackCommand::StepForward);
+        playbackBackend_.executeCommand(PlaybackCommand::StepForward);
         return { true, true };
     }
 

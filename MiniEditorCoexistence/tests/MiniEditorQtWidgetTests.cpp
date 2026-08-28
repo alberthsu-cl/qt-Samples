@@ -65,12 +65,16 @@ void MiniEditorQtWidgetTests::propertiesModelRefreshDoesNotEmitUserEdit()
     QCOMPARE(editedSpy.count(), 0);
 
     viewState.target = ClipPropertiesTarget::MediaAsset;
+    viewState.mediaDisplayName = L"Narration.wav";
+    viewState.mediaFilePath = L"D:/media/Narration.wav";
     panel.setViewState(viewState);
     QVERIFY(panel.findChild<QWidget *>(
                 QStringLiteral("propertiesFormContainer"))->isHidden());
     QVERIFY(panel.findChild<QWidget *>(QStringLiteral("opacityEditor"))->isHidden());
     QCOMPARE(panel.findChild<QLabel *>(QStringLiteral("selectionMessageLabel"))->text(),
-             QStringLiteral("Media asset selected.\nAdd it to the timeline to edit clip properties."));
+             QStringLiteral("Name: Narration.wav\nType: Audio\nDuration: 90 f\n"
+                            "Source: D:/media/Narration.wav\n\n"
+                            "Add this media to the timeline to edit placement properties."));
     QCOMPARE(editedSpy.count(), 0);
 
     viewState.target = ClipPropertiesTarget::TimelineClip;

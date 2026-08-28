@@ -2,7 +2,7 @@
 
 #include "EditorSession.h"
 #include "EditorCommandController.h"
-#include "PlaybackClockController.h"
+#include "PlaybackBackend.h"
 #include "MediaLibrary.h"
 #include "ProjectDocumentService.h"
 #include "TimelineEditingController.h"
@@ -118,8 +118,8 @@ private:
     MediaLibrary mediaLibrary_;
     EditorSession editorSession_;
     TimelineEditingController timelineController_;
+    SimulatedPlaybackBackend playbackBackend_;
     EditorCommandController commandController_;
-    PlaybackClockController playbackClockController_;
     ProjectDocumentService documentService_;
     EditorSession::ObserverId editorSessionObserverId_ = 0;
     WorkspaceLayout workspaceLayout_;

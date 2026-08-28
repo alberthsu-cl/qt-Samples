@@ -3,6 +3,7 @@
 #include "EditorSession.h"
 #include "EditorCommandController.h"
 #include "PlaybackClockController.h"
+#include "PlaybackBackend.h"
 #include "ProjectSerializer.h"
 #include "MediaLibrary.h"
 #include "TimelineModel.h"
@@ -589,7 +590,8 @@ void editorCommandControllerUnifiesEditorIntent()
 
     EditorSession session(1);
     TimelineEditingController timeline(session, library);
-    EditorCommandController commands(session, timeline);
+    SimulatedPlaybackBackend playbackBackend(session);
+    EditorCommandController commands(session, timeline, playbackBackend);
     const int clipId = session.addTimelineClip(
         videoId, TimelineTrackType::Video, 0, 100);
     session.selectTimelineClip(clipId, 0);
@@ -1488,6 +1490,27 @@ void clipFadesTravelThroughSessionUndoAndProjectFiles()
             "Saving a fade above the supported maximum must be rejected.");
 }
 
+void simulatedPlaybackBackendOwnsTheInitialPlaybackImplementation()
+{
+    EditorSession session(1);
+    SimulatedPlaybackBackend backend(session);
+    session.setPlaybackDuration(2, true);
+
+    require(backend.tickIntervalMilliseconds()
+                == PlaybackClockController::kTickIntervalMilliseconds,
+            "The simulated backend must publish the existing timer cadence to its UI host.");
+    require(backend.executeCommand(PlaybackCommand::TogglePlayPause)
+                == PlaybackClockAction::EnsureRunning
+                && session.playbackState().isPlaying,
+            "Transport commands must pass through the backend before changing editor playback.");
+    require(backend.advanceOneFrame() == PlaybackClockAction::EnsureRunning
+                && session.playbackState().currentFrame == 1,
+            "The simulated backend must preserve the existing interior-frame behavior.");
+    require(backend.advanceOneFrame() == PlaybackClockAction::Stop
+                && !session.playbackState().isPlaying,
+            "The backend must stop its host clock when the simulated media reaches its end.");
+}
+
 void clipPropertiesResolverBuildsOneCompleteViewSnapshot()
 {
     MediaLibrary library;
@@ -1531,8 +1554,12 @@ void clipPropertiesResolverBuildsOneCompleteViewSnapshot()
     const ClipPropertiesViewState sourceAsset =
         ClipPropertiesStateResolver::resolve(session, library);
     require(sourceAsset.target == ClipPropertiesTarget::MediaAsset
-                && !sourceAsset.editingEnabled,
-            "A library selection must be presented as source media, not an editable clip.");
+                && !sourceAsset.editingEnabled
+                && sourceAsset.mediaDisplayName == L"audio.wav"
+                && sourceAsset.mediaFilePath == L"D:/media/audio.wav"
+                && sourceAsset.mediaKind == MediaKind::Audio
+                && sourceAsset.durationFrames == 180,
+            "A library selection must expose read-only source media information.");
 }
 
 void timelinePresentationResolverBuildsOneCompleteViewSnapshot()
@@ -1619,6 +1646,7 @@ int main()
         timelineEditingControllerCoordinatesFocusAndSplitPolicy();
         editorCommandControllerUnifiesEditorIntent();
         playbackClockControllerKeepsTimerPolicyFrameworkNeutral();
+        simulatedPlaybackBackendOwnsTheInitialPlaybackImplementation();
         previewStateResolverKeepsPreviewPolicyFrameworkNeutral();
         clipFadeOwnsRampPolicyIndependentlyOfAnyRenderer();
         clipFadesTravelThroughSessionUndoAndProjectFiles();

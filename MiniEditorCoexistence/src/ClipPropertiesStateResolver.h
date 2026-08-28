@@ -19,6 +19,11 @@ struct ClipPropertiesViewState {
     ClipPropertiesTarget target = ClipPropertiesTarget::MediaAsset;
     bool editingEnabled = false;
     MediaKind mediaKind = MediaKind::Video;
+    // These identify a source-library item. A timeline placement keeps its
+    // editable settings below, while a selected source shows this read-only
+    // information as preparation for real media metadata in a later phase.
+    std::wstring mediaDisplayName;
+    std::wstring mediaFilePath;
     int durationFrames = 0;
     ClipSettings settings;
 };
