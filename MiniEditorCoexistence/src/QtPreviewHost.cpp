@@ -52,6 +52,12 @@ void QtPreviewHost::setPlaybackState(const PlaybackState &state)
         panel_->setPlaybackState(state);
 }
 
+void QtPreviewHost::setStillImage(const QImage &image)
+{
+    if (panel_)
+        panel_->setStillImage(image);
+}
+
 QVideoSink *QtPreviewHost::videoSink() const
 {
     return panel_ ? panel_->videoSink() : nullptr;

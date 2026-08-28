@@ -14,6 +14,7 @@
 #include "TimelinePresentationStateResolver.h"
 #include "TimelineGeometry.h"
 #include "TimelineEditingController.h"
+#include "ThumbnailRequestModel.h"
 #include "PreviewStateResolver.h"
 #include "ProjectDocumentService.h"
 #include "WorkspaceLayout.h"
@@ -33,6 +34,33 @@ void require(bool condition, const char *message)
 {
     if (!condition)
         throw std::runtime_error(message);
+}
+
+void thumbnailRequestModelUsesSourceTimeForTimelineStrips()
+{
+    TimelineClip videoClip;
+    videoClip.mediaAssetId = 7;
+    videoClip.state.sourceInFrame = 90;
+    videoClip.state.durationFrames = 180;
+
+    const std::vector<ThumbnailRequest> videoRequests =
+        ThumbnailRequestModel::timelineStrip(videoClip, MediaKind::Video, 250);
+    require(videoRequests.size() == 3,
+            "A 250-pixel video clip should request three timeline thumbnails.");
+    require(videoRequests.front().sourceFrame == 90
+                && videoRequests.back().sourceFrame == 210,
+            "Timeline thumbnails must sample the clip's trimmed source range.");
+
+    const std::vector<ThumbnailRequest> imageRequests =
+        ThumbnailRequestModel::timelineStrip(videoClip, MediaKind::Image, 250);
+    require(imageRequests.size() == 3
+                && std::all_of(imageRequests.begin(), imageRequests.end(),
+                               [](const ThumbnailRequest &request) {
+                                   return request.sourceFrame == 0;
+                               }),
+            "Still-image timeline thumbnails must always use source frame zero.");
+    require(ThumbnailRequestModel::timelineStrip(videoClip, MediaKind::Audio, 250).empty(),
+            "Audio clips must not request image thumbnails.");
 }
 
 int right(const WorkspaceRect &rect)
@@ -1694,6 +1722,7 @@ int main()
         rippleEditingShiftsOneTrackAsOneUndoableCommand();
         timelineGeometryOwnsFrameworkNeutralCoordinatesAndHitTesting();
         timelineClipTrimmingPreservesValidRangesAndHandleHits();
+        thumbnailRequestModelUsesSourceTimeForTimelineStrips();
         mediaLibraryOwnsStableSourceAssetIds();
         workspaceLayoutProtectsPaneBounds();
         std::cout << "MiniEditorCoreTests passed.\n";

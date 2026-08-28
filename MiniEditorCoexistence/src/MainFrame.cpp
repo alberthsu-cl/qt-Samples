@@ -122,6 +122,11 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     timelineSplitter_.setDragHandler([this](int parentY) { moveTimelineSplitter(parentY); });
 
 #if MINI_EDITOR_USE_QT
+    QObject::connect(&thumbnailCache_, &QtThumbnailCache::thumbnailChanged,
+                     &thumbnailCache_, [this](int) {
+                         refreshEditorViews(EditorChange::TimelineClip);
+                     });
+    thumbnailCache_.refresh(mediaLibrary_);
     playbackBackend_.setVideoOutput(previewHost_.videoSink());
     playbackBackend_.setVideoVisibilityHandler(
         [this](bool visible) { previewHost_.setDecodedVideoVisible(visible); });
@@ -151,6 +156,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
             TimelineAssetPresentation presentation;
             presentation.displayName = QString::fromStdWString(asset->displayName);
             presentation.color = QColor::fromRgb(asset->thumbnailColorRgb);
+            presentation.thumbnail = thumbnailCache_.imageFor(asset->id);
             presentation.trackType = asset->kind == MediaKind::Audio
                 ? TimelineTrackType::Audio : TimelineTrackType::Video;
             presentation.mediaKind = asset->kind;
@@ -171,7 +177,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         state.isAudioTrackVisible = isVisible;
         editorSession_.updateTimelineViewState(state);
     });
-    if (!mediaLibraryHost_.create(GetSafeHwnd(), mediaLibrary_))
+    if (!mediaLibraryHost_.create(GetSafeHwnd(), mediaLibrary_, &thumbnailCache_))
         return -1;
     if (!propertiesHost_.create(GetSafeHwnd()))
         return -1;
@@ -585,6 +591,9 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     if (selectionChanged || clipSettingsChanged || playbackChanged || timelineClipChanged) {
         const PreviewState preview = PreviewStateResolver::resolve(editorSession_, mediaLibrary_);
 #if MINI_EDITOR_USE_QT
+        previewHost_.setStillImage(
+            preview.mediaKind == MediaKind::Image
+                ? thumbnailCache_.imageFor(preview.mediaAssetId) : QImage());
         previewHost_.setPreviewState(preview);
 #else
         previewCanvas_.setPreviewState(preview);

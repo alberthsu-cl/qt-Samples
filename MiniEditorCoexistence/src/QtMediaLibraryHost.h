@@ -7,6 +7,7 @@
 
 class QtMediaLibraryPanel;
 class MediaLibrary;
+class QtThumbnailCache;
 
 // Explicit HWND bridge: MFC owns the main frame; Qt owns this child panel.
 class QtMediaLibraryHost final
@@ -22,7 +23,8 @@ public:
     QtMediaLibraryHost(const QtMediaLibraryHost &) = delete;
     QtMediaLibraryHost &operator=(const QtMediaLibraryHost &) = delete;
 
-    bool create(void *mfcParentWindowHandle, const MediaLibrary &mediaLibrary);
+    bool create(void *mfcParentWindowHandle, const MediaLibrary &mediaLibrary,
+                QtThumbnailCache *thumbnailCache = nullptr);
     void resize(const CRect &bounds);
     void setSelectedAssetIndex(int assetIndex);
     void refreshAssets();

@@ -78,6 +78,12 @@ void QtPreviewPanel::setPlaybackState(const PlaybackState &state)
     update();
 }
 
+void QtPreviewPanel::setStillImage(const QImage &image)
+{
+    stillImage_ = image;
+    update();
+}
+
 QVideoSink *QtPreviewPanel::videoSink() const
 {
     return videoSink_;
@@ -114,21 +120,25 @@ void QtPreviewPanel::paintEvent(QPaintEvent *)
         const bool canPaintDecodedVideo = isDecodedVideoVisible_
             && previewState_.mediaKind == MediaKind::Video
             && !decodedImage.isNull();
+        const bool canPaintStillImage = previewState_.mediaKind == MediaKind::Image
+            && !stillImage_.isNull();
+        const bool canPaintRealMedia = canPaintDecodedVideo || canPaintStillImage;
         painter.save();
         painter.setOpacity(std::clamp(
             previewState_.effectiveOpacityPercent / 100.0, 0.0, 1.0));
-        if (canPaintDecodedVideo) {
-            const QSize imageSize = decodedImage.size().scaled(
+        if (canPaintRealMedia) {
+            const QImage &image = canPaintDecodedVideo ? decodedImage : stillImage_;
+            const QSize imageSize = image.size().scaled(
                 videoRect.size(), Qt::KeepAspectRatio);
             const QRect imageRect(videoRect.left() + (videoRect.width() - imageSize.width()) / 2,
                                   videoRect.top() + (videoRect.height() - imageSize.height()) / 2,
                                   imageSize.width(), imageSize.height());
-            painter.drawImage(imageRect, decodedImage);
+            painter.drawImage(imageRect, image);
         } else {
             painter.fillRect(videoRect, QColor::fromRgb(previewState_.thumbnailColorRgb));
         }
         painter.restore();
-        if (!canPaintDecodedVideo) {
+        if (!canPaintRealMedia) {
             painter.setPen(QPen(QColor(220, 220, 220), 1));
             painter.drawRect(videoRect.adjusted(0, 0, -1, -1));
 
@@ -146,7 +156,7 @@ void QtPreviewPanel::paintEvent(QPaintEvent *)
                              .arg(settings.opacityPercent)
                              .arg(settings.scalePercent)
                              .arg(clipPositionText(settings.position)));
-        if (!canPaintDecodedVideo && previewState_.videoFadeGainPercent < 100) {
+        if (!canPaintRealMedia && previewState_.videoFadeGainPercent < 100) {
             painter.setPen(QColor(255, 205, 120));
             painter.drawText(QRect(availableRect.left(), availableRect.top(),
                                    availableRect.width(), 22),

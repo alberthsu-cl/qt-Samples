@@ -2,6 +2,7 @@
 
 #include "ProjectState.h"
 
+#include <QImage>
 #include <QVideoFrame>
 #include <QWidget>
 
@@ -17,6 +18,7 @@ public:
 
     void setPreviewState(const PreviewState &state);
     void setPlaybackState(const PlaybackState &state);
+    void setStillImage(const QImage &image);
     QVideoSink *videoSink() const;
     void setDecodedVideoVisible(bool visible);
 
@@ -30,5 +32,6 @@ private:
     PlaybackState playbackState_;
     QVideoSink *videoSink_ = nullptr;
     QVideoFrame decodedVideoFrame_;
+    QImage stillImage_;
     bool isDecodedVideoVisible_ = false;
 };

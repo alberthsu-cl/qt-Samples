@@ -4,6 +4,7 @@
 
 class QMimeData;
 class MediaLibrary;
+class QtThumbnailCache;
 
 // A Qt adapter over the framework-neutral DemoProject data. It deliberately
 // has no MFC window knowledge and can later be shared by other Qt views.
@@ -16,10 +17,13 @@ public:
         AssetKindRole,
         AssetDurationRole,
         ThumbnailColorRole,
+        ThumbnailImageRole,
         AssetIsRealRole
     };
 
-    explicit MediaAssetModel(const MediaLibrary &mediaLibrary, QObject *parent = nullptr);
+    explicit MediaAssetModel(const MediaLibrary &mediaLibrary,
+                             QtThumbnailCache *thumbnailCache = nullptr,
+                             QObject *parent = nullptr);
 
     void refresh();
 
@@ -31,4 +35,5 @@ public:
 
 private:
     const MediaLibrary &mediaLibrary_;
+    QtThumbnailCache *thumbnailCache_ = nullptr;
 };

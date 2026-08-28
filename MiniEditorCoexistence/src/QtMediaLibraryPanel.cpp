@@ -130,8 +130,18 @@ public:
 
         const QRect thumbnailRect(itemRect.left() + 5, itemRect.top() + 5,
                                   itemRect.width() - 10, 65);
-        painter->fillRect(thumbnailRect,
-                          index.data(MediaAssetModel::ThumbnailColorRole).value<QColor>());
+        const QImage thumbnail = index.data(MediaAssetModel::ThumbnailImageRole).value<QImage>();
+        if (thumbnail.isNull()) {
+            painter->fillRect(thumbnailRect,
+                              index.data(MediaAssetModel::ThumbnailColorRole).value<QColor>());
+        } else {
+            QSize paintedSize = thumbnail.size();
+            paintedSize.scale(thumbnailRect.size(), Qt::KeepAspectRatio);
+            QRect paintedRect(QPoint(), paintedSize);
+            paintedRect.moveCenter(thumbnailRect.center());
+            painter->fillRect(thumbnailRect, QColor(18, 20, 24));
+            painter->drawImage(paintedRect, thumbnail);
+        }
 
         const QString kind = index.data(MediaAssetModel::AssetKindRole).toString();
         const QRect badgeRect(thumbnailRect.left() + 5, thumbnailRect.top() + 5, 48, 20);
@@ -140,14 +150,15 @@ public:
         painter->drawText(badgeRect, Qt::AlignCenter, kind);
 
         const bool isReal = index.data(MediaAssetModel::AssetIsRealRole).toBool();
-        const QRect sourceBadgeRect(thumbnailRect.right() - 51, thumbnailRect.top() + 5,
-                                    46, 20);
-        painter->fillRect(sourceBadgeRect,
-                          isReal ? QColor(39, 115, 75) : QColor(110, 77, 48));
-        painter->setPen(QColor(235, 237, 242));
-        painter->drawText(sourceBadgeRect, Qt::AlignCenter,
-                          isReal ? QStringLiteral("Real")
-                                 : QStringLiteral("Fake"));
+        // A real thumbnail identifies its source visually. Only generated
+        // sample assets need an explicit Fake badge to avoid misleading users.
+        if (!isReal) {
+            const QRect sourceBadgeRect(thumbnailRect.right() - 51, thumbnailRect.top() + 5,
+                                        46, 20);
+            painter->fillRect(sourceBadgeRect, QColor(110, 77, 48));
+            painter->setPen(QColor(235, 237, 242));
+            painter->drawText(sourceBadgeRect, Qt::AlignCenter, QStringLiteral("Fake"));
+        }
 
         painter->setPen(QColor(235, 237, 242));
         const QRect nameRect(itemRect.left() + 5, itemRect.top() + 74,
@@ -166,9 +177,10 @@ public:
 
 } // namespace
 
-QtMediaLibraryPanel::QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidget *parent)
+QtMediaLibraryPanel::QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidget *parent,
+                                         QtThumbnailCache *thumbnailCache)
     : QWidget(parent)
-    , assetModel_(new MediaAssetModel(mediaLibrary, this))
+    , assetModel_(new MediaAssetModel(mediaLibrary, thumbnailCache, this))
     , assetFilterModel_(new MediaSourceFilterModel(this))
     , assetView_(new MediaAssetListView(this))
     , emptyImportButton_(new QToolButton(this))

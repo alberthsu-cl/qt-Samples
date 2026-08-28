@@ -39,6 +39,8 @@ add_executable(MiniEditorCoexistence WIN32
     src/ProjectSerializer.cpp
     src/MediaLibrary.h
     src/MediaLibrary.cpp
+    src/ThumbnailRequestModel.h
+    src/ThumbnailRequestModel.cpp
     src/TimelineModel.h
     src/TimelineModel.cpp
     src/TimelineGeometry.h
@@ -110,6 +112,8 @@ source_group("DataModel" FILES
     src/WorkspaceSettings.cpp
     src/MediaAssetModel.h
     src/MediaAssetModel.cpp
+    src/ThumbnailRequestModel.h
+    src/ThumbnailRequestModel.cpp
 )
 
 source_group("Layout" FILES
@@ -171,6 +175,8 @@ if(BUILD_TESTING)
         src/ProjectSerializer.cpp
         src/MediaLibrary.h
         src/MediaLibrary.cpp
+        src/ThumbnailRequestModel.h
+        src/ThumbnailRequestModel.cpp
         src/TimelineModel.h
         src/TimelineModel.cpp
         src/TimelineGeometry.h
@@ -230,6 +236,8 @@ target_compile_definitions(MiniEditorCoexistence PRIVATE
 if(MINI_EDITOR_USE_QT)
     target_sources(MiniEditorCoexistence PRIVATE
         src/TimelineAssetPresentation.h
+        src/QtThumbnailCache.h
+        src/QtThumbnailCache.cpp
         src/MediaAssetModel.h
         src/MediaAssetModel.cpp
         src/QtMediaLibraryPanel.h
@@ -291,6 +299,10 @@ if(MINI_EDITOR_USE_QT)
             src/MediaLibrary.cpp
             src/MediaAssetModel.h
             src/MediaAssetModel.cpp
+            src/QtThumbnailCache.h
+            src/QtThumbnailCache.cpp
+            src/ThumbnailRequestModel.h
+            src/ThumbnailRequestModel.cpp
             src/QtMediaLibraryPanel.h
             src/QtMediaLibraryPanel.cpp
             src/QtPropertiesPanel.h

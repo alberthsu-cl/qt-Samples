@@ -11,6 +11,7 @@
 
 #if MINI_EDITOR_USE_QT
 #include "QtMediaPlaybackBackend.h"
+#include "QtThumbnailCache.h"
 #include "QtMediaLibraryHost.h"
 #include "QtPreviewHost.h"
 #include "QtPropertiesHost.h"
@@ -97,6 +98,7 @@ private:
 
     CStatusBar statusBar_;
 #if MINI_EDITOR_USE_QT
+    QtThumbnailCache thumbnailCache_;
     QtMediaLibraryHost mediaLibraryHost_;
     QtPreviewHost previewHost_;
     QtPropertiesHost propertiesHost_;

@@ -5,6 +5,7 @@
 class MediaAssetModel;
 class QListView;
 class MediaLibrary;
+class QtThumbnailCache;
 class QSortFilterProxyModel;
 class QStackedLayout;
 class QToolButton;
@@ -16,7 +17,8 @@ class QtMediaLibraryPanel final : public QWidget
     Q_OBJECT
 
 public:
-    explicit QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidget *parent = nullptr);
+    explicit QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidget *parent = nullptr,
+                                 QtThumbnailCache *thumbnailCache = nullptr);
 
     void setSelectedAssetIndex(int assetIndex);
     void refreshAssets();

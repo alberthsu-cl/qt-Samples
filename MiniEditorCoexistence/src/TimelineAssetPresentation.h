@@ -4,6 +4,7 @@
 #include "TimelineModel.h"
 
 #include <QColor>
+#include <QImage>
 #include <QString>
 
 // Everything the timeline needs to preview a library asset before it has
@@ -14,4 +15,5 @@ struct TimelineAssetPresentation {
     TimelineTrackType trackType = TimelineTrackType::Video;
     MediaKind mediaKind = MediaKind::Video;
     int durationFrames = 0;
+    QImage thumbnail;
 };

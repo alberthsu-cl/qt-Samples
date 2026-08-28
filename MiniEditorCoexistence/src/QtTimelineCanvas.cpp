@@ -1,5 +1,6 @@
 #include "QtTimelineCanvas.h"
 #include "ClipFade.h"
+#include "ThumbnailRequestModel.h"
 #include "TimelineTrackPolicy.h"
 
 #include <QMouseEvent>
@@ -299,6 +300,22 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
         const QColor assetColor = presentation->color.darker(100);
         const QRect clipRect = toQRect(timelineGeometry.clipRectangle(clip));
         painter.fillRect(clipRect, assetColor);
+        if (!presentation->thumbnail.isNull() && clip.trackType == TimelineTrackType::Video) {
+            const QRect contentRect = clipRect.adjusted(2, 2, -2, -2);
+            const std::vector<ThumbnailRequest> requests =
+                ThumbnailRequestModel::timelineStrip(clip, presentation->mediaKind,
+                                                     contentRect.width(),
+                                                     contentRect.height());
+            for (int index = 0; index < static_cast<int>(requests.size()); ++index) {
+                const int left = contentRect.left()
+                    + contentRect.width() * index / static_cast<int>(requests.size());
+                const int right = contentRect.left()
+                    + contentRect.width() * (index + 1) / static_cast<int>(requests.size());
+                painter.drawImage(QRect(left, contentRect.top(), right - left,
+                                        contentRect.height()),
+                                  presentation->thumbnail);
+            }
+        }
         // The focus frame reads as selection through its colour, so it stays
         // thin enough not to eat into the clip's own content.
         const bool selected = clip.id == selectedClipId_;

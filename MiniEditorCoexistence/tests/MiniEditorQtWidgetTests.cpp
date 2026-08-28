@@ -6,6 +6,7 @@
 #include "QtTimelineCanvas.h"
 #include "QtTimelineToolbar.h"
 #include "QtTransportPanel.h"
+#include "QtThumbnailCache.h"
 #include "TimelineClipEdit.h"
 #include "TimelineGeometry.h"
 
@@ -17,6 +18,7 @@
 #include <QSlider>
 #include <QSpinBox>
 #include <QTemporaryFile>
+#include <QTemporaryDir>
 #include <QToolButton>
 #include <QtTest>
 
@@ -34,12 +36,36 @@ private slots:
     void realVideoPreviewUsesTimelineClipPresentation();
     void transportRefreshAndButtonsUseSemanticCommands();
     void mediaLibrarySeparatesProgrammaticAndUserSelection();
+    void mediaLibraryModelExposesDecodedRealImageThumbnail();
     void timelineClickSeekFocusAndDeleteUseSemanticHandlers();
     void timelineBodyDragEmitsFrameBasedMove();
     void timelineEndTrimEmitsTrimmedState();
     void timelineAudioVisibilitySeparatesRefreshAndUserToggle();
     void timelinePresentationRefreshUpdatesToolbarAtomically();
 };
+
+void MiniEditorQtWidgetTests::mediaLibraryModelExposesDecodedRealImageThumbnail()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString imagePath = directory.filePath(QStringLiteral("thumbnail.png"));
+    QImage sourceImage(16, 9, QImage::Format_ARGB32);
+    sourceImage.fill(QColor(220, 40, 30));
+    QVERIFY(sourceImage.save(imagePath));
+
+    MediaLibrary library;
+    const std::optional<int> assetId = library.addFile(
+        std::filesystem::path(imagePath.toStdWString()));
+    QVERIFY(assetId.has_value());
+
+    QtThumbnailCache cache;
+    cache.refresh(library);
+    MediaAssetModel model(library, &cache);
+    const QImage thumbnail = model.index(0, 0)
+        .data(MediaAssetModel::ThumbnailImageRole).value<QImage>();
+    QVERIFY(!thumbnail.isNull());
+    QCOMPARE(thumbnail.size(), sourceImage.size());
+}
 
 void MiniEditorQtWidgetTests::propertiesModelRefreshDoesNotEmitUserEdit()
 {

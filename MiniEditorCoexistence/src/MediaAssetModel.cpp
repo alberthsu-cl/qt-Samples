@@ -1,6 +1,7 @@
 #include "MediaAssetModel.h"
 
 #include "MediaLibrary.h"
+#include "QtThumbnailCache.h"
 
 #include <QColor>
 #include <QMimeData>
@@ -11,14 +12,32 @@ namespace {
 constexpr char kMediaAssetMimeType[] = "application/x-mini-editor-media-id";
 }
 
-MediaAssetModel::MediaAssetModel(const MediaLibrary &mediaLibrary, QObject *parent)
+MediaAssetModel::MediaAssetModel(const MediaLibrary &mediaLibrary,
+                                 QtThumbnailCache *thumbnailCache, QObject *parent)
     : QAbstractListModel(parent)
     , mediaLibrary_(mediaLibrary)
+    , thumbnailCache_(thumbnailCache)
 {
+    if (thumbnailCache_ != nullptr) {
+        connect(thumbnailCache_, &QtThumbnailCache::thumbnailChanged, this,
+                [this](int mediaAssetId) {
+                    const auto &assets = mediaLibrary_.assets();
+                    for (int row = 0; row < static_cast<int>(assets.size()); ++row) {
+                        if (assets[row].id != mediaAssetId)
+                            continue;
+                        const QModelIndex changedIndex = index(row, 0);
+                        emit dataChanged(changedIndex, changedIndex,
+                                         { ThumbnailImageRole });
+                        break;
+                    }
+                });
+    }
 }
 
 void MediaAssetModel::refresh()
 {
+    if (thumbnailCache_ != nullptr)
+        thumbnailCache_->refresh(mediaLibrary_);
     beginResetModel();
     endResetModel();
 }
@@ -54,6 +73,9 @@ QVariant MediaAssetModel::data(const QModelIndex &index, int role) const
                   .arg((asset.timelineDurationFrames / 30) % 60, 2, 10, QLatin1Char('0'));
     case ThumbnailColorRole:
         return QColor::fromRgb(asset.thumbnailColorRgb);
+    case ThumbnailImageRole:
+        return thumbnailCache_ == nullptr ? QVariant()
+                                          : QVariant::fromValue(thumbnailCache_->imageFor(asset.id));
     case AssetIsRealRole: {
         std::error_code error;
         return !asset.filePath.empty()
