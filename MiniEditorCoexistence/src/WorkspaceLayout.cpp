@@ -5,7 +5,10 @@
 namespace {
 
 constexpr int kOuterMargin = 6;
-constexpr int kTransportHeight = 42;
+// The transport panel now contains a framed control group. Its 30-pixel
+// buttons, group border, and panel margins need a little more than the old
+// 42-pixel slot, otherwise the top and bottom of the group are clipped.
+constexpr int kTransportHeight = 52;
 constexpr int kTimelineToolbarHeight = 44;
 constexpr int kSplitterThickness = 6;
 constexpr int kMinimumMediaLibraryWidth = 340;

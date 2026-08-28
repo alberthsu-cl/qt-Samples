@@ -8,6 +8,7 @@
 class QLabel;
 class QToolButton;
 class QSlider;
+class QResizeEvent;
 
 // Qt transport controls. The panel is intentionally unaware of playback
 // implementation and works with either preview renderer during migration.
@@ -26,6 +27,10 @@ signals:
 
 private:
     static QString timecodeText(const PlaybackState &state);
+    void updateResponsiveControls();
+
+protected:
+    void resizeEvent(QResizeEvent *event) override;
 
     QToolButton *stepBackwardButton_ = nullptr;
     QToolButton *playPauseButton_ = nullptr;

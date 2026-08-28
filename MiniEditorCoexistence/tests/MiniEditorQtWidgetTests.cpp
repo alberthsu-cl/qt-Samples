@@ -194,9 +194,25 @@ void MiniEditorQtWidgetTests::transportRefreshAndButtonsUseSemanticCommands()
     QCOMPARE(positionSpy.count(), 0);
     QCOMPARE(panel.findChild<QToolButton *>(QStringLiteral("playPauseButton"))->text(),
              QStringLiteral("Pause"));
+    QVERIFY(panel.findChild<QWidget *>(QStringLiteral("transportControls")) != nullptr);
+    QVERIFY(panel.findChild<QWidget *>(QStringLiteral("seekContainer")) != nullptr);
+    QCOMPARE(panel.findChild<QToolButton *>(QStringLiteral("stepBackwardButton"))->text(),
+             QStringLiteral("<"));
+    QCOMPARE(panel.findChild<QToolButton *>(QStringLiteral("stepForwardButton"))->text(),
+             QStringLiteral(">"));
     QCOMPARE(panel.findChild<QSlider *>(QStringLiteral("positionSlider"))->value(), 45);
     QCOMPARE(panel.findChild<QLabel *>(QStringLiteral("timecodeLabel"))->text(),
              QStringLiteral("00:00:01:15"));
+
+    panel.show();
+    panel.resize(350, 52);
+    QVERIFY(panel.findChild<QToolButton *>(QStringLiteral("stepBackwardButton"))->isHidden());
+    QVERIFY(panel.findChild<QToolButton *>(QStringLiteral("stepForwardButton"))->isHidden());
+    QVERIFY(panel.findChild<QLabel *>(QStringLiteral("timecodeLabel"))->isHidden());
+    panel.resize(700, 52);
+    QVERIFY(!panel.findChild<QToolButton *>(QStringLiteral("stepBackwardButton"))->isHidden());
+    QVERIFY(!panel.findChild<QToolButton *>(QStringLiteral("stepForwardButton"))->isHidden());
+    QVERIFY(!panel.findChild<QLabel *>(QStringLiteral("timecodeLabel"))->isHidden());
 
     QTest::mouseClick(panel.findChild<QToolButton *>(QStringLiteral("playPauseButton")),
                       Qt::LeftButton);
