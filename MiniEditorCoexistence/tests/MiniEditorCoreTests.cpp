@@ -2,6 +2,7 @@
 #include "ClipPropertiesStateResolver.h"
 #include "EditorSession.h"
 #include "EditorCommandController.h"
+#include "FrameTimecode.h"
 #include "PlaybackClockController.h"
 #include "PlaybackBackend.h"
 #include "ProjectSerializer.h"
@@ -1288,6 +1289,14 @@ void mediaLibraryOwnsStableSourceAssetIds()
             "Still images must receive a three-second default duration.");
     require(library.findAsset(*audioId)->kind == MediaKind::Audio,
             "Audio extension must infer the audio media kind.");
+    require(library.updateAssetDuration(*videoId, 375)
+                && library.findAsset(*videoId)->timelineDurationFrames == 375,
+            "Decoded media duration must replace an imported asset's provisional duration.");
+    require(!library.updateAssetDuration(*videoId, 375),
+            "Publishing the same decoded duration must not report another metadata change.");
+    require(frameTimecodeMmSsFf(4170) == L"02:19:00"
+                && frameTimecodeMmSsFf(375) == L"00:12:15",
+            "Properties duration must use readable minute:second:frame timecode.");
     require(!library.addFile(L"D:/media/notes.txt"),
             "Unsupported files must be rejected by the media library.");
     require(library.removeAsset(*audioId), "Imported assets must be removable.");
@@ -1511,6 +1520,23 @@ void simulatedPlaybackBackendOwnsTheInitialPlaybackImplementation()
             "The backend must stop its host clock when the simulated media reaches its end.");
 }
 
+void editorSessionAcceptsAuthoritativeBackendPlaybackState()
+{
+    EditorSession session(1);
+    session.updatePlaybackFromBackend(75, 240, true, false);
+    require(session.playbackState().currentFrame == 75
+                && session.playbackState().durationFrames == 240
+                && session.playbackState().isPlaying
+                && !session.playbackState().isPaused,
+            "A real media backend must be able to publish its clock into the active preview state.");
+
+    session.updatePlaybackFromBackend(500, 240, false, true);
+    require(session.playbackState().currentFrame == 239
+                && !session.playbackState().isPlaying
+                && session.playbackState().isPaused,
+            "Backend playback reports must clamp to the decoded duration and preserve pause state.");
+}
+
 void clipPropertiesResolverBuildsOneCompleteViewSnapshot()
 {
     MediaLibrary library;
@@ -1647,6 +1673,7 @@ int main()
         editorCommandControllerUnifiesEditorIntent();
         playbackClockControllerKeepsTimerPolicyFrameworkNeutral();
         simulatedPlaybackBackendOwnsTheInitialPlaybackImplementation();
+        editorSessionAcceptsAuthoritativeBackendPlaybackState();
         previewStateResolverKeepsPreviewPolicyFrameworkNeutral();
         clipFadeOwnsRampPolicyIndependentlyOfAnyRenderer();
         clipFadesTravelThroughSessionUndoAndProjectFiles();

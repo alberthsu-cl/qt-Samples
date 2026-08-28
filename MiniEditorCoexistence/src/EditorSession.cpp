@@ -737,6 +737,28 @@ void EditorSession::setPlaybackDuration(int durationFrames, bool resetToBeginnin
     notifyStateChanged(EditorChange::Playback);
 }
 
+void EditorSession::updatePlaybackFromBackend(
+    int currentFrame, int durationFrames, bool isPlaying, bool isPaused)
+{
+    PlaybackState &playback = activePlaybackState();
+    PlaybackState updated = playback;
+    updated.durationFrames = std::max(1, durationFrames);
+    updated.currentFrame = std::clamp(
+        currentFrame, kFirstFrame, updated.durationFrames - 1);
+    updated.isPlaying = isPlaying;
+    updated.isPaused = isPaused && !isPlaying;
+
+    if (updated.isPlaying == playback.isPlaying
+        && updated.isPaused == playback.isPaused
+        && updated.currentFrame == playback.currentFrame
+        && updated.durationFrames == playback.durationFrames) {
+        return;
+    }
+
+    playback = updated;
+    notifyStateChanged(EditorChange::Playback);
+}
+
 void EditorSession::updateTimelineViewState(const TimelineViewState &state)
 {
     timelineViewState_ = state;

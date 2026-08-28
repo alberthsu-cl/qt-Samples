@@ -1,5 +1,7 @@
 #include "MfcPropertiesPane.h"
 
+#include "FrameTimecode.h"
+
 #include <string>
 #include <vector>
 
@@ -44,7 +46,7 @@ void MfcPropertiesPane::drawContent(CDC &deviceContext, const CRect &clientRect)
             CString(_T("Name: ")) + displayName,
             CString(_T("Type: ")) + mediaKind,
             CString(_T("Duration: "))
-                + std::to_wstring(viewState_.durationFrames).c_str() + _T(" f"),
+                + frameTimecodeMmSsFf(viewState_.durationFrames).c_str(),
             CString(_T("Source: ")) + filePath,
             _T("Add this media to the timeline to edit placement properties.")
         };
@@ -63,7 +65,7 @@ void MfcPropertiesPane::drawContent(CDC &deviceContext, const CRect &clientRect)
         editState,
         CString(_T("Type: ")) + mediaKind,
         CString(_T("Duration: "))
-            + std::to_wstring(viewState_.durationFrames).c_str() + _T(" f")
+            + frameTimecodeMmSsFf(viewState_.durationFrames).c_str()
     };
     if (viewState_.mediaKind != MediaKind::Audio) {
         rows.push_back(CString(_T("Opacity: "))

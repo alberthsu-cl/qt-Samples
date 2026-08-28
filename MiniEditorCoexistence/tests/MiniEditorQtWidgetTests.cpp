@@ -72,7 +72,7 @@ void MiniEditorQtWidgetTests::propertiesModelRefreshDoesNotEmitUserEdit()
                 QStringLiteral("propertiesFormContainer"))->isHidden());
     QVERIFY(panel.findChild<QWidget *>(QStringLiteral("opacityEditor"))->isHidden());
     QCOMPARE(panel.findChild<QLabel *>(QStringLiteral("selectionMessageLabel"))->text(),
-             QStringLiteral("Name: Narration.wav\nType: Audio\nDuration: 90 f\n"
+             QStringLiteral("Name: Narration.wav\nType: Audio\nDuration: 00:03:00\n"
                             "Source: D:/media/Narration.wav\n\n"
                             "Add this media to the timeline to edit placement properties."));
     QCOMPARE(editedSpy.count(), 0);

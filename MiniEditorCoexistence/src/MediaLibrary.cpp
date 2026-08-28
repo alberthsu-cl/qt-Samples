@@ -59,6 +59,20 @@ bool MediaLibrary::replaceAssets(const std::vector<LibraryMediaAsset> &assets)
     return true;
 }
 
+bool MediaLibrary::updateAssetDuration(int assetId, int timelineDurationFrames)
+{
+    const auto asset = std::find_if(assets_.begin(), assets_.end(),
+        [assetId](const LibraryMediaAsset &candidate) {
+            return candidate.id == assetId;
+        });
+    const int duration = std::max(1, timelineDurationFrames);
+    if (asset == assets_.end() || asset->timelineDurationFrames == duration)
+        return false;
+
+    asset->timelineDurationFrames = duration;
+    return true;
+}
+
 std::optional<int> MediaLibrary::addFile(const std::filesystem::path &path)
 {
     const auto kind = inferKind(path);

@@ -7,6 +7,7 @@
 #include <memory>
 
 class QtPreviewPanel;
+class QVideoSink;
 
 // Embeds the Qt preview widget in the still-MFC-owned frame during migration.
 class QtPreviewHost final
@@ -22,6 +23,8 @@ public:
     void resize(const CRect &bounds);
     void setPreviewState(const PreviewState &state);
     void setPlaybackState(const PlaybackState &state);
+    QVideoSink *videoSink() const;
+    void setDecodedVideoVisible(bool visible);
 
 private:
     std::unique_ptr<QtPreviewPanel> panel_;

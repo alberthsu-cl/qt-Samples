@@ -1,8 +1,8 @@
 # Mini Editor Coexistence
 
-This sample models the **UI structure** of a desktop video editor while keeping
-the media engine out of scope. It is a learning project for gradual MFC-to-Qt
-migration, not a video editor implementation.
+This sample models the **UI structure** of a desktop video editor and now has
+an intentionally small real source-media playback path. It is a learning
+project for gradual MFC-to-Qt migration, not a video editor implementation.
 
 ## Phase 0 — Pure MFC baseline
 
@@ -440,6 +440,23 @@ are now compiled only by the pure-MFC fallback configuration. This is the
 intended migration result: one presentation contract, two temporarily
 independent renderers, and no Qt preview code coupled to MFC drawing types.
 
+## Incremental real source-media playback
+
+`IPlaybackBackend` keeps transport intent independent of the playback engine.
+The pure-MFC build uses `SimulatedPlaybackBackend`. The Qt-enabled build uses
+`QtMediaPlaybackBackend`, which delegates timeline and still-image playback to
+that same simulator but routes an existing selected video/audio file through
+`QMediaPlayer` and `QAudioOutput`. Decoded video is presented by the
+`QVideoWidget` owned by `QtPreviewPanel`.
+
+The source player publishes its decoded position and duration back into the
+active `PlaybackState`; existing Qt transport controls therefore display the
+real media clock without owning the player. The MFC timer remains only as the
+outer-loop bridge that lets queued Qt Multimedia callbacks reach the UI thread.
+It does not advance real-media frames. Timeline playback remains simulated on
+purpose—the next phase will resolve each timeline frame to a media asset and
+switch the real player at clip boundaries.
+
 ## Framework-neutral editor commands
 
 `EditorCommandController` maps intent-level commands—Undo, Redo, timeline
@@ -525,6 +542,11 @@ it.
 
 The Visual Studio **Desktop development with C++** workload must include
 **C++ MFC for latest v143 build tools**.
+
+The Qt installation must include **Qt Multimedia** for the MSVC 2022 64-bit
+kit. CMake links the Qt-enabled application with `Qt6::Multimedia` and
+`Qt6::MultimediaWidgets`; `windeployqt` copies their FFmpeg/media plugins and
+runtime libraries beside the executable.
 
 ## Headless Qt widget regression tests
 

@@ -1,7 +1,10 @@
 #include "QtPreviewPanel.h"
 
 #include <QPainter>
+#include <QResizeEvent>
 #include <QStringList>
+#include <QVideoSink>
+#include <QVideoWidget>
 
 #include <algorithm>
 
@@ -16,9 +19,13 @@ QString clipPositionText(ClipPosition position)
 
 QtPreviewPanel::QtPreviewPanel(QWidget *parent)
     : QWidget(parent)
+    , videoWidget_(new QVideoWidget(this))
 {
     setMinimumSize(200, 150);
     setAutoFillBackground(false);
+    videoWidget_->setAspectRatioMode(Qt::KeepAspectRatio);
+    videoWidget_->setStyleSheet(QStringLiteral("background: #181a1e;"));
+    videoWidget_->hide();
 }
 
 void QtPreviewPanel::setPreviewState(const PreviewState &state)
@@ -31,6 +38,24 @@ void QtPreviewPanel::setPlaybackState(const PlaybackState &state)
 {
     playbackState_ = state;
     update();
+}
+
+QVideoSink *QtPreviewPanel::videoSink() const
+{
+    return videoWidget_->videoSink();
+}
+
+void QtPreviewPanel::setDecodedVideoVisible(bool visible)
+{
+    videoWidget_->setVisible(visible);
+    if (visible)
+        videoWidget_->raise();
+}
+
+void QtPreviewPanel::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    videoWidget_->setGeometry(rect().adjusted(20, 20, -20, -12));
 }
 
 void QtPreviewPanel::paintEvent(QPaintEvent *)

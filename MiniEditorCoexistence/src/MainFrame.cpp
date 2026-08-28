@@ -53,7 +53,11 @@ EditorIntent commandForPlayback(PlaybackCommand command)
 MainFrame::MainFrame()
     : editorSession_(demoAssets().size()),
       timelineController_(editorSession_, mediaLibrary_),
+#if MINI_EDITOR_USE_QT
+      playbackBackend_(editorSession_, mediaLibrary_),
+#else
       playbackBackend_(editorSession_),
+#endif
       commandController_(editorSession_, timelineController_, playbackBackend_),
       documentService_(editorSession_, mediaLibrary_)
 {
@@ -117,6 +121,12 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     timelineSplitter_.setDragHandler([this](int parentY) { moveTimelineSplitter(parentY); });
 
 #if MINI_EDITOR_USE_QT
+    playbackBackend_.setVideoOutput(previewHost_.videoSink());
+    playbackBackend_.setVideoVisibilityHandler(
+        [this](bool visible) { previewHost_.setDecodedVideoVisible(visible); });
+    playbackBackend_.setSourceMetadataChangedHandler(
+        [this] { refreshEditorViews(EditorChange::Selection); });
+
     if (!timelineCanvasHost_.create(GetSafeHwnd()))
         return -1;
     timelineCanvasHost_.setSeekHandler(
@@ -571,6 +581,8 @@ void MainFrame::refreshEditorViews(EditorChange changes)
         updateStatusText();
     if (clipSettingsChanged || timelineClipChanged)
         updateWindowTitle();
+    if (selectionChanged)
+        synchronizePlaybackTimer();
 }
 
 void MainFrame::moveLeftSplitter(int parentX)

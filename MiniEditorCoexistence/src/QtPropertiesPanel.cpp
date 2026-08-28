@@ -1,6 +1,7 @@
 #include "QtPropertiesPanel.h"
 
 #include "ClipFade.h"
+#include "FrameTimecode.h"
 
 #include <QColor>
 #include <QComboBox>
@@ -314,11 +315,13 @@ void QtPropertiesPanel::updateTargetPresentation(
         const QString sourcePath = viewState.mediaFilePath.empty()
             ? QStringLiteral("Unavailable")
             : QString::fromStdWString(viewState.mediaFilePath);
+        const QString duration = QString::fromStdWString(
+            frameTimecodeMmSsFf(viewState.durationFrames));
         selectionMessageLabel_->setText(QStringLiteral(
-            "Name: %1\nType: %2\nDuration: %3 f\nSource: %4\n\n"
+            "Name: %1\nType: %2\nDuration: %3\nSource: %4\n\n"
             "Add this media to the timeline to edit placement properties.")
             .arg(displayName, type)
-            .arg(viewState.durationFrames)
+            .arg(duration)
             .arg(sourcePath));
     } else if (target == ClipPropertiesTarget::EmptyTimeline) {
         selectionMessageLabel_->setText(QStringLiteral(

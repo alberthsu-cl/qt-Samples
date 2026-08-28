@@ -20,7 +20,7 @@ PlaybackClockAction SimulatedPlaybackBackend::executeCommand(
     return synchronize();
 }
 
-PlaybackClockAction SimulatedPlaybackBackend::synchronize() const
+PlaybackClockAction SimulatedPlaybackBackend::synchronize()
 {
     return clock_.synchronize();
 }

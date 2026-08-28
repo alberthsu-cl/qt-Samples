@@ -51,3 +51,14 @@ void QtPreviewHost::setPlaybackState(const PlaybackState &state)
     if (panel_)
         panel_->setPlaybackState(state);
 }
+
+QVideoSink *QtPreviewHost::videoSink() const
+{
+    return panel_ ? panel_->videoSink() : nullptr;
+}
+
+void QtPreviewHost::setDecodedVideoVisible(bool visible)
+{
+    if (panel_)
+        panel_->setDecodedVideoVisible(visible);
+}

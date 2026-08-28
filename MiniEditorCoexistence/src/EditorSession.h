@@ -69,6 +69,8 @@ public:
     void advancePlaybackFrame();
     void seekTimeline(int frame);
     void setPlaybackDuration(int durationFrames, bool resetToBeginning);
+    void updatePlaybackFromBackend(int currentFrame, int durationFrames,
+                                   bool isPlaying, bool isPaused);
     void updateTimelineViewState(const TimelineViewState &state);
     void fitTimeline();
 

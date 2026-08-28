@@ -19,15 +19,18 @@ option(MINI_EDITOR_USE_QT
 
 if(MINI_EDITOR_USE_QT)
     if(BUILD_TESTING)
-        find_package(Qt6 REQUIRED COMPONENTS Widgets Test)
+        find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia
+                                           MultimediaWidgets Test)
     else()
-        find_package(Qt6 REQUIRED COMPONENTS Widgets)
+        find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia
+                                           MultimediaWidgets)
     endif()
 endif()
 
 add_executable(MiniEditorCoexistence WIN32
     src/DemoProject.h
     src/ProjectState.h
+    src/FrameTimecode.h
     src/MediaKind.h
     src/EditorProject.h
     src/EditorProject.cpp
@@ -131,6 +134,8 @@ source_group("Playback" FILES
     src/PlaybackBackend.cpp
     src/PlaybackClockController.h
     src/PlaybackClockController.cpp
+    src/QtMediaPlaybackBackend.h
+    src/QtMediaPlaybackBackend.cpp
 )
 
 source_group("Controller" FILES
@@ -141,6 +146,7 @@ source_group("Controller" FILES
 )
 
 source_group("Presentation" FILES
+    src/FrameTimecode.h
     src/PreviewStateResolver.h
     src/PreviewStateResolver.cpp
     src/ClipPropertiesStateResolver.h
@@ -157,6 +163,7 @@ source_group("Services" FILES
 if(BUILD_TESTING)
     add_executable(MiniEditorCoreTests
         tests/MiniEditorCoreTests.cpp
+        src/FrameTimecode.h
         src/EditorProject.h
         src/EditorProject.cpp
         src/EditorChange.h
@@ -243,6 +250,8 @@ if(MINI_EDITOR_USE_QT)
         src/QtPreviewPanel.cpp
         src/QtPreviewHost.h
         src/QtPreviewHost.cpp
+        src/QtMediaPlaybackBackend.h
+        src/QtMediaPlaybackBackend.cpp
         src/QtTimelineToolbar.h
         src/QtTimelineToolbar.cpp
         src/QtTimelineToolbarHost.h
@@ -255,7 +264,11 @@ if(MINI_EDITOR_USE_QT)
         src/QtRuntime.cpp
     )
 
-    target_link_libraries(MiniEditorCoexistence PRIVATE Qt6::Widgets)
+    target_link_libraries(MiniEditorCoexistence PRIVATE
+        Qt6::Widgets
+        Qt6::Multimedia
+        Qt6::MultimediaWidgets
+    )
     set_target_properties(MiniEditorCoexistence PROPERTIES
         AUTOMOC ON
         qt_no_entrypoint TRUE

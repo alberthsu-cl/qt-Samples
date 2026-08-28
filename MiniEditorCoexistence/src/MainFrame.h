@@ -10,6 +10,7 @@
 #include "WorkspaceSettings.h"
 
 #if MINI_EDITOR_USE_QT
+#include "QtMediaPlaybackBackend.h"
 #include "QtMediaLibraryHost.h"
 #include "QtPreviewHost.h"
 #include "QtPropertiesHost.h"
@@ -118,7 +119,11 @@ private:
     MediaLibrary mediaLibrary_;
     EditorSession editorSession_;
     TimelineEditingController timelineController_;
+#if MINI_EDITOR_USE_QT
+    QtMediaPlaybackBackend playbackBackend_;
+#else
     SimulatedPlaybackBackend playbackBackend_;
+#endif
     EditorCommandController commandController_;
     ProjectDocumentService documentService_;
     EditorSession::ObserverId editorSessionObserverId_ = 0;

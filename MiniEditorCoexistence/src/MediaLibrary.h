@@ -27,6 +27,7 @@ public:
     int addKnownAsset(const std::filesystem::path &path, MediaKind kind,
                       int timelineDurationFrames, std::uint32_t thumbnailColorRgb);
     bool replaceAssets(const std::vector<LibraryMediaAsset> &assets);
+    bool updateAssetDuration(int assetId, int timelineDurationFrames);
     std::optional<int> addFile(const std::filesystem::path &path);
     bool removeAsset(int assetId);
 
