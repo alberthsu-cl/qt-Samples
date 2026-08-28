@@ -217,8 +217,8 @@ QtMediaLibraryPanel::QtMediaLibraryPanel(const MediaLibrary &mediaLibrary, QWidg
     // the only action. There is no explanatory link or drag/drop affordance.
     emptyImportButton_->setObjectName(QStringLiteral("emptyImportButton"));
     emptyImportButton_->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
-    emptyImportButton_->setIconSize(QSize(32, 32));
-    emptyImportButton_->setFixedSize(64, 64);
+    emptyImportButton_->setIconSize(QSize(48, 48));
+    emptyImportButton_->setFixedSize(96, 96);
     emptyImportButton_->setToolTip(QStringLiteral("Import media"));
     emptyImportButton_->setStyleSheet(QStringLiteral(
         "QToolButton { background: #30343d; border: 1px solid #525865; }"

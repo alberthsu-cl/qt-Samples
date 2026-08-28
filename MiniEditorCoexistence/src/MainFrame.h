@@ -44,6 +44,7 @@ public:
 
 protected:
     afx_msg int OnCreate(LPCREATESTRUCT createStructure);
+    afx_msg BOOL OnEraseBkgnd(CDC *deviceContext);
     afx_msg void OnSize(UINT type, int width, int height);
     afx_msg void OnGetMinMaxInfo(MINMAXINFO *minMaxInfo);
     afx_msg void OnSelectMediaAsset(UINT commandId);

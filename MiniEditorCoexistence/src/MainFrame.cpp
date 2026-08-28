@@ -219,6 +219,16 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     return 0;
 }
 
+BOOL MainFrame::OnEraseBkgnd(CDC *deviceContext)
+{
+    CRect clientRect;
+    GetClientRect(&clientRect);
+    // MFC owns the gaps between the hosted Qt HWNDs. Paint those layout gaps
+    // explicitly so Windows never falls back to the bright system background.
+    deviceContext->FillSolidRect(clientRect, RGB(29, 31, 36));
+    return TRUE;
+}
+
 void MainFrame::OnSize(UINT type, int width, int height)
 {
     CFrameWnd::OnSize(type, width, height);
@@ -787,6 +797,7 @@ bool MainFrame::confirmSaveBeforeDestructiveAction()
 
 BEGIN_MESSAGE_MAP(MainFrame, CFrameWnd)
     ON_WM_CREATE()
+    ON_WM_ERASEBKGND()
     ON_WM_SIZE()
     ON_WM_GETMINMAXINFO()
     ON_COMMAND_RANGE(ID_MEDIA_ASSET_FIRST, ID_MEDIA_ASSET_LAST,

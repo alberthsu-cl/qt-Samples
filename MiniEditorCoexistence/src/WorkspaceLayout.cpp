@@ -5,6 +5,7 @@
 namespace {
 
 constexpr int kOuterMargin = 6;
+constexpr int kPreviewTransportSeparatorHeight = 2;
 // The transport panel now contains a framed control group. Its 30-pixel
 // buttons, group border, and panel margins need a little more than the old
 // 42-pixel slot, otherwise the top and bottom of the group are clipped.
@@ -62,15 +63,17 @@ WorkspaceGeometry WorkspaceLayout::calculate(int clientWidth, int contentBottom)
     const int propertiesLeft = safeClientWidth - kOuterMargin - state_.propertiesWidth;
     const int rightSplitterLeft = propertiesLeft - kSplitterThickness;
     const int topAreaBottom = timelineSplitterTop;
-    const int canvasBottom = std::max(kOuterMargin,
-                                      topAreaBottom - kTransportHeight - kOuterMargin);
+    const int canvasBottom = std::max(
+        kOuterMargin,
+        topAreaBottom - kTransportHeight - kPreviewTransportSeparatorHeight);
 
     WorkspaceGeometry geometry;
     geometry.mediaLibrary = rectFromEdges(kOuterMargin, kOuterMargin,
                                           mediaRight, topAreaBottom);
     geometry.previewCanvas = rectFromEdges(centerLeft, kOuterMargin,
                                            rightSplitterLeft, canvasBottom);
-    geometry.transport = rectFromEdges(centerLeft, canvasBottom + kOuterMargin,
+    geometry.transport = rectFromEdges(centerLeft,
+                                       canvasBottom + kPreviewTransportSeparatorHeight,
                                        rightSplitterLeft, topAreaBottom);
     geometry.properties = rectFromEdges(propertiesLeft, kOuterMargin,
                                         safeClientWidth - kOuterMargin, topAreaBottom);
