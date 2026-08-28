@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PlaybackBackend.h"
+#include "TimelinePlaybackResolver.h"
 
 #include <QAudioOutput>
 #include <QMediaPlayer>
@@ -12,9 +13,10 @@ class MediaLibrary;
 class QVideoSink;
 struct LibraryMediaAsset;
 
-// Qt Multimedia implementation used only for a selected source video/audio.
-// Timeline playback still delegates to SimulatedPlaybackBackend until the
-// later phase that resolves and switches real media for every timeline clip.
+// Qt Multimedia playback for a selected source video/audio and the active
+// video clip on the timeline. Timeline decisions remain in the framework-
+// neutral TimelinePlaybackResolver; this class only loads, seeks, and plays
+// the media that the resolver selects.
 class QtMediaPlaybackBackend final : public IPlaybackBackend
 {
 public:
@@ -37,11 +39,16 @@ private:
     const LibraryMediaAsset *selectedRealSource() const;
     bool ensureSelectedSourceLoaded();
     bool isLoadedSourceStillSelected() const;
+    std::optional<ResolvedTimelineMedia> selectedTimelineVideo() const;
+    bool ensureTimelineVideoLoaded(bool seekToTimelineFrame);
+    bool isLoadedTimelineVideoStillActive() const;
+    PlaybackClockAction synchronizeTimelinePlayback();
     void stopRealPlayback();
     void updateSessionFromPlayer();
     void setDecodedVideoVisible(bool visible);
     int playerDurationFrames() const;
     int playerPositionFrame() const;
+    int unclampedPlayerPositionFrame() const;
     qint64 positionMillisecondsForFrame(int frame) const;
 
     EditorSession &session_;
@@ -52,6 +59,9 @@ private:
     QAudioOutput audioOutput_;
     QMediaPlayer player_;
     int loadedAssetId_ = 0;
+    int loadedTimelineClipId_ = 0;
+    bool loadedForTimeline_ = false;
+    bool pauseAfterFirstSourceVideoFrame_ = false;
     bool decodedVideoVisible_ = false;
     VideoVisibilityHandler videoVisibilityHandler_;
     SourceMetadataChangedHandler sourceMetadataChangedHandler_;

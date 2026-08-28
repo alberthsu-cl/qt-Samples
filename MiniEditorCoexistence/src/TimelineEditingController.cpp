@@ -59,19 +59,26 @@ void TimelineEditingController::followPlaybackFrame()
 
     if (resolved.video) {
         const int assetIndex = assetIndexForMediaAsset(resolved.video->mediaAssetId);
-        if (assetIndex >= 0)
+        if (assetIndex >= 0
+            && (!session_.isTimelineFocused()
+                || session_.selectedTimelineClipId() != resolved.video->clipId)) {
             session_.selectTimelineClip(resolved.video->clipId, assetIndex);
+        }
         return;
     }
 
     if (resolved.audio) {
         const int assetIndex = assetIndexForMediaAsset(resolved.audio->mediaAssetId);
-        if (assetIndex >= 0)
+        if (assetIndex >= 0
+            && (!session_.isTimelineFocused()
+                || session_.selectedTimelineClipId() != resolved.audio->clipId)) {
             session_.selectTimelineClip(resolved.audio->clipId, assetIndex);
+        }
         return;
     }
 
-    session_.focusTimeline();
+    if (!session_.isTimelineFocused() || session_.selectedTimelineClipId() != 0)
+        session_.focusTimeline();
 }
 
 void TimelineEditingController::focusEmptyTimeline()

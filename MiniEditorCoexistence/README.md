@@ -440,22 +440,27 @@ are now compiled only by the pure-MFC fallback configuration. This is the
 intended migration result: one presentation contract, two temporarily
 independent renderers, and no Qt preview code coupled to MFC drawing types.
 
-## Incremental real source-media playback
+## Incremental real media playback
 
 `IPlaybackBackend` keeps transport intent independent of the playback engine.
 The pure-MFC build uses `SimulatedPlaybackBackend`. The Qt-enabled build uses
-`QtMediaPlaybackBackend`, which delegates timeline and still-image playback to
-that same simulator but routes an existing selected video/audio file through
-`QMediaPlayer` and `QAudioOutput`. Decoded video is presented by the
+`QtMediaPlaybackBackend`. An existing selected video/audio file is routed
+through `QMediaPlayer` and `QAudioOutput`. Decoded video is presented by the
 `QVideoWidget` owned by `QtPreviewPanel`.
 
 The source player publishes its decoded position and duration back into the
 active `PlaybackState`; existing Qt transport controls therefore display the
 real media clock without owning the player. The MFC timer remains only as the
 outer-loop bridge that lets queued Qt Multimedia callbacks reach the UI thread.
-It does not advance real-media frames. Timeline playback remains simulated on
-purpose—the next phase will resolve each timeline frame to a media asset and
-switch the real player at clip boundaries.
+It does not advance frames while a real video source is playing.
+
+For timeline playback, the framework-neutral `TimelinePlaybackResolver` maps
+the timeline playhead to its active video placement and source-media frame.
+`QtMediaPlaybackBackend` then loads or seeks that file, and switches the player
+at a clip boundary. Still-image placements and empty timeline gaps deliberately
+keep using the simulated timeline clock; this makes the current scope explicit.
+Timeline audio mixing and applying opacity/position/fade effects to decoded
+video remain later rendering and audio-engine phases.
 
 ## Framework-neutral editor commands
 
