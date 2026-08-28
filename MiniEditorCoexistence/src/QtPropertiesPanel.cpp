@@ -6,6 +6,7 @@
 #include <QColor>
 #include <QComboBox>
 #include <QFormLayout>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPalette>
@@ -67,6 +68,9 @@ QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
     setStyleSheet(QStringLiteral(
         "QtPropertiesPanel { background: #23252b; color: #e6e8ed; }"
         "QLabel { color: #e6e8ed; }"
+        "QGroupBox { color: #cfd4de; font-weight: 600; "
+        "border: 1px solid #3b3f48; margin-top: 10px; padding-top: 8px; }"
+        "QGroupBox::title { subcontrol-origin: margin; left: 9px; padding: 0 4px; }"
         "QComboBox { background: #31353e; color: #e6e8ed; "
         "border: 1px solid #4a4f5a; padding: 4px; }"));
 
@@ -134,23 +138,47 @@ QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
     positionComboBox_->addItem(QStringLiteral("Bottom Right"),
                                 static_cast<int>(ClipPosition::BottomRight));
 
-    formLayout_ = new QFormLayout(formContainer_);
-    formLayout_->setContentsMargins(0, 0, 0, 0);
-    formLayout_->setLabelAlignment(Qt::AlignRight);
+    sizePositionGroup_ = new QGroupBox(QStringLiteral("Size / Position"), formContainer_);
+    sizePositionGroup_->setObjectName(QStringLiteral("sizePositionGroup"));
+    sizePositionLayout_ = new QFormLayout(sizePositionGroup_);
+    sizePositionLayout_->setLabelAlignment(Qt::AlignRight);
+
+    opacityFadingGroup_ = new QGroupBox(QStringLiteral("Opacity / Fading"), formContainer_);
+    opacityFadingGroup_->setObjectName(QStringLiteral("opacityFadingGroup"));
+    opacityFadingLayout_ = new QFormLayout(opacityFadingGroup_);
+    opacityFadingLayout_->setLabelAlignment(Qt::AlignRight);
+
+    dspGroup_ = new QGroupBox(QStringLiteral("DSP"), formContainer_);
+    dspGroup_->setObjectName(QStringLiteral("dspGroup"));
+    auto *dspLayout = new QVBoxLayout(dspGroup_);
+    auto *dspPlaceholder = new QLabel(
+        QStringLiteral("Image-processing controls will be added here."), dspGroup_);
+    dspPlaceholder->setObjectName(QStringLiteral("dspPlaceholderLabel"));
+    dspPlaceholder->setWordWrap(true);
+    dspPlaceholder->setStyleSheet(QStringLiteral("color: #9da3af; font-weight: normal;"));
+    dspLayout->addWidget(dspPlaceholder);
+
     opacityEditor_ = createSliderEditor(opacitySlider_, opacitySpinBox_, this);
     opacityEditor_->setObjectName(QStringLiteral("opacityEditor"));
     scaleEditor_ = createSliderEditor(scaleSlider_, scaleSpinBox_, this);
     scaleEditor_->setObjectName(QStringLiteral("scaleEditor"));
-    formLayout_->addRow(QStringLiteral("Opacity"), opacityEditor_);
-    formLayout_->addRow(QStringLiteral("Scale"), scaleEditor_);
-    formLayout_->addRow(QStringLiteral("Position"), positionComboBox_);
-    formLayout_->addRow(QStringLiteral("Fade in"),
-                        createSliderEditor(fadeInSlider_, fadeInSpinBox_, this));
-    formLayout_->addRow(QStringLiteral("Fade out"),
-                        createSliderEditor(fadeOutSlider_, fadeOutSpinBox_, this));
+    sizePositionLayout_->addRow(QStringLiteral("Scale"), scaleEditor_);
+    sizePositionLayout_->addRow(QStringLiteral("Position"), positionComboBox_);
+    opacityFadingLayout_->addRow(QStringLiteral("Opacity"), opacityEditor_);
+    opacityFadingLayout_->addRow(QStringLiteral("Fade in"),
+                                 createSliderEditor(fadeInSlider_, fadeInSpinBox_, this));
+    opacityFadingLayout_->addRow(QStringLiteral("Fade out"),
+                                 createSliderEditor(fadeOutSlider_, fadeOutSpinBox_, this));
     // A one-widget QFormLayout row spans both columns. This keeps the summary
     // aligned with the left edge of the captions instead of the input fields.
-    formLayout_->addRow(fadeSummaryLabel_);
+    opacityFadingLayout_->addRow(fadeSummaryLabel_);
+
+    auto *formSectionsLayout = new QVBoxLayout(formContainer_);
+    formSectionsLayout->setContentsMargins(0, 0, 0, 0);
+    formSectionsLayout->setSpacing(8);
+    formSectionsLayout->addWidget(sizePositionGroup_);
+    formSectionsLayout->addWidget(opacityFadingGroup_);
+    formSectionsLayout->addWidget(dspGroup_);
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(14, 14, 14, 14);
@@ -300,9 +328,9 @@ void QtPropertiesPanel::updateFadeSummary()
 void QtPropertiesPanel::updateMediaSpecificRows()
 {
     const bool hasVisualPlacement = mediaKind_ != MediaKind::Audio;
-    formLayout_->setRowVisible(opacityEditor_, hasVisualPlacement);
-    formLayout_->setRowVisible(scaleEditor_, hasVisualPlacement);
-    formLayout_->setRowVisible(positionComboBox_, hasVisualPlacement);
+    sizePositionGroup_->setVisible(hasVisualPlacement);
+    opacityFadingLayout_->setRowVisible(opacityEditor_, hasVisualPlacement);
+    dspGroup_->setVisible(hasVisualPlacement);
 }
 
 void QtPropertiesPanel::updateTargetPresentation(

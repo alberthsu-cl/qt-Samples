@@ -6,6 +6,7 @@
 
 class QComboBox;
 class QFormLayout;
+class QGroupBox;
 class QLabel;
 class QSlider;
 class QSpinBox;
@@ -40,7 +41,11 @@ private:
     QSlider *scaleSlider_ = nullptr;
     QSpinBox *scaleSpinBox_ = nullptr;
     QComboBox *positionComboBox_ = nullptr;
-    QFormLayout *formLayout_ = nullptr;
+    QFormLayout *sizePositionLayout_ = nullptr;
+    QFormLayout *opacityFadingLayout_ = nullptr;
+    QGroupBox *sizePositionGroup_ = nullptr;
+    QGroupBox *opacityFadingGroup_ = nullptr;
+    QGroupBox *dspGroup_ = nullptr;
     QWidget *opacityEditor_ = nullptr;
     QWidget *scaleEditor_ = nullptr;
     QSlider *fadeInSlider_ = nullptr;

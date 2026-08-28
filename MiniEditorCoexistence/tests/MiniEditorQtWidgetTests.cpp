@@ -11,6 +11,7 @@
 #include "TimelineGeometry.h"
 
 #include <QComboBox>
+#include <QGroupBox>
 #include <QLabel>
 #include <QListView>
 #include <QPushButton>
@@ -89,10 +90,18 @@ void MiniEditorQtWidgetTests::propertiesModelRefreshDoesNotEmitUserEdit()
              QStringLiteral("60 of 90 frames at full level"));
     QCOMPARE(panel.findChild<QSpinBox *>(QStringLiteral("fadeInSpinBox"))->toolTip(),
              QStringLiteral("Frames the clip takes to ramp up from silence."));
+    // Opacity is one row inside a group that audio still uses, so that row is
+    // hidden on its own. Scale and Position are the whole Size / Position
+    // group, which is hidden as a unit rather than leaving a titled empty box.
+    // isHidden() only reports an explicit hide, so the rows inside a hidden
+    // group must be checked with isVisibleTo().
     QVERIFY(panel.findChild<QWidget *>(QStringLiteral("opacityEditor"))->isHidden());
-    QVERIFY(panel.findChild<QWidget *>(QStringLiteral("scaleEditor"))->isHidden());
-    QVERIFY(panel.findChild<QComboBox *>(
-                QStringLiteral("positionComboBox"))->isHidden());
+    QVERIFY(panel.findChild<QGroupBox *>(QStringLiteral("sizePositionGroup"))->isHidden());
+    QVERIFY(panel.findChild<QGroupBox *>(QStringLiteral("dspGroup"))->isHidden());
+    QVERIFY(!panel.findChild<QWidget *>(
+                QStringLiteral("scaleEditor"))->isVisibleTo(&panel));
+    QVERIFY(!panel.findChild<QComboBox *>(
+                QStringLiteral("positionComboBox"))->isVisibleTo(&panel));
     QCOMPARE(editedSpy.count(), 0);
 
     viewState.target = ClipPropertiesTarget::MediaAsset;
