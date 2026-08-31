@@ -16,4 +16,7 @@ struct TimelineAssetPresentation {
     MediaKind mediaKind = MediaKind::Video;
     int durationFrames = 0;
     QImage thumbnail;
+    // Imported files already identify themselves through their real
+    // thumbnails. Built-in sample cards still need their text labels.
+    bool isRealAsset = false;
 };

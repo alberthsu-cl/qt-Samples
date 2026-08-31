@@ -62,6 +62,16 @@ void thumbnailRequestModelUsesSourceTimeForTimelineStrips()
             "Still-image timeline thumbnails must always use source frame zero.");
     require(ThumbnailRequestModel::timelineStrip(videoClip, MediaKind::Audio, 250).empty(),
             "Audio clips must not request image thumbnails.");
+
+    const std::vector<ThumbnailRequest> zoomedRequests =
+        ThumbnailRequestModel::timelineStrip(videoClip, MediaKind::Video, 1300);
+    require(zoomedRequests.size() == 14,
+            "A wide zoomed clip should request enough fixed-width thumbnails.");
+    require(std::all_of(zoomedRequests.begin(), zoomedRequests.end(),
+                        [](const ThumbnailRequest &request) {
+                            return request.targetWidthPixels == 96;
+                        }),
+            "Timeline thumbnail cells must retain a stable visual width.");
 }
 
 int right(const WorkspaceRect &rect)

@@ -105,7 +105,7 @@ void MiniEditorQtWidgetTests::timelineThumbnailCacheRegeneratesPerClipEffects()
     originalClip.id = 12;
     originalClip.settings.effect = ClipEffectKind::None;
 
-    cache.prepareTimelineThumbnails({ affectedClip, originalClip });
+    cache.prepareTimelineThumbnails({ affectedClip, originalClip }, 100);
     const QImage grayscale = cache.timelineImageFor(affectedClip);
     const int expectedGray = qGray(qRgb(220, 40, 30));
     QCOMPARE(qRed(grayscale.pixel(0, 0)), expectedGray);
@@ -119,7 +119,7 @@ void MiniEditorQtWidgetTests::timelineThumbnailCacheRegeneratesPerClipEffects()
 
     // Changing the same clip's DSP settings replaces its derived cache entry.
     affectedClip.settings.effect = ClipEffectKind::Invert;
-    cache.prepareTimelineThumbnails({ affectedClip, originalClip });
+    cache.prepareTimelineThumbnails({ affectedClip, originalClip }, 100);
     const QImage inverted = cache.timelineImageFor(affectedClip);
     QCOMPARE(inverted.pixelColor(0, 0), QColor(35, 215, 225));
 

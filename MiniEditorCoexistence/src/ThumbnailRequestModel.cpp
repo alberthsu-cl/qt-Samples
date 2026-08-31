@@ -16,8 +16,10 @@ std::vector<ThumbnailRequest> ThumbnailRequestModel::timelineStrip(
     if (clip.mediaAssetId <= 0 || mediaKind == MediaKind::Audio || visibleWidthPixels <= 0)
         return {};
 
+    // Keep every timeline cell close to a 16:9 thumbnail. Zooming a clip
+    // requests more cells instead of stretching a small, fixed set across it.
     constexpr int kTargetThumbnailWidthPixels = 96;
-    constexpr int kMaximumThumbnailCount = 8;
+    constexpr int kMaximumThumbnailCount = 64;
     const int requestCount = std::clamp(
         (visibleWidthPixels + kTargetThumbnailWidthPixels - 1) / kTargetThumbnailWidthPixels,
         1, kMaximumThumbnailCount);

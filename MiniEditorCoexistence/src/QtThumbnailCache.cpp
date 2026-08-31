@@ -3,6 +3,7 @@
 #include "MediaLibrary.h"
 #include "QtFrameEffectProcessor.h"
 #include "ThumbnailRequestModel.h"
+#include "TimelineGeometry.h"
 
 #include <QImageReader>
 #include <QTimer>
@@ -130,7 +131,7 @@ QImage QtThumbnailCache::imageFor(int mediaAssetId) const
 }
 
 void QtThumbnailCache::prepareTimelineThumbnails(
-    const std::vector<TimelineClip> &clips)
+    const std::vector<TimelineClip> &clips, int zoomPercent)
 {
     QSet<int> activeClipIds;
     for (const TimelineClip &clip : clips) {
@@ -144,21 +145,63 @@ void QtThumbnailCache::prepareTimelineThumbnails(
             continue;
         }
 
+        // Each clip's pixel width changes with timeline zoom. The request
+        // model converts that visual width into fixed-width source samples.
+        // A 10-minute clip therefore does not automatically decode hundreds
+        // of images; it earns more thumbnails only when it occupies more
+        // screen space.
+        const TimelineGeometry clipGeometry(zoomPercent, 1);
+        constexpr int kClipContentHorizontalInset = 4;
+        const int visibleWidthPixels = std::max(
+            1, clipGeometry.clipRectangle(clip).width
+                   - kClipContentHorizontalInset);
+        const std::vector<ThumbnailRequest> requests =
+            ThumbnailRequestModel::timelineStrip(clip,
+                                                  isVideo ? MediaKind::Video
+                                                          : MediaKind::Image,
+                                                  visibleWidthPixels);
+        std::vector<int> requestedSourceFrames;
+        for (const ThumbnailRequest &request : requests) {
+            if (std::find(requestedSourceFrames.begin(), requestedSourceFrames.end(),
+                          request.sourceFrame) == requestedSourceFrames.end()) {
+                requestedSourceFrames.push_back(request.sourceFrame);
+            }
+        }
+
         const auto existing = timelineImages_.constFind(clip.id);
         const bool sameSourceRange = existing != timelineImages_.constEnd()
             && existing->mediaAssetId == clip.mediaAssetId
             && existing->sourceInFrame == clip.state.sourceInFrame
             && existing->durationFrames == clip.state.durationFrames;
-        if (!sameSourceRange) {
+        const bool hasRequestedFrames = sameSourceRange
+            && existing->samples.size() == requestedSourceFrames.size()
+            && std::equal(existing->samples.begin(), existing->samples.end(),
+                          requestedSourceFrames.begin(),
+                          [](const TimelineThumbnailSample &sample, int frame) {
+                              return sample.sourceFrame == frame;
+                          });
+        if (!hasRequestedFrames) {
             TimelineThumbnailEntry entry;
             entry.mediaAssetId = clip.mediaAssetId;
             entry.sourceInFrame = clip.state.sourceInFrame;
             entry.durationFrames = clip.state.durationFrames;
-            const MediaKind kind = isVideo ? MediaKind::Video : MediaKind::Image;
-            const std::vector<ThumbnailRequest> requests =
-                ThumbnailRequestModel::timelineStrip(clip, kind, 8 * 96);
-            for (const ThumbnailRequest &request : requests) {
-                entry.samples.push_back({ request.sourceFrame, {}, {} });
+            if (sameSourceRange) {
+                entry.effect = existing->effect;
+                entry.intensityPercent = existing->intensityPercent;
+            }
+            for (const int sourceFrame : requestedSourceFrames) {
+                TimelineThumbnailSample sample;
+                sample.sourceFrame = sourceFrame;
+                if (sameSourceRange) {
+                    const auto oldSample = std::find_if(
+                        existing->samples.begin(), existing->samples.end(),
+                        [sourceFrame](const TimelineThumbnailSample &candidate) {
+                            return candidate.sourceFrame == sourceFrame;
+                        });
+                    if (oldSample != existing->samples.end())
+                        sample = *oldSample;
+                }
+                entry.samples.push_back(std::move(sample));
             }
             timelineImages_.insert(clip.id, std::move(entry));
         }

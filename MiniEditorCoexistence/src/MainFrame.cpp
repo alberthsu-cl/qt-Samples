@@ -168,6 +168,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
                 ? TimelineTrackType::Audio : TimelineTrackType::Video;
             presentation.mediaKind = asset->kind;
             presentation.durationFrames = asset->timelineDurationFrames;
+            presentation.isRealAsset = !asset->filePath.empty();
             return presentation;
         });
     timelineCanvasHost_.setClipThumbnailResolver(
@@ -546,7 +547,9 @@ void MainFrame::refreshEditorViews(EditorChange changes)
             editorSession_, commandController_.canExecute(EditorIntent::SplitClip));
     // Effect-aware clip thumbnails are prepared during state refresh. The
     // canvas resolver below only performs a cache lookup while painting.
-    thumbnailCache_.prepareTimelineThumbnails(timelinePresentationState.clips);
+    thumbnailCache_.prepareTimelineThumbnails(
+        timelinePresentationState.clips,
+        timelinePresentationState.view.zoomPercent);
     if (selectionChanged) {
         if (editorSession_.isTimelineFocused())
             mediaLibraryHost_.clearSelection();

@@ -34,6 +34,27 @@ QRect toQRect(const TimelineRectangle &rectangle)
     return { rectangle.left, rectangle.top, rectangle.width, rectangle.height };
 }
 
+QRectF aspectFillSourceRect(const QSize &sourceSize, const QSize &targetSize)
+{
+    if (sourceSize.isEmpty() || targetSize.isEmpty())
+        return {};
+
+    const qreal sourceAspect = static_cast<qreal>(sourceSize.width())
+        / sourceSize.height();
+    const qreal targetAspect = static_cast<qreal>(targetSize.width())
+        / targetSize.height();
+
+    if (sourceAspect > targetAspect) {
+        const qreal croppedWidth = sourceSize.height() * targetAspect;
+        return { (sourceSize.width() - croppedWidth) / 2.0, 0.0,
+                 croppedWidth, static_cast<qreal>(sourceSize.height()) };
+    }
+
+    const qreal croppedHeight = sourceSize.width() / targetAspect;
+    return { 0.0, (sourceSize.height() - croppedHeight) / 2.0,
+             static_cast<qreal>(sourceSize.width()), croppedHeight };
+}
+
 QString timeLabelForFrame(int frame)
 {
     const int totalSeconds = frame / kFramesPerSecond;
@@ -312,20 +333,24 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
                 ThumbnailRequestModel::timelineStrip(clip, presentation->mediaKind,
                                                      contentRect.width(),
                                                      contentRect.height());
+            painter.save();
+            painter.setClipRect(contentRect);
             for (int index = 0; index < static_cast<int>(requests.size()); ++index) {
                 const int left = contentRect.left()
-                    + contentRect.width() * index / static_cast<int>(requests.size());
-                const int right = contentRect.left()
-                    + contentRect.width() * (index + 1) / static_cast<int>(requests.size());
+                    + requests[index].targetWidthPixels * index;
+                const QRect thumbnailRect(left, contentRect.top(),
+                                           requests[index].targetWidthPixels,
+                                           contentRect.height());
                 const QImage clipThumbnail = clipThumbnailResolver_
                     ? clipThumbnailResolver_(clip, requests[index].sourceFrame)
                     : presentation->thumbnail;
                 if (!clipThumbnail.isNull()) {
-                    painter.drawImage(QRect(left, contentRect.top(), right - left,
-                                            contentRect.height()),
-                                      clipThumbnail);
+                    painter.drawImage(QRectF(thumbnailRect), clipThumbnail,
+                                      aspectFillSourceRect(clipThumbnail.size(),
+                                                           thumbnailRect.size()));
                 }
             }
+            painter.restore();
         }
         // The focus frame reads as selection through its colour, so it stays
         // thin enough not to eat into the clip's own content.
@@ -366,10 +391,12 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
             painter.restore();
         }
 
-        painter.setPen(Qt::white);
-        painter.drawText(clipRect.adjusted(10, 0, -10, 0),
-                         Qt::AlignCenter | Qt::TextSingleLine,
-                         presentation->displayName);
+        if (!presentation->isRealAsset) {
+            painter.setPen(Qt::white);
+            painter.drawText(clipRect.adjusted(10, 0, -10, 0),
+                             Qt::AlignCenter | Qt::TextSingleLine,
+                             presentation->displayName);
+        }
 
         // Trim handles are deliberately not drawn. The focus frame already
         // shows which clip is selected, and the horizontal-resize cursor over
@@ -425,10 +452,12 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
         painter.setPen(QPen(QColor(108, 190, 255), 2, Qt::DashLine));
         painter.drawRect(previewRect.adjusted(0, 0, -1, -1));
 
-        painter.setPen(Qt::white);
-        painter.drawText(previewRect.adjusted(8, 0, -8, 0),
-                         Qt::AlignCenter | Qt::TextSingleLine,
-                         mediaDropPresentation_.displayName);
+        if (!mediaDropPresentation_.isRealAsset) {
+            painter.setPen(Qt::white);
+            painter.drawText(previewRect.adjusted(8, 0, -8, 0),
+                             Qt::AlignCenter | Qt::TextSingleLine,
+                             mediaDropPresentation_.displayName);
+        }
 
         // The guide and label make the placement rule unambiguous: this
         // left edge is the exact frame at which the new clip will start.

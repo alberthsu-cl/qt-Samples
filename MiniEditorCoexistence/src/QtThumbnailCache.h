@@ -31,7 +31,8 @@ public:
     // Builds small effect-aware images before the timeline paints. Entries are
     // keyed per placement, so changing one clip never changes the source image
     // used by Media Library or another placement of the same asset.
-    void prepareTimelineThumbnails(const std::vector<TimelineClip> &clips);
+    void prepareTimelineThumbnails(const std::vector<TimelineClip> &clips,
+                                   int zoomPercent);
     // The canvas asks for the closest decoded sample to its current source
     // frame. That lets a clip keep meaningful visual variety as zoom changes
     // without decoding again during paintEvent().
