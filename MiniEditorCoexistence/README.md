@@ -565,6 +565,12 @@ Undo/Redo, and are stored in the v8 `.mini-editor.json` project file. Selecting
 a source-library asset still shows the unmodified source because source
 inspection is not a timeline placement edit.
 
+Timeline thumbnails use a separate derived cache keyed by clip ID, source
+thumbnail identity, effect, and intensity. A DSP edit regenerates only the
+affected placement's small thumbnail during view refresh; `paintEvent()` only
+reads the prepared image. Media Library continues to display the untouched
+source thumbnail, and another placement of the same asset keeps its own result.
+
 ### Back-pressure: conflate, do not queue
 
 This is the one place the original sample's design could not be copied.

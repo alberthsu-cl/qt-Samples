@@ -80,6 +80,12 @@ void QtTimelineCanvasHost::setAssetPresentationResolver(AssetPresentationResolve
         canvas_->setAssetPresentationResolver(std::move(resolver));
 }
 
+void QtTimelineCanvasHost::setClipThumbnailResolver(ClipThumbnailResolver resolver)
+{
+    if (canvas_)
+        canvas_->setClipThumbnailResolver(std::move(resolver));
+}
+
 void QtTimelineCanvasHost::setTimelineClipDeletedHandler(TimelineClipDeletedHandler handler)
 {
     if (canvas_)

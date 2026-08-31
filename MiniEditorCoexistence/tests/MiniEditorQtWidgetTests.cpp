@@ -43,6 +43,7 @@ private slots:
     void transportRefreshAndButtonsUseSemanticCommands();
     void mediaLibrarySeparatesProgrammaticAndUserSelection();
     void mediaLibraryModelExposesDecodedRealImageThumbnail();
+    void timelineThumbnailCacheRegeneratesPerClipEffects();
     void timelineClickSeekFocusAndDeleteUseSemanticHandlers();
     void timelineBodyDragEmitsFrameBasedMove();
     void timelineEndTrimEmitsTrimmedState();
@@ -71,6 +72,55 @@ void MiniEditorQtWidgetTests::mediaLibraryModelExposesDecodedRealImageThumbnail(
         .data(MediaAssetModel::ThumbnailImageRole).value<QImage>();
     QVERIFY(!thumbnail.isNull());
     QCOMPARE(thumbnail.size(), sourceImage.size());
+}
+
+void MiniEditorQtWidgetTests::timelineThumbnailCacheRegeneratesPerClipEffects()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString imagePath = directory.filePath(QStringLiteral("effect-source.png"));
+    QImage sourceImage(16, 9, QImage::Format_ARGB32);
+    sourceImage.fill(QColor(220, 40, 30));
+    QVERIFY(sourceImage.save(imagePath));
+
+    MediaLibrary library;
+    const std::optional<int> assetId = library.addFile(
+        std::filesystem::path(imagePath.toStdWString()));
+    QVERIFY(assetId.has_value());
+
+    QtThumbnailCache cache;
+    cache.refresh(library);
+    const QImage libraryThumbnail = cache.imageFor(*assetId);
+    QVERIFY(!libraryThumbnail.isNull());
+
+    TimelineClip affectedClip;
+    affectedClip.id = 11;
+    affectedClip.mediaAssetId = *assetId;
+    affectedClip.trackType = TimelineTrackType::Video;
+    affectedClip.settings.effect = ClipEffectKind::Grayscale;
+    affectedClip.settings.effectIntensityPercent = 100;
+
+    TimelineClip originalClip = affectedClip;
+    originalClip.id = 12;
+    originalClip.settings.effect = ClipEffectKind::None;
+
+    cache.prepareTimelineThumbnails({ affectedClip, originalClip });
+    const QImage grayscale = cache.timelineImageFor(affectedClip);
+    const int expectedGray = qGray(qRgb(220, 40, 30));
+    QCOMPARE(qRed(grayscale.pixel(0, 0)), expectedGray);
+    QCOMPARE(qGreen(grayscale.pixel(0, 0)), expectedGray);
+    QCOMPARE(qBlue(grayscale.pixel(0, 0)), expectedGray);
+
+    // A second placement and Media Library still expose the original source.
+    QCOMPARE(cache.timelineImageFor(originalClip).pixelColor(0, 0),
+             QColor(220, 40, 30));
+    QCOMPARE(cache.imageFor(*assetId).pixelColor(0, 0), QColor(220, 40, 30));
+
+    // Changing the same clip's DSP settings replaces its derived cache entry.
+    affectedClip.settings.effect = ClipEffectKind::Invert;
+    cache.prepareTimelineThumbnails({ affectedClip, originalClip });
+    const QImage inverted = cache.timelineImageFor(affectedClip);
+    QCOMPARE(inverted.pixelColor(0, 0), QColor(35, 215, 225));
 }
 
 void MiniEditorQtWidgetTests::propertiesModelRefreshDoesNotEmitUserEdit()

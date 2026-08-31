@@ -188,6 +188,12 @@ void QtTimelineCanvas::setAssetPresentationResolver(AssetPresentationResolver re
     update();
 }
 
+void QtTimelineCanvas::setClipThumbnailResolver(ClipThumbnailResolver resolver)
+{
+    clipThumbnailResolver_ = std::move(resolver);
+    update();
+}
+
 void QtTimelineCanvas::setTimelineClipDeletedHandler(TimelineClipDeletedHandler handler)
 {
     timelineClipDeletedHandler_ = std::move(handler);
@@ -300,7 +306,9 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
         const QColor assetColor = presentation->color.darker(100);
         const QRect clipRect = toQRect(timelineGeometry.clipRectangle(clip));
         painter.fillRect(clipRect, assetColor);
-        if (!presentation->thumbnail.isNull() && clip.trackType == TimelineTrackType::Video) {
+        const QImage clipThumbnail = clipThumbnailResolver_
+            ? clipThumbnailResolver_(clip) : presentation->thumbnail;
+        if (!clipThumbnail.isNull() && clip.trackType == TimelineTrackType::Video) {
             const QRect contentRect = clipRect.adjusted(2, 2, -2, -2);
             const std::vector<ThumbnailRequest> requests =
                 ThumbnailRequestModel::timelineStrip(clip, presentation->mediaKind,
@@ -313,7 +321,7 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
                     + contentRect.width() * (index + 1) / static_cast<int>(requests.size());
                 painter.drawImage(QRect(left, contentRect.top(), right - left,
                                         contentRect.height()),
-                                  presentation->thumbnail);
+                                  clipThumbnail);
             }
         }
         // The focus frame reads as selection through its colour, so it stays

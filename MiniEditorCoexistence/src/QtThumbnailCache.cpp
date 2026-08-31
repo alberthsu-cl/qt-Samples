@@ -1,11 +1,16 @@
 #include "QtThumbnailCache.h"
 
 #include "MediaLibrary.h"
+#include "QtFrameEffectProcessor.h"
 
 #include <QImageReader>
 #include <QTimer>
 #include <QUrl>
 #include <QVideoFrame>
+
+#include <QSet>
+
+#include <utility>
 
 QtThumbnailCache::QtThumbnailCache(QObject *parent)
     : QObject(parent)
@@ -53,6 +58,7 @@ void QtThumbnailCache::refresh(const MediaLibrary &mediaLibrary)
     isAcceptingCurrentVideoFrames_ = false;
     pendingVideos_.clear();
     images_.clear();
+    timelineImages_.clear();
     for (const LibraryMediaAsset &asset : mediaLibrary.assets()) {
         if (asset.filePath.empty())
             continue;
@@ -73,6 +79,60 @@ void QtThumbnailCache::refresh(const MediaLibrary &mediaLibrary)
 QImage QtThumbnailCache::imageFor(int mediaAssetId) const
 {
     return images_.value(mediaAssetId);
+}
+
+void QtThumbnailCache::prepareTimelineThumbnails(
+    const std::vector<TimelineClip> &clips)
+{
+    QSet<int> activeClipIds;
+    for (const TimelineClip &clip : clips) {
+        activeClipIds.insert(clip.id);
+        const QImage source = images_.value(clip.mediaAssetId);
+        const bool needsEffect = clip.settings.effect != ClipEffectKind::None
+            && clip.settings.effectIntensityPercent > 0;
+        if (source.isNull() || !needsEffect) {
+            timelineImages_.remove(clip.id);
+            continue;
+        }
+
+        const auto existing = timelineImages_.constFind(clip.id);
+        if (existing != timelineImages_.constEnd()
+            && existing->mediaAssetId == clip.mediaAssetId
+            && existing->effect == clip.settings.effect
+            && existing->intensityPercent
+                == clip.settings.effectIntensityPercent
+            && existing->sourceCacheKey == source.cacheKey()) {
+            continue;
+        }
+
+        // Timeline tiles are small. Apply the effect to a bounded image here,
+        // during state refresh, so paintEvent remains a cache-only operation.
+        const QImage scaledSource = source.scaled(
+            192, 108, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        TimelineThumbnailEntry entry;
+        entry.mediaAssetId = clip.mediaAssetId;
+        entry.effect = clip.settings.effect;
+        entry.intensityPercent = clip.settings.effectIntensityPercent;
+        entry.sourceCacheKey = source.cacheKey();
+        entry.image = QtFrameEffectProcessor::applyEffect(
+            scaledSource, entry.effect, entry.intensityPercent);
+        timelineImages_.insert(clip.id, std::move(entry));
+    }
+
+    for (auto iterator = timelineImages_.begin();
+         iterator != timelineImages_.end();) {
+        if (!activeClipIds.contains(iterator.key()))
+            iterator = timelineImages_.erase(iterator);
+        else
+            ++iterator;
+    }
+}
+
+QImage QtThumbnailCache::timelineImageFor(const TimelineClip &clip) const
+{
+    const auto entry = timelineImages_.constFind(clip.id);
+    return entry == timelineImages_.constEnd()
+        ? imageFor(clip.mediaAssetId) : entry->image;
 }
 
 void QtThumbnailCache::startNextVideo()

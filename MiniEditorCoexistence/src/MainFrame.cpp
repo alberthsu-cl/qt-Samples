@@ -170,6 +170,10 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
             presentation.durationFrames = asset->timelineDurationFrames;
             return presentation;
         });
+    timelineCanvasHost_.setClipThumbnailResolver(
+        [this](const TimelineClip &clip) {
+            return thumbnailCache_.timelineImageFor(clip);
+        });
     timelineCanvasHost_.setTimelineClipDeletedHandler(
         [this](int clipId) {
             if (timelineController_.deleteClip(clipId))
@@ -540,6 +544,9 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     const TimelinePresentationState timelinePresentationState =
         TimelinePresentationStateResolver::resolve(
             editorSession_, commandController_.canExecute(EditorIntent::SplitClip));
+    // Effect-aware clip thumbnails are prepared during state refresh. The
+    // canvas resolver below only performs a cache lookup while painting.
+    thumbnailCache_.prepareTimelineThumbnails(timelinePresentationState.clips);
     if (selectionChanged) {
         if (editorSession_.isTimelineFocused())
             mediaLibraryHost_.clearSelection();
