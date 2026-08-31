@@ -54,6 +54,8 @@ add_executable(MiniEditorCoexistence WIN32
     src/TimelineTrackPolicy.cpp
     src/TimelinePlaybackResolver.h
     src/TimelinePlaybackResolver.cpp
+    src/MediaPlaybackPlan.h
+    src/MediaPlaybackPlan.cpp
     src/EditorSession.h
     src/EditorSession.cpp
     src/EditorCommandController.h
@@ -134,6 +136,8 @@ source_group("Layout" FILES
 source_group("Playback" FILES
     src/TimelinePlaybackResolver.h
     src/TimelinePlaybackResolver.cpp
+    src/MediaPlaybackPlan.h
+    src/MediaPlaybackPlan.cpp
     src/PlaybackBackend.h
     src/PlaybackBackend.cpp
     src/PlaybackClockController.h
@@ -192,6 +196,8 @@ if(BUILD_TESTING)
         src/TimelineTrackPolicy.cpp
         src/TimelinePlaybackResolver.h
         src/TimelinePlaybackResolver.cpp
+        src/MediaPlaybackPlan.h
+        src/MediaPlaybackPlan.cpp
         src/EditorSession.h
         src/EditorSession.cpp
         src/EditorCommandController.h

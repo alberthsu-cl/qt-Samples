@@ -2,7 +2,6 @@
 
 #include "EditorSession.h"
 #include "MediaLibrary.h"
-#include "PreviewStateResolver.h"
 
 #include <QCoreApplication>
 #include <QEventLoop>
@@ -65,7 +64,7 @@ QtMediaPlaybackBackend::QtMediaPlaybackBackend(
             return;
         }
 
-        if (!isLoadedSourceStillSelected())
+        if (!isLoadedSourceStillRequested())
             return;
 
         if (status == QMediaPlayer::EndOfMedia) {
@@ -74,19 +73,28 @@ QtMediaPlaybackBackend::QtMediaPlaybackBackend(
             session_.updatePlaybackFromBackend(
                 duration - 1, duration, false, true);
         } else if (status == QMediaPlayer::InvalidMedia) {
+            loadedSourceMediaReady_ = false;
             cancelSilentFirstFrameDecode();
             const PlaybackState &state = session_.playbackState();
             session_.updatePlaybackFromBackend(
                 state.currentFrame, state.durationFrames, false, false);
             setDecodedVideoVisible(false);
-        } else if (status == QMediaPlayer::LoadedMedia
-                   && pauseAfterFirstVideoFrame_) {
+        } else if (status == QMediaPlayer::LoadedMedia) {
+            loadedSourceMediaReady_ = true;
             // Some multimedia backends discard a seek issued while the source
-            // is still loading. Seek again after LoadedMedia, then decode one
-            // frame and pause it in the video-sink callback.
+            // is still loading. Always reapply the plan's source frame after
+            // loading, whether the destination state is playing or paused.
             player_.setPosition(positionMillisecondsForFrame(
                 pendingSourceSeekFrame_));
-            player_.play();
+
+            const MediaPlaybackPlan plan = desiredPlaybackPlan();
+            if (pauseAfterFirstVideoFrame_) {
+                // Decode one frame, then pause in the video-sink callback.
+                player_.play();
+            } else if (plan.shouldPlay) {
+                audioOutput_.setMuted(false);
+                player_.play();
+            }
         }
     });
 }
@@ -151,12 +159,14 @@ PlaybackClockAction QtMediaPlaybackBackend::executeCommand(
         return synchronizeTimelinePlayback(isStartingPlayback);
     }
 
-    if (selectedRealSource() == nullptr) {
+    const MediaPlaybackPlan plan = desiredPlaybackPlan();
+    if (plan.context != MediaPlaybackContext::Source
+        || !plan.usesMediaDecoder()) {
         stopRealPlayback();
         return simulatedBackend_.executeCommand(command);
     }
 
-    if (!ensureSelectedSourceLoaded())
+    if (!ensureSelectedSourceLoaded(plan))
         return simulatedBackend_.executeCommand(command);
 
     const PlaybackState stateBeforeCommand = session_.playbackState();
@@ -194,12 +204,14 @@ PlaybackClockAction QtMediaPlaybackBackend::synchronize()
     if (session_.isTimelineFocused())
         return synchronizeTimelinePlayback();
 
-    if (selectedRealSource() == nullptr) {
+    const MediaPlaybackPlan plan = desiredPlaybackPlan();
+    if (plan.context != MediaPlaybackContext::Source
+        || !plan.usesMediaDecoder()) {
         stopRealPlayback();
         return simulatedBackend_.synchronize();
     }
 
-    ensureSelectedSourceLoaded();
+    ensureSelectedSourceLoaded(plan);
     const bool metadataIsLoading =
         player_.mediaStatus() == QMediaPlayer::LoadingMedia;
     return session_.playbackState().isPlaying || metadataIsLoading
@@ -214,16 +226,18 @@ PlaybackClockAction QtMediaPlaybackBackend::seekToCurrentFrame()
         return synchronizeTimelinePlayback(true);
     }
 
-    const LibraryMediaAsset *asset = selectedRealSource();
-    if (asset == nullptr)
+    const MediaPlaybackPlan plan = desiredPlaybackPlan();
+    if (plan.context != MediaPlaybackContext::Source
+        || !plan.usesMediaDecoder()) {
         return simulatedBackend_.seekToCurrentFrame();
+    }
 
-    pendingSourceSeekFrame_ = session_.playbackState().currentFrame;
-    if (!ensureSelectedSourceLoaded())
+    pendingSourceSeekFrame_ = plan.sourceFrame;
+    if (!ensureSelectedSourceLoaded(plan))
         return simulatedBackend_.seekToCurrentFrame();
 
     player_.setPosition(positionMillisecondsForFrame(pendingSourceSeekFrame_));
-    if (asset->kind == MediaKind::Video && !session_.playbackState().isPlaying) {
+    if (plan.needsSilentVideoPreroll()) {
         // Decode the newly requested paused frame. The video-sink callback
         // pauses the player as soon as that frame becomes available.
         beginSilentFirstFrameDecode();
@@ -252,8 +266,11 @@ PlaybackClockAction QtMediaPlaybackBackend::advanceOneFrame()
         return synchronizeTimelinePlayback();
     }
 
-    if (selectedRealSource() == nullptr)
+    const MediaPlaybackPlan plan = desiredPlaybackPlan();
+    if (plan.context != MediaPlaybackContext::Source
+        || !plan.usesMediaDecoder()) {
         return simulatedBackend_.advanceOneFrame();
+    }
 
     // MFC owns the outer message loop. Its playback timer periodically gives
     // queued Qt Multimedia callbacks a chance to reach the UI thread; media
@@ -262,51 +279,51 @@ PlaybackClockAction QtMediaPlaybackBackend::advanceOneFrame()
     return synchronize();
 }
 
-const LibraryMediaAsset *QtMediaPlaybackBackend::selectedRealSource() const
+MediaPlaybackPlan QtMediaPlaybackBackend::desiredPlaybackPlan() const
 {
-    if (session_.isTimelineFocused())
-        return nullptr;
-
-    const auto &assets = mediaLibrary_.assets();
-    const int index = session_.selectedAssetIndex();
-    if (index < 0 || index >= static_cast<int>(assets.size()))
-        return nullptr;
-
-    const LibraryMediaAsset &asset = assets[index];
-    if (asset.kind == MediaKind::Image || asset.filePath.empty())
-        return nullptr;
-
-    std::error_code error;
-    return std::filesystem::is_regular_file(asset.filePath, error)
-        ? &asset : nullptr;
+    return MediaPlaybackPlanResolver::resolve(session_, mediaLibrary_);
 }
 
-bool QtMediaPlaybackBackend::ensureSelectedSourceLoaded()
+bool QtMediaPlaybackBackend::ensureSelectedSourceLoaded(
+    const MediaPlaybackPlan &plan)
 {
-    const LibraryMediaAsset *asset = selectedRealSource();
-    if (asset == nullptr)
+    if (plan.context != MediaPlaybackContext::Source
+        || !plan.usesMediaDecoder()) {
+        return false;
+    }
+
+    const LibraryMediaAsset *asset = mediaLibrary_.findAsset(plan.mediaAssetId);
+    if (asset == nullptr || asset->filePath.empty())
+        return false;
+
+    std::error_code error;
+    if (!std::filesystem::is_regular_file(asset->filePath, error))
         return false;
 
     if (loadedAssetId_ != asset->id || loadedForTimeline_) {
         // Drop the previous timeline frame while the newly selected source
         // loads. The preview will show the new frame only after it arrives.
+        // Mark the replacement as not ready before stopping the old source.
+        // QMediaPlayer may synchronously or asynchronously publish its final
+        // old position; updateSessionFromPlayer must ignore that callback.
+        loadedSourceMediaReady_ = false;
         setDecodedVideoVisible(false);
         player_.stop();
         loadedAssetId_ = asset->id;
         loadedTimelineClipId_ = 0;
         loadedForTimeline_ = false;
         hasPendingTimelineSeek_ = false;
-        if (asset->kind == MediaKind::Video)
+        if (plan.needsSilentVideoPreroll())
             beginSilentFirstFrameDecode();
         else
             cancelSilentFirstFrameDecode();
-        pendingSourceSeekFrame_ = session_.playbackState().currentFrame;
+        pendingSourceSeekFrame_ = plan.sourceFrame;
         player_.setSource(QUrl::fromLocalFile(
             QString::fromStdWString(asset->filePath.wstring())));
         // A paused QMediaPlayer does not necessarily decode until it receives
         // an explicit seek. This requests the first frame as soon as loading
         // completes, so selecting a video shows a useful preview before Play.
-        player_.setPosition(0);
+        player_.setPosition(positionMillisecondsForFrame(plan.sourceFrame));
     }
 
     setDecodedVideoVisible(asset->kind == MediaKind::Video);
@@ -315,25 +332,27 @@ bool QtMediaPlaybackBackend::ensureSelectedSourceLoaded()
 
 bool QtMediaPlaybackBackend::isLoadedSourceStillSelected() const
 {
-    const LibraryMediaAsset *asset = selectedRealSource();
-    return !loadedForTimeline_ && asset != nullptr && asset->id == loadedAssetId_;
+    return loadedSourceMediaReady_ && isLoadedSourceStillRequested();
 }
 
-std::optional<ResolvedTimelineMedia> QtMediaPlaybackBackend::selectedTimelineVideo() const
+bool QtMediaPlaybackBackend::isLoadedSourceStillRequested() const
 {
-    // Use the exact same stopped-vs-playhead policy as the visible preview.
-    // Otherwise selecting a clip can update Properties while the decoder keeps
-    // showing the unrelated clip underneath the old playhead position.
-    return PreviewStateResolver::resolveTimelineVideo(session_, mediaLibrary_);
+    const MediaPlaybackPlan plan = desiredPlaybackPlan();
+    return !loadedForTimeline_
+        && plan.context == MediaPlaybackContext::Source
+        && plan.usesMediaDecoder()
+        && plan.mediaAssetId == loadedAssetId_;
 }
 
-bool QtMediaPlaybackBackend::ensureTimelineVideoLoaded(bool seekToTimelineFrame)
+bool QtMediaPlaybackBackend::ensureTimelineVideoLoaded(
+    const MediaPlaybackPlan &plan, bool seekToTimelineFrame)
 {
-    const std::optional<ResolvedTimelineMedia> video = selectedTimelineVideo();
-    if (!video || video->mediaKind != MediaKind::Video)
+    if (plan.context != MediaPlaybackContext::Timeline
+        || plan.mediaKind != MediaKind::Video) {
         return false;
+    }
 
-    const LibraryMediaAsset *asset = mediaLibrary_.findAsset(video->mediaAssetId);
+    const LibraryMediaAsset *asset = mediaLibrary_.findAsset(plan.mediaAssetId);
     if (asset == nullptr || asset->filePath.empty())
         return false;
 
@@ -342,21 +361,22 @@ bool QtMediaPlaybackBackend::ensureTimelineVideoLoaded(bool seekToTimelineFrame)
         return false;
 
     const bool changedClip = !loadedForTimeline_
-        || loadedAssetId_ != asset->id || loadedTimelineClipId_ != video->clipId;
+        || loadedAssetId_ != asset->id
+        || loadedTimelineClipId_ != plan.timelineClipId;
     if (changedClip) {
         setDecodedVideoVisible(false);
         // A stopped timeline selection still needs one decoded frame. Playing
         // briefly is the reliable cross-backend way to make QVideoSink receive
         // it; the sink callback pauses immediately after that frame arrives.
-        if (!session_.timelinePlaybackState().isPlaying)
+        if (plan.needsSilentVideoPreroll())
             beginSilentFirstFrameDecode();
         else
             cancelSilentFirstFrameDecode();
         player_.stop();
         loadedAssetId_ = asset->id;
-        loadedTimelineClipId_ = video->clipId;
+        loadedTimelineClipId_ = plan.timelineClipId;
         loadedForTimeline_ = true;
-        pendingTimelineSeekFrame_ = video->sourceFrame;
+        pendingTimelineSeekFrame_ = plan.sourceFrame;
         hasPendingTimelineSeek_ = true;
         // Do not expose frame-zero audio while the decoder is loading and has
         // not yet accepted the trimmed source seek.
@@ -367,25 +387,28 @@ bool QtMediaPlaybackBackend::ensureTimelineVideoLoaded(bool seekToTimelineFrame)
 
     setDecodedVideoVisible(true);
     if (changedClip || seekToTimelineFrame) {
-        player_.setPosition(positionMillisecondsForFrame(video->sourceFrame));
+        player_.setPosition(positionMillisecondsForFrame(plan.sourceFrame));
     }
     return true;
 }
 
 bool QtMediaPlaybackBackend::isLoadedTimelineVideoStillActive() const
 {
-    const std::optional<ResolvedTimelineMedia> video = selectedTimelineVideo();
-    return loadedForTimeline_ && video && video->mediaKind == MediaKind::Video
-        && video->mediaAssetId == loadedAssetId_
-        && video->clipId == loadedTimelineClipId_;
+    const MediaPlaybackPlan plan = desiredPlaybackPlan();
+    return loadedForTimeline_
+        && plan.context == MediaPlaybackContext::Timeline
+        && plan.mediaKind == MediaKind::Video
+        && plan.mediaAssetId == loadedAssetId_
+        && plan.timelineClipId == loadedTimelineClipId_;
 }
 
 PlaybackClockAction QtMediaPlaybackBackend::synchronizeTimelinePlayback(
     bool seekToTimelineFrame)
 {
     const PlaybackState &timeline = session_.timelinePlaybackState();
+    const MediaPlaybackPlan plan = desiredPlaybackPlan();
     if (!ensureTimelineVideoLoaded(
-            seekToTimelineFrame || !timeline.isPlaying)) {
+            plan, seekToTimelineFrame || !timeline.isPlaying)) {
         stopRealPlayback();
         return timeline.isPlaying ? PlaybackClockAction::EnsureRunning
                                   : PlaybackClockAction::Stop;
@@ -438,6 +461,7 @@ void QtMediaPlaybackBackend::stopRealPlayback()
         player_.stop();
     loadedTimelineClipId_ = 0;
     loadedForTimeline_ = false;
+    loadedSourceMediaReady_ = false;
     hasPendingTimelineSeek_ = false;
     cancelSilentFirstFrameDecode();
     setDecodedVideoVisible(false);
@@ -462,15 +486,26 @@ void QtMediaPlaybackBackend::updateSessionFromPlayer()
     }
 
     const PlaybackState &state = session_.playbackState();
+    // Fallback for media backends that report the first position before they
+    // deliver a QVideoSink frame. Keep this ahead of the stopped/paused guard:
+    // silent preroll intentionally runs while the editor is stopped.
+    if (pauseAfterFirstVideoFrame_ && player_.position() > 0)
+        finishSilentFirstFrameDecode();
+
+    if (!state.isPlaying) {
+        // Seeking, changing a selection, and the silent first-frame decode
+        // all put the desired source frame into EditorSession before asking
+        // QMediaPlayer to decode it. A queued positionChanged signal has no
+        // source ID, so it can belong to the previous file. Do not let it
+        // overwrite an intentional stopped/paused preview position.
+        session_.updatePlaybackFromBackend(
+            state.currentFrame, durationFrames, false, state.isPaused);
+        return;
+    }
+
     session_.updatePlaybackFromBackend(
         playerPositionFrame(), durationFrames,
         state.isPlaying, state.isPaused);
-
-    // Fallback for media backends that report the first position before they
-    // deliver a QVideoSink frame.
-    if (pauseAfterFirstVideoFrame_ && player_.position() > 0) {
-        finishSilentFirstFrameDecode();
-    }
 }
 
 void QtMediaPlaybackBackend::setDecodedVideoVisible(bool visible)

@@ -24,7 +24,7 @@ public:
     void resize(const CRect &bounds);
     void setPreviewState(const PreviewState &state);
     void setPlaybackState(const PlaybackState &state);
-    void setStillImage(const QImage &image);
+    void setFallbackImage(const QImage &image);
     QVideoSink *videoSink() const;
     void setDecodedVideoVisible(bool visible);
 

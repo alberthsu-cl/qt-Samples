@@ -7,6 +7,7 @@
 #include "PlaybackBackend.h"
 #include "ProjectSerializer.h"
 #include "MediaLibrary.h"
+#include "MediaPlaybackPlan.h"
 #include "TimelineModel.h"
 #include "TimelineClipEdit.h"
 #include "TimelineTrackPolicy.h"
@@ -562,6 +563,19 @@ void timelineEditingControllerCoordinatesFocusAndSplitPolicy()
         ClipPropertiesStateResolver::resolve(session, library);
     require(insertedProperties.target == ClipPropertiesTarget::TimelineClip,
             "Redoing an insertion must restore its editable Properties target.");
+
+    controller.selectSourceAsset(1);
+    session.seekTimeline(50);
+    session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+    require(session.sourcePlaybackState().isPaused
+                && session.sourcePlaybackState().currentFrame == 50,
+            "The source-selection reset test requires a paused source preview.");
+    controller.selectSourceAsset(0);
+    require(!session.isTimelineFocused()
+                && session.sourcePlaybackState().currentFrame == 0
+                && !session.sourcePlaybackState().isPaused,
+            "Selecting a different library source must start its preview at frame zero.");
 
     controller.selectSourceAsset(1);
     session.seekTimeline(50);
@@ -1601,6 +1615,70 @@ void simulatedPlaybackBackendOwnsTheInitialPlaybackImplementation()
             "The backend must stop its host clock when the simulated media reaches its end.");
 }
 
+void mediaPlaybackPlanResolverCentralizesDecoderIntent()
+{
+    MediaLibrary library;
+    const int videoId = library.addKnownAsset(
+        L"D:/media/video.mp4", MediaKind::Video, 300, 0x5078A0);
+    const int imageId = library.addKnownAsset(
+        L"D:/media/still.jpg", MediaKind::Image, 150, 0x2878B4);
+
+    EditorSession session(2);
+    MediaPlaybackPlan plan = MediaPlaybackPlanResolver::resolve(session, library);
+    require(!plan.hasMedia(),
+            "An editor with no selection must not request decoder media.");
+
+    session.selectAsset(0);
+    session.seekTimeline(45);
+    plan = MediaPlaybackPlanResolver::resolve(session, library);
+    require(plan.context == MediaPlaybackContext::Source
+                && plan.mediaAssetId == videoId
+                && plan.timelineClipId == 0
+                && plan.sourceFrame == 45
+                && plan.usesMediaDecoder()
+                && plan.needsSilentVideoPreroll(),
+            "A stopped source video must request its selected frame as a silent preroll.");
+
+    session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+    plan = MediaPlaybackPlanResolver::resolve(session, library);
+    require(plan.shouldPlay && !plan.needsSilentVideoPreroll(),
+            "A playing source must publish play intent instead of preroll intent.");
+    session.handlePlaybackCommand(PlaybackCommand::Stop);
+
+    session.selectAsset(1);
+    plan = MediaPlaybackPlanResolver::resolve(session, library);
+    require(plan.mediaAssetId == imageId && !plan.usesMediaDecoder()
+                && plan.sourceFrame == 0,
+            "A still image must remain in the plan without using QMediaPlayer.");
+
+    const int clipId = session.addTimelineClip(
+        videoId, TimelineTrackType::Video, 100, 90);
+    TimelineClipState trimmed = session.timelineModel().findClip(clipId)->state;
+    trimmed.sourceInFrame = 60;
+    session.moveTimelineClip(clipId, trimmed, TimelineClipEditKind::TrimStart);
+    session.selectTimelineClip(clipId, 0);
+    session.seekTimeline(140);
+
+    // Stopped editing previews the selected clip's first trimmed source frame,
+    // independently of the timeline head.
+    plan = MediaPlaybackPlanResolver::resolve(session, library);
+    require(plan.context == MediaPlaybackContext::Timeline
+                && plan.timelineClipId == clipId
+                && plan.sourceFrame == 60
+                && plan.needsSilentVideoPreroll(),
+            "A stopped timeline edit target must resolve to its trimmed source-in frame.");
+
+    session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+    plan = MediaPlaybackPlanResolver::resolve(session, library);
+    require(plan.sourceFrame == 100 && plan.shouldPlay,
+            "Timeline playback must map the playhead to clip-local trimmed source time.");
+
+    session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+    plan = MediaPlaybackPlanResolver::resolve(session, library);
+    require(plan.sourceFrame == 100 && plan.isPaused && !plan.shouldPlay,
+            "A paused timeline must preserve the exact playhead-derived source frame.");
+}
+
 void editorSessionAcceptsAuthoritativeBackendPlaybackState()
 {
     EditorSession session(1);
@@ -1754,6 +1832,7 @@ int main()
         editorCommandControllerUnifiesEditorIntent();
         playbackClockControllerKeepsTimerPolicyFrameworkNeutral();
         simulatedPlaybackBackendOwnsTheInitialPlaybackImplementation();
+        mediaPlaybackPlanResolverCentralizesDecoderIntent();
         editorSessionAcceptsAuthoritativeBackendPlaybackState();
         previewStateResolverKeepsPreviewPolicyFrameworkNeutral();
         clipFadeOwnsRampPolicyIndependentlyOfAnyRenderer();

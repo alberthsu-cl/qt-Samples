@@ -547,11 +547,27 @@ void MiniEditorQtWidgetTests::realVideoPreviewUsesTimelineClipPresentation()
     state.settings.scalePercent = 50;
     state.settings.position = ClipPosition::BottomRight;
     state.effectiveOpacityPercent = 42;
+    QImage fallback(160, 90, QImage::Format_RGB32);
+    fallback.fill(QColor(210, 45, 30));
+    panel.setFallbackImage(fallback);
     panel.setPreviewState(state);
 
     // The decoder targets our QVideoSink. QtPreviewPanel paints the received
     // frame itself, which is what allows timeline opacity and placement.
     QVERIFY(panel.videoSink() != nullptr);
+
+    // Selecting another library video clears the old decoded frame. Its own
+    // thumbnail must remain visible while the new decoder source is loading,
+    // instead of exposing the generated blue placeholder card.
+    panel.setDecodedVideoVisible(false);
+    panel.show();
+    QCoreApplication::processEvents();
+    const QImage rendered = panel.grab().toImage();
+    // This test deliberately places a 50% preview in the bottom-right, so
+    // sample inside that video rectangle rather than at the whole-panel centre.
+    const QColor fallbackPixel = rendered.pixelColor(500, 300);
+    QVERIFY(fallbackPixel.red() > fallbackPixel.blue());
+    QVERIFY(fallbackPixel.red() > fallbackPixel.green());
 }
 
 void MiniEditorQtWidgetTests::timelineClickSeekFocusAndDeleteUseSemanticHandlers()

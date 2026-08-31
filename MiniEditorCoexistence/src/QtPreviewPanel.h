@@ -19,7 +19,9 @@ public:
 
     void setPreviewState(const PreviewState &state);
     void setPlaybackState(const PlaybackState &state);
-    void setStillImage(const QImage &image);
+    // Cached source thumbnail used for still images and while a newly selected
+    // video is waiting for its first decoded frame.
+    void setFallbackImage(const QImage &image);
     QVideoSink *videoSink() const;
     void setDecodedVideoVisible(bool visible);
 
@@ -39,7 +41,7 @@ private:
     PlaybackState playbackState_;
     QVideoSink *videoSink_ = nullptr;
     QVideoFrame decodedVideoFrame_;
-    QImage stillImage_;
+    QImage fallbackImage_;
     bool isDecodedVideoVisible_ = false;
     QtPreviewEffectPipeline *effectPipeline_ = nullptr;
     QImage processedImage_;

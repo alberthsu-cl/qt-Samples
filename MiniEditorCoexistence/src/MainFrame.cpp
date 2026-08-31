@@ -608,9 +608,10 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     if (selectionChanged || clipSettingsChanged || playbackChanged || timelineClipChanged) {
         const PreviewState preview = PreviewStateResolver::resolve(editorSession_, mediaLibrary_);
 #if MINI_EDITOR_USE_QT
-        previewHost_.setStillImage(
-            preview.mediaKind == MediaKind::Image
-                ? thumbnailCache_.imageFor(preview.mediaAssetId) : QImage());
+        // A cached image is the still-image source and also the temporary
+        // preview for a video while QMediaPlayer loads its first decoded frame.
+        previewHost_.setFallbackImage(
+            thumbnailCache_.imageFor(preview.mediaAssetId));
         previewHost_.setPreviewState(preview);
 #else
         previewCanvas_.setPreviewState(preview);

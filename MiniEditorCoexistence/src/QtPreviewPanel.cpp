@@ -100,15 +100,15 @@ void QtPreviewPanel::setPlaybackState(const PlaybackState &state)
     update();
 }
 
-void QtPreviewPanel::setStillImage(const QImage &image)
+void QtPreviewPanel::setFallbackImage(const QImage &image)
 {
     // MainFrame refreshes preview presentation on every playback tick. Do not
-    // invalidate a video effect merely because the same empty still-image
-    // value was supplied again, or restart still processing for the same image.
-    if (stillImage_.cacheKey() == image.cacheKey())
+    // restart processing merely because the same cached source image was
+    // supplied again.
+    if (fallbackImage_.cacheKey() == image.cacheKey())
         return;
 
-    stillImage_ = image;
+    fallbackImage_ = image;
     processedImage_ = QImage();
     effectPipeline_->clear();
     submitFrameForProcessing(image);
@@ -117,9 +117,12 @@ void QtPreviewPanel::setStillImage(const QImage &image)
 
 QImage QtPreviewPanel::sourceImageToPaint() const
 {
-    if (previewState_.mediaKind == MediaKind::Image)
-        return stillImage_;
-    return isDecodedVideoVisible_ ? decodedVideoFrame_.toImage() : QImage();
+    const QImage decodedImage = decodedVideoFrame_.toImage();
+    if (previewState_.mediaKind == MediaKind::Video
+        && isDecodedVideoVisible_ && !decodedImage.isNull()) {
+        return decodedImage;
+    }
+    return fallbackImage_;
 }
 
 void QtPreviewPanel::submitFrameForProcessing(const QImage &frame)
@@ -143,6 +146,7 @@ void QtPreviewPanel::setDecodedVideoVisible(bool visible)
         decodedVideoFrame_ = {};
         processedImage_ = QImage();
         effectPipeline_->clear();
+        submitFrameForProcessing(sourceImageToPaint());
     }
     update();
 }
@@ -170,9 +174,12 @@ void QtPreviewPanel::paintEvent(QPaintEvent *)
         const bool canPaintDecodedVideo = isDecodedVideoVisible_
             && previewState_.mediaKind == MediaKind::Video
             && !decodedImage.isNull();
-        const bool canPaintStillImage = previewState_.mediaKind == MediaKind::Image
-            && !stillImage_.isNull();
-        const bool canPaintRealMedia = canPaintDecodedVideo || canPaintStillImage;
+        const bool canPaintFallbackImage =
+            (previewState_.mediaKind == MediaKind::Image
+             || previewState_.mediaKind == MediaKind::Video)
+            && !fallbackImage_.isNull();
+        const bool canPaintRealMedia =
+            canPaintDecodedVideo || canPaintFallbackImage;
         painter.save();
         painter.setOpacity(std::clamp(
             previewState_.effectiveOpacityPercent / 100.0, 0.0, 1.0));
@@ -180,7 +187,8 @@ void QtPreviewPanel::paintEvent(QPaintEvent *)
             // The processed frame lags the source by at most one frame while
             // the worker is busy, which is why painting prefers it but never
             // waits for it.
-            const QImage &sourceImage = canPaintDecodedVideo ? decodedImage : stillImage_;
+            const QImage &sourceImage = canPaintDecodedVideo
+                ? decodedImage : fallbackImage_;
             const QImage &image = processedImage_.isNull() ? sourceImage : processedImage_;
             const QSize imageSize = image.size().scaled(
                 videoRect.size(), Qt::KeepAspectRatio);
