@@ -10,7 +10,10 @@ constexpr int kPreviewTransportSeparatorHeight = 2;
 // buttons, group border, and panel margins need a little more than the old
 // 42-pixel slot, otherwise the top and bottom of the group are clipped.
 constexpr int kTransportHeight = 52;
-constexpr int kTimelineToolbarHeight = 44;
+// The Qt toolbar has buttons plus vertical layout margins. Reserve enough
+// physical MFC pixels at common Windows DPI scales so its native child window
+// never grows down over the timeline ruler labels beneath it.
+constexpr int kTimelineToolbarHeight = 54;
 constexpr int kSplitterThickness = 6;
 constexpr int kMinimumMediaLibraryWidth = 340;
 constexpr int kMinimumPropertiesWidth = 310;

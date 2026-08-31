@@ -28,6 +28,10 @@ public:
     void setClipSettingsEditedHandler(ClipSettingsEditedHandler handler);
 
 private:
+    void applyBounds();
+
     std::unique_ptr<QtPropertiesPanel> panel_;
     ClipSettingsEditedHandler clipSettingsEditedHandler_;
+    CRect bounds_;
+    bool hasBounds_ = false;
 };

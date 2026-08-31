@@ -44,6 +44,7 @@ private slots:
     void mediaLibrarySeparatesProgrammaticAndUserSelection();
     void mediaLibraryModelExposesDecodedRealImageThumbnail();
     void timelineThumbnailCacheRegeneratesPerClipEffects();
+    void timelineCanvasRequestsDistinctTrimmedSourceFrames();
     void timelineClickSeekFocusAndDeleteUseSemanticHandlers();
     void timelineBodyDragEmitsFrameBasedMove();
     void timelineEndTrimEmitsTrimmedState();
@@ -121,6 +122,56 @@ void MiniEditorQtWidgetTests::timelineThumbnailCacheRegeneratesPerClipEffects()
     cache.prepareTimelineThumbnails({ affectedClip, originalClip });
     const QImage inverted = cache.timelineImageFor(affectedClip);
     QCOMPARE(inverted.pixelColor(0, 0), QColor(35, 215, 225));
+
+    // Adding an unrelated library asset must not discard the strip cache for
+    // an existing timeline placement.
+    const QString importedImagePath = directory.filePath(QStringLiteral("new-media.png"));
+    QImage importedImage(16, 9, QImage::Format_ARGB32);
+    importedImage.fill(QColor(30, 160, 220));
+    QVERIFY(importedImage.save(importedImagePath));
+    QVERIFY(library.addFile(
+        std::filesystem::path(importedImagePath.toStdWString())).has_value());
+    cache.refresh(library);
+    QCOMPARE(cache.timelineImageFor(affectedClip).pixelColor(0, 0),
+             QColor(35, 215, 225));
+}
+
+void MiniEditorQtWidgetTests::timelineCanvasRequestsDistinctTrimmedSourceFrames()
+{
+    QtTimelineCanvas canvas;
+    canvas.resize(1000, TimelineGeometry::kCanvasHeight);
+
+    TimelineClip clip{ 27, 101, TimelineTrackType::Video,
+                       { 0, 240, 60 }, {} };
+    TimelinePresentationState state;
+    state.clips = { clip };
+    state.durationFrames = 600;
+    canvas.setPresentationState(state);
+    canvas.setAssetPresentationResolver([](int) {
+        TimelineAssetPresentation presentation;
+        presentation.displayName = QStringLiteral("Trimmed video");
+        presentation.color = QColor(60, 80, 110);
+        presentation.mediaKind = MediaKind::Video;
+        return std::optional<TimelineAssetPresentation>(presentation);
+    });
+
+    std::vector<int> requestedSourceFrames;
+    QImage thumbnail(16, 9, QImage::Format_RGB32);
+    thumbnail.fill(QColor(220, 80, 40));
+    canvas.setClipThumbnailResolver(
+        [&requestedSourceFrames, &thumbnail](const TimelineClip &, int sourceFrame) {
+            requestedSourceFrames.push_back(sourceFrame);
+            return thumbnail;
+        });
+
+    canvas.show();
+    QCoreApplication::processEvents();
+    canvas.grab();
+
+    QVERIFY(requestedSourceFrames.size() > 1);
+    QCOMPARE(requestedSourceFrames.front(), 60);
+    QVERIFY(std::any_of(requestedSourceFrames.begin(), requestedSourceFrames.end(),
+                        [](int frame) { return frame > 60; }));
 }
 
 void MiniEditorQtWidgetTests::propertiesModelRefreshDoesNotEmitUserEdit()

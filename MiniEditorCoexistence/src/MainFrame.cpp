@@ -171,8 +171,8 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
             return presentation;
         });
     timelineCanvasHost_.setClipThumbnailResolver(
-        [this](const TimelineClip &clip) {
-            return thumbnailCache_.timelineImageFor(clip);
+        [this](const TimelineClip &clip, int sourceFrame) {
+            return thumbnailCache_.timelineImageFor(clip, sourceFrame);
         });
     timelineCanvasHost_.setTimelineClipDeletedHandler(
         [this](int clipId) {

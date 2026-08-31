@@ -3,6 +3,8 @@
 #include "QtPropertiesPanel.h"
 
 #include <QObject>
+#include <QSizePolicy>
+#include <QTimer>
 
 #include <utility>
 
@@ -12,6 +14,11 @@ QtPropertiesHost::~QtPropertiesHost() = default;
 bool QtPropertiesHost::create(void *mfcParentWindowHandle)
 {
     panel_ = std::make_unique<QtPropertiesPanel>();
+    // MFC owns this native child's rectangle. When the panel switches from a
+    // short read-only message to the full clip editor, Qt must not promote its
+    // layout size hint into a larger top-level window that covers siblings.
+    panel_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
+    panel_->setMinimumSize(0, 0);
     panel_->setWindowFlag(Qt::FramelessWindowHint, true);
     panel_->setAttribute(Qt::WA_NativeWindow);
 
@@ -52,22 +59,37 @@ bool QtPropertiesHost::create(void *mfcParentWindowHandle)
 
 void QtPropertiesHost::resize(const CRect &bounds)
 {
-    if (!panel_)
-        return;
-
-    const HWND qtWindowHandle = reinterpret_cast<HWND>(panel_->winId());
-    ::SetWindowPos(qtWindowHandle, nullptr,
-                   bounds.left, bounds.top, bounds.Width(), bounds.Height(),
-                   SWP_NOZORDER | SWP_NOACTIVATE);
+    bounds_ = bounds;
+    hasBounds_ = true;
+    applyBounds();
 }
 
 void QtPropertiesHost::setViewState(const ClipPropertiesViewState &viewState)
 {
-    if (panel_)
-        panel_->setViewState(viewState);
+    if (!panel_)
+        return;
+
+    panel_->setViewState(viewState);
+    applyBounds();
+    // Visibility changes queue a Qt layout request. Apply the MFC rectangle
+    // one more time after that request, otherwise the new form can temporarily
+    // retain its preferred height and paint over the timeline ruler.
+    QTimer::singleShot(0, panel_.get(), [this] { applyBounds(); });
 }
 
 void QtPropertiesHost::setClipSettingsEditedHandler(ClipSettingsEditedHandler handler)
 {
     clipSettingsEditedHandler_ = std::move(handler);
+}
+
+void QtPropertiesHost::applyBounds()
+{
+    if (!panel_ || !hasBounds_)
+        return;
+
+    const HWND qtWindowHandle = reinterpret_cast<HWND>(panel_->winId());
+    ::SetWindowPos(qtWindowHandle, nullptr,
+                   bounds_.left, bounds_.top,
+                   bounds_.Width(), bounds_.Height(),
+                   SWP_NOZORDER | SWP_NOACTIVATE);
 }

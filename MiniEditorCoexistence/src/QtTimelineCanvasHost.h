@@ -28,7 +28,8 @@ public:
     using MediaAssetDroppedHandler = std::function<void(int mediaAssetId, int frame)>;
     using AssetPresentationResolver =
         std::function<std::optional<TimelineAssetPresentation>(int mediaAssetId)>;
-    using ClipThumbnailResolver = std::function<QImage(const TimelineClip &clip)>;
+    using ClipThumbnailResolver = std::function<QImage(const TimelineClip &clip,
+                                                        int sourceFrame)>;
     using TimelineClipDeletedHandler = std::function<void(int clipId)>;
     using TimelineClipSelectedHandler = std::function<void(int clipId)>;
     using TimelineFocusRequestedHandler = std::function<void()>;
