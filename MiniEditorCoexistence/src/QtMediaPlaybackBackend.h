@@ -31,7 +31,7 @@ public:
 
     unsigned int tickIntervalMilliseconds() const override;
     PlaybackClockAction executeCommand(PlaybackCommand command) override;
-    PlaybackClockAction seekToCurrentFrame() override;
+    PlaybackClockAction seek(const PreviewSeekRequest &request) override;
     PlaybackClockAction synchronize() override;
     PlaybackClockAction advanceOneFrame() override;
 
@@ -45,6 +45,8 @@ private:
     bool isLoadedTimelineVideoStillActive() const;
     PlaybackClockAction synchronizeTimelinePlayback(
         bool seekToTimelineFrame = false);
+    PlaybackClockAction synchronizeTimelinePlayback(
+        const MediaPlaybackPlan &plan, bool seekToTimelineFrame);
     void beginSilentFrameDecode(int targetSourceFrame);
     void finishSilentFirstFrameDecode();
     void cancelSilentFirstFrameDecode();
@@ -76,6 +78,7 @@ private:
     int pendingTimelineSeekFrame_ = 0;
     bool hasPendingTimelineSeek_ = false;
     bool decodedVideoVisible_ = false;
+    PreviewSeekRequestTracker seekRequests_;
     VideoVisibilityHandler videoVisibilityHandler_;
     SourceMetadataChangedHandler sourceMetadataChangedHandler_;
 };

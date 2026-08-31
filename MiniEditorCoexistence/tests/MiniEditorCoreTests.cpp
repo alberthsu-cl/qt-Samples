@@ -17,6 +17,7 @@
 #include "TimelineEditingController.h"
 #include "ThumbnailRequestModel.h"
 #include "PreviewStateResolver.h"
+#include "PreviewSeekRequest.h"
 #include "ProjectDocumentService.h"
 #include "WorkspaceLayout.h"
 
@@ -1689,6 +1690,52 @@ void mediaPlaybackPlanResolverCentralizesDecoderIntent()
             "A paused timeline must preserve the exact playhead-derived source frame.");
 }
 
+void previewSeekRequestsSnapshotIntentAndRejectStaleResults()
+{
+    MediaLibrary library;
+    const int videoId = library.addKnownAsset(
+        L"D:/media/seek-contract.mp4", MediaKind::Video, 300, 0x5078A0);
+
+    EditorSession session(1);
+    const int clipId = session.addTimelineClip(
+        videoId, TimelineTrackType::Video, 100, 120);
+    TimelineClipState trimmed = session.timelineModel().findClip(clipId)->state;
+    trimmed.sourceInFrame = 30;
+    require(session.moveTimelineClip(clipId, trimmed),
+            "Seek-contract test requires a trimmed video clip.");
+    session.selectTimelineClip(clipId, 0);
+    session.setPlaybackDuration(
+        session.timelineModel().contentDurationFrames(), false);
+    session.seekTimeline(140);
+
+    const PreviewSeekRequest first = PreviewSeekRequestResolver::resolve(
+        41, session, library);
+    require(first.isValid() && first.timelineFrame == 140
+                && first.playbackPlan.context == MediaPlaybackContext::Timeline
+                && first.playbackPlan.timelineClipId == clipId
+                && first.playbackPlan.sourceFrame == 70,
+            "A seek request must snapshot the resolved timeline and source frames.");
+
+    session.seekTimeline(160);
+    const PreviewSeekRequest second = PreviewSeekRequestResolver::resolve(
+        42, session, library);
+
+    PreviewSeekRequestTracker tracker;
+    require(tracker.begin(first) && tracker.begin(second),
+            "Newer seek requests must supersede earlier work.");
+    require(!tracker.accepts({ first.requestId,
+                               first.playbackPlan.sourceFrame }),
+            "A decoded result from a superseded seek must be rejected.");
+    require(tracker.accepts({ second.requestId,
+                              second.playbackPlan.sourceFrame }),
+            "The newest seek result must be accepted.");
+    tracker.complete(second.requestId);
+    require(!tracker.current().has_value(),
+            "Completing the newest seek must clear pending work.");
+    require(!tracker.begin(first),
+            "An old request ID must remain stale after completion.");
+}
+
 void editorSessionAcceptsAuthoritativeBackendPlaybackState()
 {
     EditorSession session(1);
@@ -1843,6 +1890,7 @@ int main()
         playbackClockControllerKeepsTimerPolicyFrameworkNeutral();
         simulatedPlaybackBackendOwnsTheInitialPlaybackImplementation();
         mediaPlaybackPlanResolverCentralizesDecoderIntent();
+        previewSeekRequestsSnapshotIntentAndRejectStaleResults();
         editorSessionAcceptsAuthoritativeBackendPlaybackState();
         previewStateResolverKeepsPreviewPolicyFrameworkNeutral();
         clipFadeOwnsRampPolicyIndependentlyOfAnyRenderer();

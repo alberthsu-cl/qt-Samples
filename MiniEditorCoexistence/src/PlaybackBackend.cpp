@@ -25,7 +25,8 @@ PlaybackClockAction SimulatedPlaybackBackend::synchronize()
     return clock_.synchronize();
 }
 
-PlaybackClockAction SimulatedPlaybackBackend::seekToCurrentFrame()
+PlaybackClockAction SimulatedPlaybackBackend::seek(
+    const PreviewSeekRequest &)
 {
     return synchronize();
 }

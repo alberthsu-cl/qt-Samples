@@ -142,7 +142,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
             // the real decoder to the resolved source frame. Without this,
             // QMediaPlayer keeps playing from the frame it decoded when the
             // clip was selected (usually the clip's first frame).
-            applyPlaybackClockAction(playbackBackend_.seekToCurrentFrame());
+            seekPreviewToCurrentFrame();
         });
     timelineCanvasHost_.setTimelineClipEditedHandler(
         [this](int clipId, const TimelineClipState &state,
@@ -215,7 +215,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     transportHost_.setPlaybackPositionHandler(
         [this](int frame) {
             timelineController_.seekFocusedPreview(frame);
-            applyPlaybackClockAction(playbackBackend_.seekToCurrentFrame());
+            seekPreviewToCurrentFrame();
         });
     timelineToolbarHost_.setViewStateEditedHandler([this](const TimelineViewState &state) {
         editorSession_.updateTimelineViewState(state);
@@ -365,10 +365,16 @@ void MainFrame::OnUpdateEditSplitClip(CCmdUI *commandUi)
 void MainFrame::OnTimer(UINT_PTR timerId)
 {
     if (timerId == kPlaybackTimerId) {
+        // The same timer also pumps Qt events during a stopped, silent
+        // one-frame decode. Only real timeline playback is allowed to move
+        // selection with the head; otherwise clicking a clip would be undone
+        // by the first decoder-pump tick.
+        const bool wasPlayingTimeline = editorSession_.isTimelineFocused()
+            && editorSession_.timelinePlaybackState().isPlaying;
         // This is a deliberately simple MFC timer. In a production editor the
         // media engine would report its clock/playhead instead.
         applyPlaybackClockAction(playbackBackend_.advanceOneFrame());
-        if (editorSession_.isTimelineFocused())
+        if (wasPlayingTimeline && editorSession_.isTimelineFocused())
             timelineController_.followPlaybackFrame();
         return;
     }
@@ -518,6 +524,13 @@ void MainFrame::executeEditorCommand(EditorIntent command)
 void MainFrame::synchronizePlaybackTimer()
 {
     applyPlaybackClockAction(playbackBackend_.synchronize());
+}
+
+void MainFrame::seekPreviewToCurrentFrame()
+{
+    const PreviewSeekRequest request = PreviewSeekRequestResolver::resolve(
+        nextPreviewSeekRequestId_++, editorSession_, mediaLibrary_);
+    applyPlaybackClockAction(playbackBackend_.seek(request));
 }
 
 void MainFrame::applyPlaybackClockAction(PlaybackClockAction action)

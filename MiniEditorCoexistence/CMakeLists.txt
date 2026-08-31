@@ -56,6 +56,8 @@ add_executable(MiniEditorCoexistence WIN32
     src/TimelinePlaybackResolver.cpp
     src/MediaPlaybackPlan.h
     src/MediaPlaybackPlan.cpp
+    src/PreviewSeekRequest.h
+    src/PreviewSeekRequest.cpp
     src/EditorSession.h
     src/EditorSession.cpp
     src/EditorCommandController.h
@@ -138,6 +140,8 @@ source_group("Playback" FILES
     src/TimelinePlaybackResolver.cpp
     src/MediaPlaybackPlan.h
     src/MediaPlaybackPlan.cpp
+    src/PreviewSeekRequest.h
+    src/PreviewSeekRequest.cpp
     src/PlaybackBackend.h
     src/PlaybackBackend.cpp
     src/PlaybackClockController.h
@@ -198,6 +202,8 @@ if(BUILD_TESTING)
         src/TimelinePlaybackResolver.cpp
         src/MediaPlaybackPlan.h
         src/MediaPlaybackPlan.cpp
+        src/PreviewSeekRequest.h
+        src/PreviewSeekRequest.cpp
         src/EditorSession.h
         src/EditorSession.cpp
         src/EditorCommandController.h

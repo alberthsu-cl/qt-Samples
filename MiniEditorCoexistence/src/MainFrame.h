@@ -33,6 +33,7 @@
 #include <afxext.h>
 #include <afxwin.h>
 
+#include <cstdint>
 #include <filesystem>
 
 class MainFrame final : public CFrameWnd
@@ -81,6 +82,7 @@ private:
     int contentBottomForClient(int clientHeight);
     void executeEditorCommand(EditorIntent command);
     void applyPlaybackClockAction(PlaybackClockAction action);
+    void seekPreviewToCurrentFrame();
     void synchronizePlaybackTimer();
     void refreshEditorViews(EditorChange changes);
     void moveLeftSplitter(int parentX);
@@ -130,6 +132,7 @@ private:
     EditorCommandController commandController_;
     ProjectDocumentService documentService_;
     EditorSession::ObserverId editorSessionObserverId_ = 0;
+    std::uint64_t nextPreviewSeekRequestId_ = 1;
     WorkspaceLayout workspaceLayout_;
     std::filesystem::path projectFilePath_;
     bool isWorkspaceReady_ = false;
