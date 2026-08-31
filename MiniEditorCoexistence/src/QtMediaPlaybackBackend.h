@@ -45,7 +45,7 @@ private:
     bool isLoadedTimelineVideoStillActive() const;
     PlaybackClockAction synchronizeTimelinePlayback(
         bool seekToTimelineFrame = false);
-    void beginSilentFirstFrameDecode();
+    void beginSilentFrameDecode(int targetSourceFrame);
     void finishSilentFirstFrameDecode();
     void cancelSilentFirstFrameDecode();
     void stopRealPlayback();
@@ -71,6 +71,7 @@ private:
     // old file. This becomes true only after the new source is loaded.
     bool loadedSourceMediaReady_ = false;
     bool pauseAfterFirstVideoFrame_ = false;
+    int silentDecodeTargetFrame_ = 0;
     int pendingSourceSeekFrame_ = 0;
     int pendingTimelineSeekFrame_ = 0;
     bool hasPendingTimelineSeek_ = false;

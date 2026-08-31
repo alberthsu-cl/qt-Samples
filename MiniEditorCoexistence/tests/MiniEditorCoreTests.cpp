@@ -1669,14 +1669,14 @@ void mediaPlaybackPlanResolverCentralizesDecoderIntent()
     session.selectTimelineClip(clipId, 0);
     session.seekTimeline(140);
 
-    // Stopped editing previews the selected clip's first trimmed source frame,
-    // independently of the timeline head.
+    // A stopped head inside the selected clip resolves the exact trimmed
+    // source frame. This is the same plan used when the user clicks the ruler.
     plan = MediaPlaybackPlanResolver::resolve(session, library);
     require(plan.context == MediaPlaybackContext::Timeline
                 && plan.timelineClipId == clipId
-                && plan.sourceFrame == 60
+                && plan.sourceFrame == 100
                 && plan.needsSilentVideoPreroll(),
-            "A stopped timeline edit target must resolve to its trimmed source-in frame.");
+            "A stopped timeline seek must resolve the exact frame under the head.");
 
     session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
     plan = MediaPlaybackPlanResolver::resolve(session, library);

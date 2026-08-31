@@ -16,8 +16,18 @@ std::optional<ResolvedTimelineMedia> PreviewStateResolver::resolveTimelineVideo(
     const TimelineClip *selectedClip = timeline.findClip(
         session.selectedTimelineClipId());
 
+    const bool playheadIsInsideSelectedClip = selectedClip != nullptr
+        && playback.currentFrame >= selectedClip->state.startFrame
+        && playback.currentFrame < selectedClip->state.startFrame
+                                      + selectedClip->state.durationFrames;
+
+    // Clicking a clip while stopped previews that edit target even when the
+    // head is elsewhere. Once the user moves the head into the selected clip,
+    // however, the head becomes the preview target and must resolve its exact
+    // source frame.
     if (!playback.isPlaying && !playback.isPaused && selectedClip != nullptr
-        && selectedClip->trackType == TimelineTrackType::Video) {
+        && selectedClip->trackType == TimelineTrackType::Video
+        && !playheadIsInsideSelectedClip) {
         return TimelinePlaybackResolver::resolveClip(
             *selectedClip, mediaLibrary, selectedClip->state.startFrame);
     }
