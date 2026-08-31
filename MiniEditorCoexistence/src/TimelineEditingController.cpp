@@ -22,6 +22,13 @@ bool TimelineEditingController::focusClip(int clipId, bool resetToBeginning)
 
     const bool wasSourceFocused = !session_.isTimelineFocused();
     const int previousPreviewFrame = session_.playbackState().currentFrame;
+    if (!wasSourceFocused) {
+        // A clip click is an explicit editing action. End a frozen paused
+        // preview before Selection is notified; otherwise the decoder sees
+        // the old playhead clip during that notification and never loads the
+        // newly focused clip's first frame.
+        session_.leavePausedTimelinePlaybackForEditing();
+    }
     session_.selectTimelineClip(clipId, assetIndex);
     synchronizePlaybackDuration(resetToBeginning);
     if (wasSourceFocused && !resetToBeginning)

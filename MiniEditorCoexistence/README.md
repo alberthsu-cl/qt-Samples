@@ -331,9 +331,11 @@ UI frameworks. For each playhead position it resolves the active V1 and A1
 placements and maps timeline time to clip-local and source-media frames. Video
 and audio use `sourceInFrame + clipLocalFrame`; still images keep source frame
 zero while their display frame advances. Gaps deliberately resolve to no video.
-Pause, frame stepping, and natural playback end retain the resolved playhead
-frame and keep the timeline/source information overlay visible. Only an
-explicit Stop returns Preview to its stopped/focused state and hides the overlay.
+Pause and frame stepping retain the resolved playhead frame and keep the
+timeline/source information overlay visible. Natural **timeline** completion
+stops and returns the head to frame zero, ready for the next Play command;
+source preview still retains its final frame for inspection. An explicit Stop
+also returns Preview to its stopped/focused state and hides the overlay.
 
 ## Phase 19 — Timeline model foundation
 
@@ -535,9 +537,56 @@ because its arrow is not an interactive target on its own.
 The spin boxes also use `setKeyboardTracking(false)`, so typing `120` is one
 edit and one Undo entry instead of three.
 
-Project format v7 stores both fade lengths per timeline placement. Version 6
-and older documents load with no fades, and every loaded placement is
-re-clamped to its own duration.
+Project format v8 stores both fade lengths and DSP settings per timeline
+placement. Version 6 and older documents load with no fades; version 7 and
+older documents load with no DSP effect. Every loaded placement is re-clamped
+to its own duration.
+
+## Phase 23 — DSP preview effects on a worker thread
+
+The DSP group reserved in the Properties inspector now holds a real effect
+selector: **None / Grayscale / Invert / Blur**, plus an intensity slider that
+blends the processed frame back over the untouched one.
+
+The effects are ported from the sibling learning project
+`D:\Qt\Samples\ThreadedEffectPreview`. Its `EffectType` and `FrameProcessor`
+become `ClipEffect.h` and `QtFrameEffectProcessor` here, keeping that sample's
+two rules: the worker owns no widgets, and it checks
+`isInterruptionRequested()` between image rows so shutdown never waits for a
+frame to finish. Those effects are CPU work on a `QImage`; moving them onto the
+GPU is a separate, later step.
+
+### A real per-clip edit decision
+
+DSP lives in `ClipSettings`, beside opacity, position, and fades. Each timeline
+placement can therefore have a different effect and intensity. DSP edits use
+the existing `clipSettingsEdited` path, mark the document dirty, participate in
+Undo/Redo, and are stored in the v8 `.mini-editor.json` project file. Selecting
+a source-library asset still shows the unmodified source because source
+inspection is not a timeline placement edit.
+
+### Back-pressure: conflate, do not queue
+
+This is the one place the original sample's design could not be copied.
+`ThreadedEffectPreview` applies back-pressure by disabling its Process button
+until a result returns. A live preview cannot do that — decoded frames keep
+arriving regardless.
+
+`QtPreviewEffectPipeline` therefore **conflates**: while the worker is busy it
+remembers only the newest frame and drops the ones in between, so the work
+queue can never grow without bound and the preview always catches up to the
+current frame. `droppedFrameCount()` exposes that for testing. Painting prefers
+the last processed frame but never waits for one, so an expensive effect
+degrades the preview's update rate rather than freezing the UI thread.
+
+When the effect is `None`, `submit()` returns false and the panel paints the
+decoded frame directly, so an idle DSP section costs nothing — no copy, no
+thread hop.
+
+`clear()` also advances the accepted request generation. A result already in
+progress may finish, but its old request ID is ignored, so changing clips,
+sources, or effects can never paint a stale processed frame over the current
+preview.
 
 ## Build with Visual Studio 2022
 

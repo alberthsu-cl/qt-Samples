@@ -43,7 +43,11 @@ private:
     std::optional<ResolvedTimelineMedia> selectedTimelineVideo() const;
     bool ensureTimelineVideoLoaded(bool seekToTimelineFrame);
     bool isLoadedTimelineVideoStillActive() const;
-    PlaybackClockAction synchronizeTimelinePlayback();
+    PlaybackClockAction synchronizeTimelinePlayback(
+        bool seekToTimelineFrame = false);
+    void beginSilentFirstFrameDecode();
+    void finishSilentFirstFrameDecode();
+    void cancelSilentFirstFrameDecode();
     void stopRealPlayback();
     void updateSessionFromPlayer();
     void setDecodedVideoVisible(bool visible);
@@ -62,8 +66,10 @@ private:
     int loadedAssetId_ = 0;
     int loadedTimelineClipId_ = 0;
     bool loadedForTimeline_ = false;
-    bool pauseAfterFirstSourceVideoFrame_ = false;
+    bool pauseAfterFirstVideoFrame_ = false;
     int pendingSourceSeekFrame_ = 0;
+    int pendingTimelineSeekFrame_ = 0;
+    bool hasPendingTimelineSeek_ = false;
     bool decodedVideoVisible_ = false;
     VideoVisibilityHandler videoVisibilityHandler_;
     SourceMetadataChangedHandler sourceMetadataChangedHandler_;

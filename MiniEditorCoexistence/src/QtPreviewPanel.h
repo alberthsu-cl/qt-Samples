@@ -6,6 +6,7 @@
 #include <QVideoFrame>
 #include <QWidget>
 
+class QtPreviewEffectPipeline;
 class QVideoSink;
 
 // Qt rendering replacement for the learning sample's MFC preview placeholder.
@@ -28,10 +29,18 @@ protected:
 private:
     static QString frameTimecode(int frame, int framesPerSecond);
 
+    // Hands the newest source frame to the worker thread. Painting keeps
+    // using the previous processed frame until a new result arrives, so the
+    // preview never blocks on the effect.
+    void submitFrameForProcessing(const QImage &frame);
+    QImage sourceImageToPaint() const;
+
     PreviewState previewState_;
     PlaybackState playbackState_;
     QVideoSink *videoSink_ = nullptr;
     QVideoFrame decodedVideoFrame_;
     QImage stillImage_;
     bool isDecodedVideoVisible_ = false;
+    QtPreviewEffectPipeline *effectPipeline_ = nullptr;
+    QImage processedImage_;
 };

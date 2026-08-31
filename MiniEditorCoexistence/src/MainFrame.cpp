@@ -136,7 +136,14 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     if (!timelineCanvasHost_.create(GetSafeHwnd()))
         return -1;
     timelineCanvasHost_.setSeekHandler(
-        [this](int frame) { timelineController_.focusFrame(frame); });
+        [this](int frame) {
+            timelineController_.focusFrame(frame);
+            // Moving the timeline head changes editor state first, then seeks
+            // the real decoder to the resolved source frame. Without this,
+            // QMediaPlayer keeps playing from the frame it decoded when the
+            // clip was selected (usually the clip's first frame).
+            applyPlaybackClockAction(playbackBackend_.seekToCurrentFrame());
+        });
     timelineCanvasHost_.setTimelineClipEditedHandler(
         [this](int clipId, const TimelineClipState &state,
                TimelineClipEditKind editKind) {

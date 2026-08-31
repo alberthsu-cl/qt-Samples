@@ -2,6 +2,7 @@
 
 #include <QWidget>
 
+#include "ClipEffect.h"
 #include "ClipPropertiesStateResolver.h"
 
 class QComboBox;
@@ -31,7 +32,8 @@ public:
 
 signals:
     void clipSettingsEdited(int opacityPercent, int scalePercent, int positionValue,
-                            int fadeInFrames, int fadeOutFrames);
+                            int fadeInFrames, int fadeOutFrames,
+                            int effectValue, int effectIntensityPercent);
 
 private:
     void emitCurrentSettings();
@@ -46,6 +48,10 @@ private:
     QGroupBox *sizePositionGroup_ = nullptr;
     QGroupBox *opacityFadingGroup_ = nullptr;
     QGroupBox *dspGroup_ = nullptr;
+    QComboBox *effectComboBox_ = nullptr;
+    QSlider *effectIntensitySlider_ = nullptr;
+    QSpinBox *effectIntensitySpinBox_ = nullptr;
+    QWidget *effectIntensityEditor_ = nullptr;
     QWidget *opacityEditor_ = nullptr;
     QWidget *scaleEditor_ = nullptr;
     QSlider *fadeInSlider_ = nullptr;
@@ -67,4 +73,5 @@ private:
     void updateTargetPresentation(const ClipPropertiesViewState &viewState);
     void updateMediaSpecificRows();
     void updateFadeSummary();
+    void updateEffectIntensityEnabled();
 };

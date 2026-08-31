@@ -5,6 +5,27 @@
 #include "MediaLibrary.h"
 #include "TimelinePlaybackResolver.h"
 
+std::optional<ResolvedTimelineMedia> PreviewStateResolver::resolveTimelineVideo(
+    const EditorSession &session, const MediaLibrary &mediaLibrary)
+{
+    if (!session.isTimelineFocused())
+        return std::nullopt;
+
+    const PlaybackState &playback = session.timelinePlaybackState();
+    const TimelineModel &timeline = session.timelineModel();
+    const TimelineClip *selectedClip = timeline.findClip(
+        session.selectedTimelineClipId());
+
+    if (!playback.isPlaying && !playback.isPaused && selectedClip != nullptr
+        && selectedClip->trackType == TimelineTrackType::Video) {
+        return TimelinePlaybackResolver::resolveClip(
+            *selectedClip, mediaLibrary, selectedClip->state.startFrame);
+    }
+
+    return TimelinePlaybackResolver::resolve(
+        timeline, mediaLibrary, playback.currentFrame).video;
+}
+
 PreviewState PreviewStateResolver::resolve(const EditorSession &session,
                                            const MediaLibrary &mediaLibrary)
 {
@@ -34,24 +55,16 @@ PreviewState PreviewStateResolver::resolve(const EditorSession &session,
     }
 
     const TimelineModel &timeline = session.timelineModel();
-    const TimelineClip *selectedClip = timeline.findClip(
-        session.selectedTimelineClipId());
     const ResolvedTimelineFrame resolvedFrame = TimelinePlaybackResolver::resolve(
         timeline, mediaLibrary, playback.currentFrame);
-    std::optional<ResolvedTimelineMedia> visibleVideo = resolvedFrame.video;
-    bool applyVideoFade = true;
-
-    // While stopped, Properties is an editor for the focused placement. Show
-    // that video clip directly so opacity, scale, and position changes appear
-    // immediately even when the timeline playhead is currently elsewhere.
-    if (!playback.isPlaying && !playback.isPaused && selectedClip != nullptr
-        && selectedClip->trackType == TimelineTrackType::Video) {
-        visibleVideo = TimelinePlaybackResolver::resolveClip(
-            *selectedClip, mediaLibrary, selectedClip->state.startFrame);
-        // This is the clip as an edit target, not a rendered timeline frame.
-        // Its fade-in would otherwise hide the very placement being adjusted.
-        applyVideoFade = false;
-    }
+    const std::optional<ResolvedTimelineMedia> visibleVideo =
+        resolveTimelineVideo(session, mediaLibrary);
+    // A stopped focused placement is an edit target. Its fade-in must not hide
+    // the item being adjusted; playback/paused frames still evaluate fades.
+    const bool isFocusedEditTarget = !playback.isPlaying && !playback.isPaused
+        && visibleVideo
+        && visibleVideo->clipId == session.selectedTimelineClipId();
+    const bool applyVideoFade = !isFocusedEditTarget;
 
     preview.timelineFrame = playback.currentFrame;
     if (resolvedFrame.audio) {

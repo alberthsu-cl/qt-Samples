@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ClipEffect.h"
 #include "MediaKind.h"
 
 #include <cstdint>
@@ -24,6 +25,11 @@ struct ClipSettings {
     // Undo/Redo; ClipFade owns the rules that keep them valid.
     int fadeInFrames = 0;
     int fadeOutFrames = 0;
+    // DSP belongs to the timeline placement, just like opacity and fading.
+    // Keeping it here makes each clip independently editable, undoable, and
+    // serializable while source-library preview remains untouched.
+    ClipEffectKind effect = ClipEffectKind::None;
+    int effectIntensityPercent = 100;
 };
 
 // Playback remains application/MFC-owned during this migration. Qt transport

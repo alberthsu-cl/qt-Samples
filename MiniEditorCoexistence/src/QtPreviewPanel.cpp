@@ -1,5 +1,7 @@
 #include "QtPreviewPanel.h"
 
+#include "QtPreviewEffectPipeline.h"
+
 #include <QImage>
 #include <QPainter>
 #include <QStringList>
@@ -55,6 +57,7 @@ QRect videoRectangle(const QRect &availableRect, const ClipSettings &settings)
 QtPreviewPanel::QtPreviewPanel(QWidget *parent)
     : QWidget(parent)
     , videoSink_(new QVideoSink(this))
+    , effectPipeline_(new QtPreviewEffectPipeline(this))
 {
     setMinimumSize(200, 150);
     setAutoFillBackground(false);
@@ -62,13 +65,32 @@ QtPreviewPanel::QtPreviewPanel(QWidget *parent)
     connect(videoSink_, &QVideoSink::videoFrameChanged, this,
             [this](const QVideoFrame &frame) {
                 decodedVideoFrame_ = frame;
+                submitFrameForProcessing(frame.toImage());
+                update();
+            });
+    connect(effectPipeline_, &QtPreviewEffectPipeline::frameProcessed, this,
+            [this](const QImage &result) {
+                processedImage_ = result;
                 update();
             });
 }
 
 void QtPreviewPanel::setPreviewState(const PreviewState &state)
 {
+    const bool processingInputChanged =
+        previewState_.mediaAssetId != state.mediaAssetId
+        || previewState_.mediaKind != state.mediaKind
+        || previewState_.settings.effect != state.settings.effect
+        || previewState_.settings.effectIntensityPercent
+            != state.settings.effectIntensityPercent;
     previewState_ = state;
+    if (processingInputChanged) {
+        // Invalidate any result still being produced for the old clip/source.
+        // The pipeline will ignore that result when it eventually arrives.
+        processedImage_ = QImage();
+        effectPipeline_->clear();
+        submitFrameForProcessing(sourceImageToPaint());
+    }
     update();
 }
 
@@ -80,8 +102,33 @@ void QtPreviewPanel::setPlaybackState(const PlaybackState &state)
 
 void QtPreviewPanel::setStillImage(const QImage &image)
 {
+    // MainFrame refreshes preview presentation on every playback tick. Do not
+    // invalidate a video effect merely because the same empty still-image
+    // value was supplied again, or restart still processing for the same image.
+    if (stillImage_.cacheKey() == image.cacheKey())
+        return;
+
     stillImage_ = image;
+    processedImage_ = QImage();
+    effectPipeline_->clear();
+    submitFrameForProcessing(image);
     update();
+}
+
+QImage QtPreviewPanel::sourceImageToPaint() const
+{
+    if (previewState_.mediaKind == MediaKind::Image)
+        return stillImage_;
+    return isDecodedVideoVisible_ ? decodedVideoFrame_.toImage() : QImage();
+}
+
+void QtPreviewPanel::submitFrameForProcessing(const QImage &frame)
+{
+    if (!effectPipeline_->submit(frame, previewState_.settings.effect,
+                                 previewState_.settings.effectIntensityPercent)) {
+        // A disabled effect must not leave the last processed frame on screen.
+        processedImage_ = QImage();
+    }
 }
 
 QVideoSink *QtPreviewPanel::videoSink() const
@@ -92,8 +139,11 @@ QVideoSink *QtPreviewPanel::videoSink() const
 void QtPreviewPanel::setDecodedVideoVisible(bool visible)
 {
     isDecodedVideoVisible_ = visible;
-    if (!visible)
+    if (!visible) {
         decodedVideoFrame_ = {};
+        processedImage_ = QImage();
+        effectPipeline_->clear();
+    }
     update();
 }
 
@@ -127,7 +177,11 @@ void QtPreviewPanel::paintEvent(QPaintEvent *)
         painter.setOpacity(std::clamp(
             previewState_.effectiveOpacityPercent / 100.0, 0.0, 1.0));
         if (canPaintRealMedia) {
-            const QImage &image = canPaintDecodedVideo ? decodedImage : stillImage_;
+            // The processed frame lags the source by at most one frame while
+            // the worker is busy, which is why painting prefers it but never
+            // waits for it.
+            const QImage &sourceImage = canPaintDecodedVideo ? decodedImage : stillImage_;
+            const QImage &image = processedImage_.isNull() ? sourceImage : processedImage_;
             const QSize imageSize = image.size().scaled(
                 videoRect.size(), Qt::KeepAspectRatio);
             const QRect imageRect(videoRect.left() + (videoRect.width() - imageSize.width()) / 2,

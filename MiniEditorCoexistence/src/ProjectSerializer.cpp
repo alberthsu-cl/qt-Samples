@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr int kCurrentFormatVersion = 7;
+constexpr int kCurrentFormatVersion = 8;
 
 std::string utf8FromWide(const std::wstring &value)
 {
@@ -72,6 +72,31 @@ std::optional<ClipPosition> positionFromName(const std::string &name)
         return ClipPosition::BottomLeft;
     if (name == "BottomRight")
         return ClipPosition::BottomRight;
+    return std::nullopt;
+}
+
+const char *effectName(ClipEffectKind effect)
+{
+    switch (effect) {
+    case ClipEffectKind::None:      return "None";
+    case ClipEffectKind::Grayscale: return "Grayscale";
+    case ClipEffectKind::Invert:    return "Invert";
+    case ClipEffectKind::Blur:      return "Blur";
+    }
+
+    return "None";
+}
+
+std::optional<ClipEffectKind> effectFromName(const std::string &name)
+{
+    if (name == "None")
+        return ClipEffectKind::None;
+    if (name == "Grayscale")
+        return ClipEffectKind::Grayscale;
+    if (name == "Invert")
+        return ClipEffectKind::Invert;
+    if (name == "Blur")
+        return ClipEffectKind::Blur;
     return std::nullopt;
 }
 
@@ -174,6 +199,11 @@ bool ProjectSerializer::save(const std::filesystem::path &path,
             setError(errorMessage, L"A timeline clip has a fade longer than the clip.");
             return false;
         }
+        if (clip.settings.effectIntensityPercent < kMinimumEffectIntensityPercent
+            || clip.settings.effectIntensityPercent > kMaximumEffectIntensityPercent) {
+            setError(errorMessage, L"A timeline clip has an invalid DSP intensity.");
+            return false;
+        }
     }
 
     std::vector<TimelineClip> validatedClips;
@@ -218,7 +248,10 @@ bool ProjectSerializer::save(const std::filesystem::path &path,
                << ", \"scalePercent\": " << clip.settings.scalePercent
                << ", \"position\": \"" << positionName(clip.settings.position)
                << "\", \"fadeInFrames\": " << clip.settings.fadeInFrames
-               << ", \"fadeOutFrames\": " << clip.settings.fadeOutFrames << " }";
+               << ", \"fadeOutFrames\": " << clip.settings.fadeOutFrames
+               << ", \"effect\": \"" << effectName(clip.settings.effect)
+               << "\", \"effectIntensityPercent\": "
+               << clip.settings.effectIntensityPercent << " }";
         output << (index + 1 == project.timelineItems.size() ? "\n" : ",\n");
     }
     output << "  ]\n"
@@ -388,7 +421,23 @@ std::optional<EditorProject> ProjectSerializer::load(const std::filesystem::path
             settings.fadeInFrames = *fadeIn;
             settings.fadeOutFrames = *fadeOut;
         }
-        // Version 6 and older predate fades and load with none. A trim made
+        if (*formatVersion >= 8) {
+            const auto effectValue = stringValue(clipObject, "effect");
+            const auto effect = effectValue
+                ? effectFromName(*effectValue) : std::nullopt;
+            const auto intensity = integerValue(
+                clipObject, "effectIntensityPercent");
+            if (!effect || !intensity
+                || *intensity < kMinimumEffectIntensityPercent
+                || *intensity > kMaximumEffectIntensityPercent) {
+                setError(errorMessage, L"A timeline clip has invalid DSP settings.");
+                return std::nullopt;
+            }
+            settings.effect = *effect;
+            settings.effectIntensityPercent = *intensity;
+        }
+        // Version 6 and older predate fades; version 7 and older predate DSP.
+        // Both migrate to their neutral defaults. A trim made
         // in a newer build can still shorten a clip below its stored ramps,
         // so every loaded placement is re-clamped to its own duration.
         settings = ClipFade::clampSettings(settings, *durationFrames);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ProjectState.h"
+#include "TimelinePlaybackResolver.h"
 
 class EditorSession;
 class MediaLibrary;
@@ -11,6 +12,13 @@ class MediaLibrary;
 class PreviewStateResolver final
 {
 public:
+    // The picture the timeline preview should decode. While stopped, a
+    // focused video placement is the edit target even when the playhead is
+    // elsewhere. During play/pause, the playhead owns the visible picture.
+    // Renderers and media backends must use this same policy.
+    static std::optional<ResolvedTimelineMedia> resolveTimelineVideo(
+        const EditorSession &session, const MediaLibrary &mediaLibrary);
+
     static PreviewState resolve(const EditorSession &session,
                                 const MediaLibrary &mediaLibrary);
 };

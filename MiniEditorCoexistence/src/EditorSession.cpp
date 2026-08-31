@@ -25,7 +25,9 @@ bool hasSameClipSettings(const ClipSettings &left, const ClipSettings &right)
         && left.scalePercent == right.scalePercent
         && left.position == right.position
         && left.fadeInFrames == right.fadeInFrames
-        && left.fadeOutFrames == right.fadeOutFrames;
+        && left.fadeOutFrames == right.fadeOutFrames
+        && left.effect == right.effect
+        && left.effectIntensityPercent == right.effectIntensityPercent;
 }
 
 // clipDurationFrames is zero for source-library settings, which have no
@@ -37,6 +39,9 @@ ClipSettings clampedClipSettings(ClipSettings settings, int clipDurationFrames =
                                          kMinimumOpacityPercent, kMaximumOpacityPercent);
     settings.scalePercent = std::clamp(settings.scalePercent,
                                        kMinimumScalePercent, kMaximumScalePercent);
+    settings.effectIntensityPercent = std::clamp(
+        settings.effectIntensityPercent,
+        kMinimumEffectIntensityPercent, kMaximumEffectIntensityPercent);
     return ClipFade::clampSettings(settings, clipDurationFrames);
 }
 
@@ -731,9 +736,18 @@ void EditorSession::advancePlaybackFrame()
 
     ++playback.currentFrame;
     if (playback.currentFrame >= playback.durationFrames) {
-        playback.currentFrame = std::max(0, playback.durationFrames - 1);
         playback.isPlaying = false;
-        playback.isPaused = true;
+        if (isTimelineFocused_) {
+            // A completed timeline is ready to play again immediately. This
+            // matches an explicit Stop without requiring a second transport
+            // click after the head reaches the total duration.
+            playback.currentFrame = kFirstFrame;
+            playback.isPaused = false;
+        } else {
+            // Source preview keeps its last decoded frame for inspection.
+            playback.currentFrame = std::max(0, playback.durationFrames - 1);
+            playback.isPaused = true;
+        }
     }
     notifyStateChanged(EditorChange::Playback);
 }
@@ -776,6 +790,17 @@ void EditorSession::updatePlaybackFromBackend(
     }
 
     playback = updated;
+    notifyStateChanged(EditorChange::Playback);
+}
+
+void EditorSession::leavePausedTimelinePlaybackForEditing()
+{
+    if (timelinePlaybackState_.isPlaying || !timelinePlaybackState_.isPaused)
+        return;
+
+    timelinePlaybackState_.isPaused = false;
+    // currentFrame deliberately stays unchanged: selecting an edit target
+    // must not silently move the timeline head.
     notifyStateChanged(EditorChange::Playback);
 }
 

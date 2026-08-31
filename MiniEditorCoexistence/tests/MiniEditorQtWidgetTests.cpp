@@ -2,6 +2,8 @@
 #include "MediaAssetModel.h"
 #include "QtMediaLibraryPanel.h"
 #include "QtPropertiesPanel.h"
+#include "QtFrameEffectProcessor.h"
+#include "QtPreviewEffectPipeline.h"
 #include "QtPreviewPanel.h"
 #include "QtTimelineCanvas.h"
 #include "QtTimelineToolbar.h"
@@ -16,6 +18,7 @@
 #include <QListView>
 #include <QPushButton>
 #include <QSignalSpy>
+#include <QThread>
 #include <QSlider>
 #include <QSpinBox>
 #include <QTemporaryFile>
@@ -34,6 +37,8 @@ private slots:
     void propertiesModelRefreshDoesNotEmitUserEdit();
     void propertiesUserEditEmitsCompleteSettings();
     void propertiesFadeEditorsRespectTheClipDuration();
+    void dspControlsEditCompleteClipSettings();
+    void previewEffectPipelineProcessesOffTheUiThreadAndConflates();
     void realVideoPreviewUsesTimelineClipPresentation();
     void transportRefreshAndButtonsUseSemanticCommands();
     void mediaLibrarySeparatesProgrammaticAndUserSelection();
@@ -151,6 +156,8 @@ void MiniEditorQtWidgetTests::propertiesUserEditEmitsCompleteSettings()
     QCOMPARE(arguments[2].toInt(), static_cast<int>(ClipPosition::TopLeft));
     QCOMPARE(arguments[3].toInt(), 0);
     QCOMPARE(arguments[4].toInt(), 0);
+    QCOMPARE(arguments[5].toInt(), static_cast<int>(ClipEffectKind::None));
+    QCOMPARE(arguments[6].toInt(), 100);
 }
 
 void MiniEditorQtWidgetTests::propertiesFadeEditorsRespectTheClipDuration()
@@ -211,6 +218,147 @@ void MiniEditorQtWidgetTests::propertiesFadeEditorsRespectTheClipDuration()
     QVERIFY(!fadeInSlider->isEnabled());
     QVERIFY(!fadeOut->isEnabled());
     QVERIFY(!fadeOutSlider->isEnabled());
+}
+
+void MiniEditorQtWidgetTests::dspControlsEditCompleteClipSettings()
+{
+    QtPropertiesPanel panel;
+    auto *effectComboBox = panel.findChild<QComboBox *>(QStringLiteral("effectComboBox"));
+    auto *intensitySpinBox =
+        panel.findChild<QSpinBox *>(QStringLiteral("effectIntensitySpinBox"));
+    auto *intensitySlider =
+        panel.findChild<QSlider *>(QStringLiteral("effectIntensitySlider"));
+    auto *intensityEditor =
+        panel.findChild<QWidget *>(QStringLiteral("effectIntensityEditor"));
+    QVERIFY(effectComboBox != nullptr && intensitySpinBox != nullptr);
+    QVERIFY(intensitySlider != nullptr && intensityEditor != nullptr);
+
+    QSignalSpy clipSettingsSpy(&panel, &QtPropertiesPanel::clipSettingsEdited);
+
+    // Applying stored clip state must not look like a user edit, and an
+    // inactive effect must disable its own intensity control.
+    ClipSettings settings;
+    panel.setEditingEnabled(true);
+    panel.setClipSettings(settings);
+    QCOMPARE(clipSettingsSpy.count(), 0);
+    QVERIFY(!intensityEditor->isEnabled());
+
+    settings.effect = ClipEffectKind::Blur;
+    settings.effectIntensityPercent = 40;
+    panel.setClipSettings(settings);
+    QCOMPARE(clipSettingsSpy.count(), 0);
+    QCOMPARE(effectComboBox->currentData().toInt(),
+             static_cast<int>(ClipEffectKind::Blur));
+    QCOMPARE(intensitySpinBox->value(), 40);
+    QCOMPARE(intensitySlider->value(), 40);
+    QVERIFY(intensityEditor->isEnabled());
+
+    intensitySlider->setValue(75);
+    QCOMPARE(clipSettingsSpy.count(), 1);
+    const QList<QVariant> intensityEdit = clipSettingsSpy.takeFirst();
+    QCOMPARE(intensityEdit[5].toInt(), static_cast<int>(ClipEffectKind::Blur));
+    QCOMPARE(intensityEdit[6].toInt(), 75);
+
+    effectComboBox->setCurrentIndex(
+        effectComboBox->findData(static_cast<int>(ClipEffectKind::Grayscale)));
+    QCOMPARE(clipSettingsSpy.count(), 1);
+    QCOMPARE(clipSettingsSpy.takeFirst()[5].toInt(),
+             static_cast<int>(ClipEffectKind::Grayscale));
+}
+
+void MiniEditorQtWidgetTests::previewEffectPipelineProcessesOffTheUiThreadAndConflates()
+{
+    QImage source(8, 8, QImage::Format_ARGB32);
+    source.fill(QColor(200, 100, 50));
+
+    // The worker's own function is checked first, so a later threading failure
+    // cannot be mistaken for an arithmetic one.
+    const QImage grayscale = QtFrameEffectProcessor::applyEffect(
+        source, ClipEffectKind::Grayscale, 100);
+    const int expectedGray = qGray(qRgb(200, 100, 50));
+    QCOMPARE(qRed(grayscale.pixel(0, 0)), expectedGray);
+    QCOMPARE(qGreen(grayscale.pixel(0, 0)), expectedGray);
+    QCOMPARE(qBlue(grayscale.pixel(0, 0)), expectedGray);
+
+    // Intensity blends the effect back over the untouched frame.
+    const QImage halfGrayscale = QtFrameEffectProcessor::applyEffect(
+        source, ClipEffectKind::Grayscale, 50);
+    QCOMPARE(qRed(halfGrayscale.pixel(0, 0)), 200 + (expectedGray - 200) / 2);
+
+    // An inactive effect must return the frame untouched, so the preview can
+    // skip the thread hop entirely.
+    QCOMPARE(QtFrameEffectProcessor::applyEffect(source, ClipEffectKind::None, 100),
+             source);
+    QCOMPARE(QtFrameEffectProcessor::applyEffect(source, ClipEffectKind::Invert, 0),
+             source);
+
+    // The worker really must run away from this thread. Ported from
+    // ThreadedEffectPreview's tst_frameprocessor: move the worker onto a real
+    // QThread, queue a request, and record where the result was emitted. The
+    // direct connection runs the observer in the emitting thread.
+    {
+        QThread workerThread;
+        QtFrameEffectProcessor processor;
+        processor.moveToThread(&workerThread);
+        QThread *observedThread = nullptr;
+        QObject::connect(&processor, &QtFrameEffectProcessor::frameProcessed,
+                         &processor,
+                         [&observedThread](int, const QImage &) {
+                             observedThread = QThread::currentThread();
+                         },
+                         Qt::DirectConnection);
+        QSignalSpy workerSpy(&processor, &QtFrameEffectProcessor::frameProcessed);
+        workerThread.start();
+        QVERIFY(QMetaObject::invokeMethod(&processor, "processFrame",
+                                          Qt::QueuedConnection,
+                                          Q_ARG(int, 7), Q_ARG(QImage, source),
+                                          Q_ARG(ClipEffectKind, ClipEffectKind::Grayscale),
+                                          Q_ARG(int, 100)));
+        QVERIFY(workerSpy.wait(5000));
+        QCOMPARE(workerSpy.takeFirst().first().toInt(), 7);
+        QVERIFY(observedThread != nullptr);
+        QVERIFY(observedThread != QThread::currentThread());
+        QCOMPARE(observedThread, &workerThread);
+        workerThread.requestInterruption();
+        workerThread.quit();
+        QVERIFY(workerThread.wait(5000));
+    }
+
+    QtPreviewEffectPipeline pipeline;
+    QSignalSpy processedSpy(&pipeline, &QtPreviewEffectPipeline::frameProcessed);
+
+    QVERIFY(!pipeline.submit(source, ClipEffectKind::None, 100));
+    QVERIFY(pipeline.submit(source, ClipEffectKind::Invert, 100));
+    QVERIFY(processedSpy.wait(5000));
+    const QImage result = processedSpy.takeFirst().first().value<QImage>();
+    QCOMPARE(qRed(result.pixel(0, 0)), 55);
+    QCOMPARE(qGreen(result.pixel(0, 0)), 155);
+    QCOMPARE(qBlue(result.pixel(0, 0)), 205);
+
+    // A live preview cannot stop producing frames, so the pipeline conflates:
+    // while the worker is busy it keeps only the newest frame and drops the
+    // rest instead of growing an unbounded queue.
+    const int droppedBefore = pipeline.droppedFrameCount();
+    for (int submission = 0; submission < 12; ++submission)
+        QVERIFY(pipeline.submit(source, ClipEffectKind::Blur, 100));
+    QVERIFY(pipeline.droppedFrameCount() > droppedBefore);
+    QVERIFY(pipeline.droppedFrameCount() - droppedBefore < 12);
+
+    // Clearing while a slow request is active invalidates that result. The
+    // next source/effect must be the only image allowed back to the UI.
+    QtPreviewEffectPipeline staleResultPipeline;
+    QSignalSpy currentResultSpy(
+        &staleResultPipeline, &QtPreviewEffectPipeline::frameProcessed);
+    QImage slowFrame(1024, 1024, QImage::Format_ARGB32);
+    slowFrame.fill(QColor(10, 20, 30));
+    QVERIFY(staleResultPipeline.submit(slowFrame, ClipEffectKind::Blur, 100));
+    staleResultPipeline.clear();
+    QVERIFY(staleResultPipeline.submit(source, ClipEffectKind::Invert, 100));
+    QVERIFY(currentResultSpy.wait(5000));
+    QCOMPARE(currentResultSpy.count(), 1);
+    const QImage currentResult = currentResultSpy.takeFirst().first().value<QImage>();
+    QCOMPARE(currentResult.size(), source.size());
+    QCOMPARE(qRed(currentResult.pixel(0, 0)), 55);
 }
 
 void MiniEditorQtWidgetTests::transportRefreshAndButtonsUseSemanticCommands()

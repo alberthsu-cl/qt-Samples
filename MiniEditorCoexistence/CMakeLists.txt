@@ -47,6 +47,7 @@ add_executable(MiniEditorCoexistence WIN32
     src/TimelineGeometry.cpp
     src/TimelineClipEdit.h
     src/TimelineClipEdit.cpp
+    src/ClipEffect.h
     src/ClipFade.h
     src/ClipFade.cpp
     src/TimelineTrackPolicy.h
@@ -123,6 +124,7 @@ source_group("Layout" FILES
     src/TimelineGeometry.cpp
     src/TimelineClipEdit.h
     src/TimelineClipEdit.cpp
+    src/ClipEffect.h
     src/ClipFade.h
     src/ClipFade.cpp
     src/TimelineTrackPolicy.h
@@ -183,6 +185,7 @@ if(BUILD_TESTING)
         src/TimelineGeometry.cpp
         src/TimelineClipEdit.h
         src/TimelineClipEdit.cpp
+        src/ClipEffect.h
         src/ClipFade.h
         src/ClipFade.cpp
         src/TimelineTrackPolicy.h
@@ -254,6 +257,10 @@ if(MINI_EDITOR_USE_QT)
         src/QtTransportHost.cpp
         src/QtPreviewPanel.h
         src/QtPreviewPanel.cpp
+        src/QtFrameEffectProcessor.h
+        src/QtFrameEffectProcessor.cpp
+        src/QtPreviewEffectPipeline.h
+        src/QtPreviewEffectPipeline.cpp
         src/QtPreviewHost.h
         src/QtPreviewHost.cpp
         src/QtMediaPlaybackBackend.h
@@ -309,6 +316,10 @@ if(MINI_EDITOR_USE_QT)
             src/QtPropertiesPanel.cpp
             src/QtPreviewPanel.h
             src/QtPreviewPanel.cpp
+            src/QtFrameEffectProcessor.h
+            src/QtFrameEffectProcessor.cpp
+            src/QtPreviewEffectPipeline.h
+            src/QtPreviewEffectPipeline.cpp
             src/ClipPropertiesStateResolver.h
             src/QtTransportPanel.h
             src/QtTransportPanel.cpp
@@ -319,6 +330,7 @@ if(MINI_EDITOR_USE_QT)
             src/TimelineGeometry.cpp
             src/TimelineClipEdit.h
             src/TimelineClipEdit.cpp
+            src/ClipEffect.h
             src/ClipFade.h
             src/ClipFade.cpp
             src/TimelineTrackPolicy.h

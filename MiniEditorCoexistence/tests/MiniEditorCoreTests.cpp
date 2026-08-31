@@ -572,6 +572,23 @@ void timelineEditingControllerCoordinatesFocusAndSplitPolicy()
                 && session.playbackState().currentFrame == 50,
             "Controller clip focus must map the placement to its source asset without resetting time.");
 
+    // Reproduce the UI ordering regression: pause over the first placement,
+    // then click a different clip without moving the timeline head.
+    session.seekTimeline(120);
+    session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+    require(session.timelinePlaybackState().isPaused,
+            "The selection regression requires a paused timeline preview.");
+    require(controller.focusClip(insertedClipId, false),
+            "A paused timeline must allow selecting another clip for editing.");
+    const PreviewState selectedWhilePaused =
+        PreviewStateResolver::resolve(session, library);
+    require(!session.timelinePlaybackState().isPaused
+                && session.timelinePlaybackState().currentFrame == 120
+                && selectedWhilePaused.mediaAssetId == secondVideoId
+                && selectedWhilePaused.sourceFrame == 0,
+            "A clip click must keep the head but preview the selected clip's first frame.");
+
     controller.focusFrame(120);
     require(session.selectedTimelineClipId() == videoClipId,
             "V1 must win focus when video and audio overlap at the timeline head.");
@@ -720,10 +737,14 @@ void previewStateResolverKeepsPreviewPolicyFrameworkNeutral()
     session.setPlaybackDuration(session.timelineModel().contentDurationFrames(), false);
     session.seekTimeline(50);
     preview = PreviewStateResolver::resolve(session, library);
+    const std::optional<ResolvedTimelineMedia> focusedVideo =
+        PreviewStateResolver::resolveTimelineVideo(session, library);
     require(preview.mode == PreviewMode::Timeline && preview.hasMedia
                 && preview.mediaAssetId == videoId && preview.sourceFrame == 20
-                && preview.settings.opacityPercent == 70,
-            "A stopped focused video clip must preview its clip settings at its own start.");
+                && preview.settings.opacityPercent == 70
+                && focusedVideo && focusedVideo->clipId == videoClipId
+                && focusedVideo->sourceFrame == 20,
+            "A stopped focused video clip and decoder must resolve the same clip start.");
 
     session.seekTimeline(150);
     session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
@@ -901,6 +922,7 @@ void focusedTimelineClipOwnsIndependentPlacementSettings()
 
 void playbackStopsAtFocusedPreviewDuration()
 {
+    // Source preview preserves its final frame for inspection.
     EditorSession session(1);
     session.setPlaybackDuration(3, true);
     session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
@@ -913,6 +935,21 @@ void playbackStopsAtFocusedPreviewDuration()
             "Natural playback end must preserve the final resolved preview frame.");
     require(session.playbackState().currentFrame == 2,
             "Stopped preview playback must remain on its final valid frame.");
+
+    // Timeline completion instead rewinds and enters a stopped state so the
+    // next Play command starts immediately from the beginning.
+    const int timelineClipId = session.addTimelineClip(
+        1, TimelineTrackType::Video, 0, 3);
+    session.selectTimelineClip(timelineClipId, 0);
+    session.setPlaybackDuration(3, true);
+    session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+    session.advancePlaybackFrame();
+    session.advancePlaybackFrame();
+    session.advancePlaybackFrame();
+    require(!session.timelinePlaybackState().isPlaying
+                && !session.timelinePlaybackState().isPaused
+                && session.timelinePlaybackState().currentFrame == 0,
+            "Natural timeline completion must stop and return the head to frame zero.");
 }
 
 void pausedPlaybackPreservesItsCurrentFrame()
@@ -1439,18 +1476,28 @@ void clipFadesTravelThroughSessionUndoAndProjectFiles()
     ClipSettings settings;
     settings.fadeInFrames = 40;
     settings.fadeOutFrames = 20;
+    settings.effect = ClipEffectKind::Grayscale;
+    settings.effectIntensityPercent = 65;
     session.updateSelectedClipSettings(settings);
     const TimelineClip *videoClip = session.timelineModel().findClip(videoClipId);
     require(videoClip != nullptr && videoClip->settings.fadeInFrames == 40
-                && videoClip->settings.fadeOutFrames == 20,
-            "The session must store the requested fade lengths on the focused clip.");
+                && videoClip->settings.fadeOutFrames == 20
+                && videoClip->settings.effect == ClipEffectKind::Grayscale
+                && videoClip->settings.effectIntensityPercent == 65,
+            "The session must store fades and DSP on the focused clip.");
 
     require(session.undo(), "A fade edit must be undoable.");
     require(session.timelineModel().findClip(videoClipId)->settings.fadeInFrames == 0,
             "Undo must restore the previous fade lengths.");
+    require(session.timelineModel().findClip(videoClipId)->settings.effect
+                == ClipEffectKind::None,
+            "Undo must restore the previous DSP effect.");
     require(session.redo(), "A fade edit must be redoable.");
     require(session.timelineModel().findClip(videoClipId)->settings.fadeInFrames == 40,
             "Redo must reapply the stored fade lengths.");
+    require(session.timelineModel().findClip(videoClipId)->settings.effect
+                == ClipEffectKind::Grayscale,
+            "Redo must reapply the stored DSP effect.");
 
     // Splitting divides the clip, so each half keeps only the ramp it owns.
     const int rightPieceId = session.splitTimelineClip(videoClipId, 60,
@@ -1517,8 +1564,10 @@ void clipFadesTravelThroughSessionUndoAndProjectFiles()
         [videoId](const TimelineClip &clip) { return clip.mediaAssetId == videoId; });
     require(savedVideoClip != loaded->timelineItems.end()
                 && savedVideoClip->settings.fadeInFrames == 40
-                && savedVideoClip->settings.fadeOutFrames == 20,
-            "Format version 7 must round-trip both fade lengths.");
+                && savedVideoClip->settings.fadeOutFrames == 20
+                && savedVideoClip->settings.effect == ClipEffectKind::Grayscale
+                && savedVideoClip->settings.effectIntensityPercent == 65,
+            "Format version 8 must round-trip fades and DSP settings.");
 
     // Save must reject values above the editor's supported maximum even when
     // the clip itself is long enough. Otherwise load would silently clamp the

@@ -150,13 +150,44 @@ QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
 
     dspGroup_ = new QGroupBox(QStringLiteral("DSP"), formContainer_);
     dspGroup_->setObjectName(QStringLiteral("dspGroup"));
-    auto *dspLayout = new QVBoxLayout(dspGroup_);
-    auto *dspPlaceholder = new QLabel(
-        QStringLiteral("Image-processing controls will be added here."), dspGroup_);
-    dspPlaceholder->setObjectName(QStringLiteral("dspPlaceholderLabel"));
-    dspPlaceholder->setWordWrap(true);
-    dspPlaceholder->setStyleSheet(QStringLiteral("color: #9da3af; font-weight: normal;"));
-    dspLayout->addWidget(dspPlaceholder);
+    auto *dspLayout = new QFormLayout(dspGroup_);
+    dspLayout->setLabelAlignment(Qt::AlignRight);
+
+    effectComboBox_ = new QComboBox(dspGroup_);
+    effectComboBox_->setObjectName(QStringLiteral("effectComboBox"));
+    for (const ClipEffectKind effect : { ClipEffectKind::None,
+                                         ClipEffectKind::Grayscale,
+                                         ClipEffectKind::Invert,
+                                         ClipEffectKind::Blur }) {
+        effectComboBox_->addItem(
+            QString::fromWCharArray(clipEffectDisplayName(effect)),
+            static_cast<int>(effect));
+    }
+
+    effectIntensitySlider_ = new QSlider(Qt::Horizontal, dspGroup_);
+    effectIntensitySlider_->setObjectName(QStringLiteral("effectIntensitySlider"));
+    effectIntensitySpinBox_ = new QSpinBox(dspGroup_);
+    effectIntensitySpinBox_->setObjectName(QStringLiteral("effectIntensitySpinBox"));
+    effectIntensitySpinBox_->setSuffix(QStringLiteral(" %"));
+    effectIntensitySpinBox_->setKeyboardTracking(false);
+    if (QStyle *inputStyle = paletteAwareInputStyle())
+        effectIntensitySpinBox_->setStyle(inputStyle);
+    effectIntensitySlider_->setRange(kMinimumEffectIntensityPercent,
+                                     kMaximumEffectIntensityPercent);
+    effectIntensitySpinBox_->setRange(kMinimumEffectIntensityPercent,
+                                      kMaximumEffectIntensityPercent);
+    effectIntensityEditor_ = createSliderEditor(effectIntensitySlider_,
+                                                effectIntensitySpinBox_, dspGroup_);
+    effectIntensityEditor_->setObjectName(QStringLiteral("effectIntensityEditor"));
+
+    dspLayout->addRow(QStringLiteral("Effect"), effectComboBox_);
+    dspLayout->addRow(QStringLiteral("Intensity"), effectIntensityEditor_);
+    auto *dspNote = new QLabel(
+        QStringLiteral("Apply on selected timeline clip."), dspGroup_);
+    dspNote->setObjectName(QStringLiteral("dspNoteLabel"));
+    dspNote->setWordWrap(true);
+    dspNote->setStyleSheet(QStringLiteral("color: #9da3af; font-weight: normal;"));
+    dspLayout->addRow(dspNote);
 
     opacityEditor_ = createSliderEditor(opacitySlider_, opacitySpinBox_, this);
     opacityEditor_->setObjectName(QStringLiteral("opacityEditor"));
@@ -234,8 +265,30 @@ QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
                 updateFadeSummary();
                 emitCurrentSettings();
             });
+    connect(effectComboBox_, qOverload<int>(&QComboBox::currentIndexChanged), this,
+            [this](int) {
+                updateEffectIntensityEnabled();
+                emitCurrentSettings();
+            });
+    connect(effectIntensitySlider_, &QSlider::valueChanged,
+            effectIntensitySpinBox_, &QSpinBox::setValue);
+    connect(effectIntensitySpinBox_, qOverload<int>(&QSpinBox::valueChanged), this,
+            [this](int value) {
+                const QSignalBlocker blockSlider(effectIntensitySlider_);
+                effectIntensitySlider_->setValue(value);
+                emitCurrentSettings();
+            });
+
     updateFadeSummary();
+    updateEffectIntensityEnabled();
     updateTargetPresentation({});
+}
+
+void QtPropertiesPanel::updateEffectIntensityEnabled()
+{
+    const bool hasEffect = effectComboBox_->currentData().toInt()
+        != static_cast<int>(ClipEffectKind::None);
+    effectIntensityEditor_->setEnabled(hasEffect);
 }
 
 void QtPropertiesPanel::setClipDurationFrames(int durationFrames)
@@ -405,6 +458,9 @@ void QtPropertiesPanel::setClipSettings(const ClipSettings &settings)
     const QSignalBlocker blockFadeInSpinBox(fadeInSpinBox_);
     const QSignalBlocker blockFadeOutSlider(fadeOutSlider_);
     const QSignalBlocker blockFadeOutSpinBox(fadeOutSpinBox_);
+    const QSignalBlocker blockEffect(effectComboBox_);
+    const QSignalBlocker blockEffectSlider(effectIntensitySlider_);
+    const QSignalBlocker blockEffectSpinBox(effectIntensitySpinBox_);
     opacitySlider_->setValue(settings.opacityPercent);
     opacitySpinBox_->setValue(settings.opacityPercent);
     scaleSlider_->setValue(settings.scalePercent);
@@ -412,6 +468,13 @@ void QtPropertiesPanel::setClipSettings(const ClipSettings &settings)
     positionComboBox_->setCurrentIndex(positionComboBox_->findData(
         static_cast<int>(settings.position)));
     setFadeValues(settings.fadeInFrames, settings.fadeOutFrames);
+    const int effectIndex = effectComboBox_->findData(
+        static_cast<int>(settings.effect));
+    if (effectIndex >= 0)
+        effectComboBox_->setCurrentIndex(effectIndex);
+    effectIntensitySlider_->setValue(settings.effectIntensityPercent);
+    effectIntensitySpinBox_->setValue(settings.effectIntensityPercent);
+    updateEffectIntensityEnabled();
     updateFadeSummary();
 }
 
@@ -426,6 +489,10 @@ void QtPropertiesPanel::setEditingEnabled(bool enabled)
     fadeInSpinBox_->setEnabled(enabled);
     fadeOutSlider_->setEnabled(enabled);
     fadeOutSpinBox_->setEnabled(enabled);
+    effectComboBox_->setEnabled(enabled);
+    effectIntensityEditor_->setEnabled(enabled
+        && effectComboBox_->currentData().toInt()
+            != static_cast<int>(ClipEffectKind::None));
     setToolTip(enabled
         ? QString()
         : QStringLiteral("Select a timeline clip to edit placement properties."));
@@ -437,5 +504,7 @@ void QtPropertiesPanel::emitCurrentSettings()
                             scaleSpinBox_->value(),
                             positionComboBox_->currentData().toInt(),
                             fadeInSpinBox_->value(),
-                            fadeOutSpinBox_->value());
+                            fadeOutSpinBox_->value(),
+                            effectComboBox_->currentData().toInt(),
+                            effectIntensitySpinBox_->value());
 }

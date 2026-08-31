@@ -32,14 +32,17 @@ bool QtPropertiesHost::create(void *mfcParentWindowHandle)
     QObject::connect(panel_.get(), &QtPropertiesPanel::clipSettingsEdited,
                      panel_.get(),
                      [this](int opacityPercent, int scalePercent, int positionValue,
-                            int fadeInFrames, int fadeOutFrames) {
+                            int fadeInFrames, int fadeOutFrames,
+                            int effectValue, int effectIntensityPercent) {
                          if (clipSettingsEditedHandler_) {
                              clipSettingsEditedHandler_(ClipSettings{
                                  opacityPercent,
                                  scalePercent,
                                  static_cast<ClipPosition>(positionValue),
                                  fadeInFrames,
-                                 fadeOutFrames
+                                 fadeOutFrames,
+                                 static_cast<ClipEffectKind>(effectValue),
+                                 effectIntensityPercent
                              });
                          }
                      });
