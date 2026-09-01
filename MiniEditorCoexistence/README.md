@@ -456,6 +456,14 @@ real media clock without owning the player. The MFC timer remains only as the
 outer-loop bridge that lets queued Qt Multimedia callbacks reach the UI thread.
 It does not advance frames while a real video source is playing.
 
+The Qt transport uses one compact cycling button for preview rates of **0.5x,
+1.0x, 1.5x, and 2.0x**.
+One transient `playbackRatePercent` value is shared by source and timeline
+contexts. `QtMediaPlaybackBackend` applies it to both the V1 media player and
+the independent A1 audio player, while simulated still-image and gap playback
+derives a matching timer interval. The rate is not serialized and does not
+change clip duration or edit timing.
+
 For timeline playback, the framework-neutral `TimelinePlaybackResolver` maps
 the timeline playhead to its active video placement and source-media frame.
 `QtMediaPlaybackBackend` then loads or seeks that file, and switches the player

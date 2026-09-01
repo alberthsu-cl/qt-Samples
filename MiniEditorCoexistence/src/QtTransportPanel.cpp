@@ -12,8 +12,34 @@
 #include <QToolButton>
 
 #include <algorithm>
+#include <iterator>
 
 namespace {
+
+constexpr int kPlaybackRates[] = { 50, 100, 150, 200 };
+
+QString playbackRateText(int ratePercent)
+{
+    if (ratePercent % 100 == 0)
+        return QStringLiteral("%1.0x").arg(ratePercent / 100);
+
+    return QStringLiteral("%1.%2x")
+        .arg(ratePercent / 100)
+        .arg((ratePercent % 100) / 10);
+}
+
+int nextPlaybackRate(int currentRatePercent)
+{
+    const auto current = std::find(std::begin(kPlaybackRates),
+                                   std::end(kPlaybackRates),
+                                   currentRatePercent);
+    if (current == std::end(kPlaybackRates)
+        || std::next(current) == std::end(kPlaybackRates)) {
+        return kPlaybackRates[0];
+    }
+
+    return *std::next(current);
+}
 
 class ClickSeekSlider final : public QSlider
 {
@@ -78,6 +104,9 @@ QtTransportPanel::QtTransportPanel(QWidget *parent)
                                         QStringLiteral("Stop playback"),
                                         QSize(54, 30), this))
     , positionSlider_(new ClickSeekSlider(Qt::Horizontal, this))
+    , playbackRateButton_(createTransportButton(
+          QStringLiteral("1.0x"), QStringLiteral("Change preview playback speed"),
+          QSize(58, 30), this))
     , timecodeLabel_(new QLabel(this))
 {
     stepBackwardButton_->setObjectName(QStringLiteral("stepBackwardButton"));
@@ -85,6 +114,7 @@ QtTransportPanel::QtTransportPanel(QWidget *parent)
     stepForwardButton_->setObjectName(QStringLiteral("stepForwardButton"));
     stopButton_->setObjectName(QStringLiteral("stopButton"));
     positionSlider_->setObjectName(QStringLiteral("positionSlider"));
+    playbackRateButton_->setObjectName(QStringLiteral("playbackRateButton"));
     timecodeLabel_->setObjectName(QStringLiteral("timecodeLabel"));
 
     setStyleSheet(QStringLiteral(
@@ -103,6 +133,9 @@ QtTransportPanel::QtTransportPanel(QWidget *parent)
         "QToolButton#playPauseButton:hover { background: #4796ec; }"
         "QToolButton#playPauseButton:checked { background: #b96b2c; "
         "border-color: #e7a45d; }"
+        "QToolButton#playbackRateButton { background: #30343d; color: #e6e8ed; "
+        "border: 1px solid #525865; padding: 3px; }"
+        "QToolButton#playbackRateButton:hover { background: #3c5572; }"
         "QLabel { background: #101114; color: #e6e8ed; padding: 6px; "
         "border: 1px solid #30343d; border-radius: 3px; "
         "font-family: Consolas, monospace; }"));
@@ -133,6 +166,7 @@ QtTransportPanel::QtTransportPanel(QWidget *parent)
     layout->setContentsMargins(10, 6, 10, 6);
     layout->setSpacing(8);
     layout->addWidget(transportControls);
+    layout->addWidget(playbackRateButton_, 0, Qt::AlignVCenter);
     // Use Qt's native slider appearance, exactly like the Zoom control. It
     // supplies matching minimum/maximum endpoint spacing by itself.
     layout->addWidget(positionSlider_, 1, Qt::AlignVCenter);
@@ -148,6 +182,11 @@ QtTransportPanel::QtTransportPanel(QWidget *parent)
             [this] { emit playbackCommandRequested(static_cast<int>(PlaybackCommand::Stop)); });
     connect(positionSlider_, &QSlider::sliderMoved, this,
             &QtTransportPanel::playbackPositionRequested);
+    connect(playbackRateButton_, &QToolButton::clicked, this, [this] {
+        const int currentRate = playbackRateButton_->property(
+            "ratePercent").toInt();
+        emit playbackRateRequested(nextPlaybackRate(currentRate));
+    });
 
     setPlaybackState({});
     updateResponsiveControls();
@@ -159,6 +198,7 @@ void QtTransportPanel::setPlaybackState(const PlaybackState &state)
     // this view update from becoming a false command back to the MFC owner.
     const QSignalBlocker signalBlocker(playPauseButton_);
     const QSignalBlocker sliderBlocker(positionSlider_);
+    const QSignalBlocker rateBlocker(playbackRateButton_);
     playPauseButton_->setChecked(state.isPlaying);
     playPauseButton_->setText(state.isPlaying ? QStringLiteral("Pause")
                                                : QStringLiteral("Play"));
@@ -166,6 +206,10 @@ void QtTransportPanel::setPlaybackState(const PlaybackState &state)
                                                   : QStringLiteral("Play playback"));
     positionSlider_->setRange(0, std::max(0, state.durationFrames - 1));
     positionSlider_->setValue(state.currentFrame);
+    playbackRateButton_->setProperty("ratePercent",
+                                     state.playbackRatePercent);
+    playbackRateButton_->setText(playbackRateText(
+        state.playbackRatePercent));
     timecodeLabel_->setText(timecodeText(state));
 }
 
@@ -195,8 +239,10 @@ void QtTransportPanel::updateResponsiveControls()
     // transport. Preserve a useful seek bar first, then reveal secondary
     // controls as the panel receives more room.
     const bool showFrameSteps = width() >= 560;
+    const bool showPlaybackRate = width() >= 500;
     const bool showTimecode = width() >= 420;
     stepBackwardButton_->setVisible(showFrameSteps);
     stepForwardButton_->setVisible(showFrameSteps);
+    playbackRateButton_->setVisible(showPlaybackRate);
     timecodeLabel_->setVisible(showTimecode);
 }

@@ -345,7 +345,7 @@ void MiniEditorQtWidgetTests::propertiesModelRefreshDoesNotEmitUserEdit()
     QCOMPARE(panel.findChild<QLabel *>(QStringLiteral("fadeSummaryLabel"))->text(),
              QStringLiteral("60 of 90 frames at full level"));
     QCOMPARE(panel.findChild<QSpinBox *>(QStringLiteral("fadeInSpinBox"))->toolTip(),
-             QStringLiteral("Frames the clip takes to ramp up from silence."));
+             QStringLiteral("Set equal fade-in and fade-out ramps from/to silence."));
     // Opacity is one row inside a group that audio still uses, so that row is
     // hidden on its own. Scale and Position are the whole Size / Position
     // group, which is hidden as a unit rather than leaving a titled empty box.
@@ -383,7 +383,7 @@ void MiniEditorQtWidgetTests::propertiesModelRefreshDoesNotEmitUserEdit()
     QVERIFY(!panel.findChild<QComboBox *>(
                  QStringLiteral("positionComboBox"))->isHidden());
     QCOMPARE(panel.findChild<QSpinBox *>(QStringLiteral("fadeInSpinBox"))->toolTip(),
-             QStringLiteral("Frames the clip takes to ramp up from transparent."));
+             QStringLiteral("Set equal fade-in and fade-out ramps from/to transparent."));
     QCOMPARE(editedSpy.count(), 0);
 
     viewState.editingEnabled = false;
@@ -444,23 +444,38 @@ void MiniEditorQtWidgetTests::propertiesFadeEditorsRespectTheClipDuration()
     QCOMPARE(fadeOut->maximum(), 90);
     QCOMPARE(fadeOutSlider->maximum(), 90);
 
-    // The fade being dragged wins; the other one yields so the pair still fits.
-    fadeInSlider->setValue(85);
-    QCOMPARE(fadeIn->value(), 85);
-    QCOMPARE(fadeOut->value(), 5);
-    QCOMPARE(fadeOutSlider->value(), 5);
+    // Fade in is the symmetric shortcut: one edit initializes both ramps.
+    fadeInSlider->setValue(40);
+    QCOMPARE(fadeIn->value(), 40);
+    QCOMPARE(fadeOut->value(), 40);
+    QCOMPARE(fadeOutSlider->value(), 40);
     QCOMPARE(summary->text(),
-             QStringLiteral("0 of 90 frames at full opacity"));
+             QStringLiteral("10 of 90 frames at full opacity"));
     QCOMPARE(editedSpy.count(), 1);
     const QList<QVariant> fadeArguments = editedSpy.takeFirst();
-    QCOMPARE(fadeArguments[3].toInt(), 85);
-    QCOMPARE(fadeArguments[4].toInt(), 5);
+    QCOMPARE(fadeArguments[3].toInt(), 40);
+    QCOMPARE(fadeArguments[4].toInt(), 40);
+
+    // Fade out is the independent override and never changes Fade in.
+    fadeOutSlider->setValue(10);
+    QCOMPARE(fadeIn->value(), 40);
+    QCOMPARE(fadeOut->value(), 10);
+    QCOMPARE(editedSpy.count(), 1);
+    const QList<QVariant> asymmetricArguments = editedSpy.takeFirst();
+    QCOMPARE(asymmetricArguments[3].toInt(), 40);
+    QCOMPARE(asymmetricArguments[4].toInt(), 10);
+
+    // An excessive Fade out clamps itself; the established Fade in remains.
+    fadeOutSlider->setValue(80);
+    QCOMPARE(fadeIn->value(), 40);
+    QCOMPARE(fadeOut->value(), 50);
+    editedSpy.clear();
 
     // Trimming the clip shorter keeps the stored pair valid and proportional,
     // and a model refresh must never look like a user edit.
     panel.setClipDurationFrames(45);
-    QCOMPARE(fadeIn->value(), 42);
-    QCOMPARE(fadeOut->value(), 3);
+    QCOMPARE(fadeIn->value(), 20);
+    QCOMPARE(fadeOut->value(), 25);
     QCOMPARE(fadeIn->maximum(), 45);
     QCOMPARE(editedSpy.count(), 0);
 
@@ -617,16 +632,19 @@ void MiniEditorQtWidgetTests::transportRefreshAndButtonsUseSemanticCommands()
     QtTransportPanel panel;
     QSignalSpy commandSpy(&panel, &QtTransportPanel::playbackCommandRequested);
     QSignalSpy positionSpy(&panel, &QtTransportPanel::playbackPositionRequested);
+    QSignalSpy rateSpy(&panel, &QtTransportPanel::playbackRateRequested);
 
     PlaybackState playback;
     playback.isPlaying = true;
     playback.currentFrame = 45;
     playback.durationFrames = 90;
     playback.framesPerSecond = 30;
+    playback.playbackRatePercent = 150;
     panel.setPlaybackState(playback);
 
     QCOMPARE(commandSpy.count(), 0);
     QCOMPARE(positionSpy.count(), 0);
+    QCOMPARE(rateSpy.count(), 0);
     QCOMPARE(panel.findChild<QToolButton *>(QStringLiteral("playPauseButton"))->text(),
              QStringLiteral("Pause"));
     QVERIFY(panel.findChild<QWidget *>(QStringLiteral("transportControls")) != nullptr);
@@ -637,6 +655,10 @@ void MiniEditorQtWidgetTests::transportRefreshAndButtonsUseSemanticCommands()
     QCOMPARE(panel.findChild<QSlider *>(QStringLiteral("positionSlider"))->value(), 45);
     QCOMPARE(panel.findChild<QLabel *>(QStringLiteral("timecodeLabel"))->text(),
              QStringLiteral("00:00:01:15"));
+    QToolButton *rateButton = panel.findChild<QToolButton *>(
+        QStringLiteral("playbackRateButton"));
+    QVERIFY(rateButton != nullptr);
+    QCOMPARE(rateButton->text(), QStringLiteral("1.5x"));
 
     QSlider *positionSlider = panel.findChild<QSlider *>(
         QStringLiteral("positionSlider"));
@@ -658,6 +680,15 @@ void MiniEditorQtWidgetTests::transportRefreshAndButtonsUseSemanticCommands()
     QVERIFY(!panel.findChild<QToolButton *>(QStringLiteral("stepBackwardButton"))->isHidden());
     QVERIFY(!panel.findChild<QToolButton *>(QStringLiteral("stepForwardButton"))->isHidden());
     QVERIFY(!panel.findChild<QLabel *>(QStringLiteral("timecodeLabel"))->isHidden());
+    QVERIFY(!rateButton->isHidden());
+
+    QTest::mouseClick(rateButton, Qt::LeftButton);
+    QCOMPARE(rateSpy.count(), 1);
+    QCOMPARE(rateSpy.takeFirst()[0].toInt(), 200);
+    playback.playbackRatePercent = 200;
+    panel.setPlaybackState(playback);
+    QTest::mouseClick(rateButton, Qt::LeftButton);
+    QCOMPARE(rateSpy.takeFirst()[0].toInt(), 50);
 
     QTest::mouseClick(panel.findChild<QToolButton *>(QStringLiteral("playPauseButton")),
                       Qt::LeftButton);

@@ -42,6 +42,11 @@ bool QtTransportHost::create(void *mfcParentWindowHandle)
                          if (playbackPositionHandler_)
                              playbackPositionHandler_(frame);
                      });
+    QObject::connect(panel_.get(), &QtTransportPanel::playbackRateRequested,
+                     panel_.get(), [this](int ratePercent) {
+                         if (playbackRateHandler_)
+                             playbackRateHandler_(ratePercent);
+                     });
     panel_->show();
     return true;
 }
@@ -71,4 +76,9 @@ void QtTransportHost::setPlaybackCommandHandler(PlaybackCommandHandler handler)
 void QtTransportHost::setPlaybackPositionHandler(PlaybackPositionHandler handler)
 {
     playbackPositionHandler_ = std::move(handler);
+}
+
+void QtTransportHost::setPlaybackRateHandler(PlaybackRateHandler handler)
+{
+    playbackRateHandler_ = std::move(handler);
 }

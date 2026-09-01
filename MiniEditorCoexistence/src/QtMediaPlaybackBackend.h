@@ -58,6 +58,7 @@ private:
     void finishSilentFirstFrameDecode();
     void cancelSilentFirstFrameDecode();
     bool shouldMuteVideoTrackAudio() const;
+    void applyPlaybackRate();
     void stopRealPlayback();
     void updateSessionFromPlayer();
     void setDecodedVideoVisible(bool visible);

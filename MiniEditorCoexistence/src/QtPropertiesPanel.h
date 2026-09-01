@@ -66,9 +66,10 @@ private:
 
     int fadeLimitFrames() const;
     void applyFadeRanges();
-    // The fade being dragged always moves freely across its whole range; the
-    // other one yields so the pair still fits inside the clip.
-    void yieldOppositeFade(bool fadeInChanged);
+    // Fade in is the convenient symmetric master; Fade out remains the
+    // explicit override for creating an asymmetric pair.
+    void applyLinkedFadeIn(int requestedFrames);
+    void applyIndependentFadeOut(int requestedFrames);
     void setFadeValues(int fadeInFrames, int fadeOutFrames);
     void updateTargetPresentation(const ClipPropertiesViewState &viewState);
     void updateMediaSpecificRows();

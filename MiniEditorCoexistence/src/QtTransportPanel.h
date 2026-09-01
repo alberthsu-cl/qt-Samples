@@ -24,6 +24,7 @@ public:
 signals:
     void playbackCommandRequested(int commandValue);
     void playbackPositionRequested(int frame);
+    void playbackRateRequested(int ratePercent);
 
 private:
     static QString timecodeText(const PlaybackState &state);
@@ -37,5 +38,6 @@ protected:
     QToolButton *stepForwardButton_ = nullptr;
     QToolButton *stopButton_ = nullptr;
     QSlider *positionSlider_ = nullptr;
+    QToolButton *playbackRateButton_ = nullptr;
     QLabel *timecodeLabel_ = nullptr;
 };

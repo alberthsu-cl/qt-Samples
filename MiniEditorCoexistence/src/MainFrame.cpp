@@ -247,6 +247,10 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
             timelineController_.seekFocusedPreview(frame);
             seekPreviewToCurrentFrame();
         });
+    transportHost_.setPlaybackRateHandler([this](int ratePercent) {
+        editorSession_.updatePlaybackRatePercent(ratePercent);
+        synchronizePlaybackTimer();
+    });
     timelineToolbarHost_.setViewStateEditedHandler([this](const TimelineViewState &state) {
         editorSession_.updateTimelineViewState(state);
     });

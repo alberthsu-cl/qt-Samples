@@ -14,6 +14,7 @@ class QtTransportHost final
 public:
     using PlaybackCommandHandler = std::function<void(PlaybackCommand command)>;
     using PlaybackPositionHandler = std::function<void(int frame)>;
+    using PlaybackRateHandler = std::function<void(int ratePercent)>;
 
     QtTransportHost();
     ~QtTransportHost();
@@ -26,9 +27,11 @@ public:
     void setPlaybackState(const PlaybackState &state);
     void setPlaybackCommandHandler(PlaybackCommandHandler handler);
     void setPlaybackPositionHandler(PlaybackPositionHandler handler);
+    void setPlaybackRateHandler(PlaybackRateHandler handler);
 
 private:
     std::unique_ptr<QtTransportPanel> panel_;
     PlaybackCommandHandler playbackCommandHandler_;
     PlaybackPositionHandler playbackPositionHandler_;
+    PlaybackRateHandler playbackRateHandler_;
 };

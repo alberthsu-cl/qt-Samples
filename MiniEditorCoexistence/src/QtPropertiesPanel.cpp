@@ -120,7 +120,7 @@ QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
     scaleSpinBox_->setSuffix(QStringLiteral(" %"));
 
     fadeInSpinBox_->setToolTip(QStringLiteral(
-        "Frames the clip takes to ramp up from transparent."));
+        "Set equal fade-in and fade-out lengths."));
     fadeOutSpinBox_->setToolTip(QStringLiteral(
         "Frames the clip takes to ramp down to transparent."));
     fadeInSlider_->setToolTip(fadeInSpinBox_->toolTip());
@@ -249,7 +249,7 @@ QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
                     const QSignalBlocker blockSlider(fadeInSlider_);
                     fadeInSlider_->setValue(value);
                 }
-                yieldOppositeFade(true);
+                applyLinkedFadeIn(value);
                 updateFadeSummary();
                 emitCurrentSettings();
             });
@@ -261,7 +261,7 @@ QtPropertiesPanel::QtPropertiesPanel(QWidget *parent)
                     const QSignalBlocker blockSlider(fadeOutSlider_);
                     fadeOutSlider_->setValue(value);
                 }
-                yieldOppositeFade(false);
+                applyIndependentFadeOut(value);
                 updateFadeSummary();
                 emitCurrentSettings();
             });
@@ -333,20 +333,23 @@ void QtPropertiesPanel::applyFadeRanges()
     fadeOutSpinBox_->setRange(0, limit);
 }
 
-void QtPropertiesPanel::yieldOppositeFade(bool fadeInChanged)
+void QtPropertiesPanel::applyLinkedFadeIn(int requestedFrames)
 {
-    if (clipDurationFrames_ <= 0)
-        return;
+    const int symmetricLimit = clipDurationFrames_ > 0
+        ? std::min(fadeLimitFrames(), clipDurationFrames_ / 2)
+        : fadeLimitFrames();
+    const int linkedFrames = std::clamp(requestedFrames, 0, symmetricLimit);
+    setFadeValues(linkedFrames, linkedFrames);
+}
 
-    const int fadeIn = fadeInSpinBox_->value();
-    const int fadeOut = fadeOutSpinBox_->value();
-    if (fadeIn + fadeOut <= clipDurationFrames_)
-        return;
-
-    if (fadeInChanged)
-        setFadeValues(fadeIn, clipDurationFrames_ - fadeIn);
-    else
-        setFadeValues(clipDurationFrames_ - fadeOut, fadeOut);
+void QtPropertiesPanel::applyIndependentFadeOut(int requestedFrames)
+{
+    const int maximumFadeOut = clipDurationFrames_ > 0
+        ? std::max(0, clipDurationFrames_ - fadeInSpinBox_->value())
+        : fadeLimitFrames();
+    const int fadeOut = std::clamp(requestedFrames, 0,
+                                   std::min(fadeLimitFrames(), maximumFadeOut));
+    setFadeValues(fadeInSpinBox_->value(), fadeOut);
 }
 
 void QtPropertiesPanel::setFadeValues(int fadeInFrames, int fadeOutFrames)
@@ -433,8 +436,8 @@ void QtPropertiesPanel::setViewState(const ClipPropertiesViewState &viewState)
 
     const bool isAudio = mediaKind_ == MediaKind::Audio;
     const QString fadeInToolTip = isAudio
-        ? QStringLiteral("Frames the clip takes to ramp up from silence.")
-        : QStringLiteral("Frames the clip takes to ramp up from transparent.");
+        ? QStringLiteral("Set equal fade-in and fade-out ramps from/to silence.")
+        : QStringLiteral("Set equal fade-in and fade-out ramps from/to transparent.");
     const QString fadeOutToolTip = isAudio
         ? QStringLiteral("Frames the clip takes to ramp down to silence.")
         : QStringLiteral("Frames the clip takes to ramp down to transparent.");

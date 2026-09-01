@@ -42,6 +42,9 @@ struct PlaybackState {
     int currentFrame = 0;
     int framesPerSecond = 30;
     int durationFrames = 300;
+    // Preview-only transport rate. This is deliberately transient: changing
+    // it does not retime clips or alter the saved project.
+    int playbackRatePercent = 100;
 };
 
 enum class PreviewMode {

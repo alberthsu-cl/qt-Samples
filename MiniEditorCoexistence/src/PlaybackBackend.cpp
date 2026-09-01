@@ -10,7 +10,8 @@ SimulatedPlaybackBackend::SimulatedPlaybackBackend(EditorSession &session)
 
 unsigned int SimulatedPlaybackBackend::tickIntervalMilliseconds() const
 {
-    return PlaybackClockController::kTickIntervalMilliseconds;
+    return PlaybackClockController::tickIntervalMillisecondsForRate(
+        session_.playbackState().playbackRatePercent);
 }
 
 PlaybackClockAction SimulatedPlaybackBackend::executeCommand(

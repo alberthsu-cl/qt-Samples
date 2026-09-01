@@ -15,6 +15,8 @@ class PlaybackClockController final
 public:
     static constexpr unsigned int kTickIntervalMilliseconds = 33;
 
+    static unsigned int tickIntervalMillisecondsForRate(int ratePercent);
+
     explicit PlaybackClockController(EditorSession &session);
 
     PlaybackClockAction synchronize() const;

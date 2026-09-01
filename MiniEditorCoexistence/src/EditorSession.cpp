@@ -656,8 +656,11 @@ void EditorSession::replaceProject(const EditorProject &project)
     projectDirty_ = false;
     history_.clear();
     timelineClipboard_.reset();
+    const int playbackRatePercent = sourcePlaybackState_.playbackRatePercent;
     sourcePlaybackState_ = {};
     timelinePlaybackState_ = {};
+    sourcePlaybackState_.playbackRatePercent = playbackRatePercent;
+    timelinePlaybackState_.playbackRatePercent = playbackRatePercent;
     notifyStateChanged(EditorChange::All);
 }
 
@@ -797,6 +800,21 @@ void EditorSession::updatePlaybackFromBackend(
     }
 
     playback = updated;
+    notifyStateChanged(EditorChange::Playback);
+}
+
+void EditorSession::updatePlaybackRatePercent(int ratePercent)
+{
+    const int clampedRate = std::clamp(ratePercent, 50, 200);
+    if (sourcePlaybackState_.playbackRatePercent == clampedRate
+        && timelinePlaybackState_.playbackRatePercent == clampedRate) {
+        return;
+    }
+
+    // Preview speed is one transport preference, not two independent source
+    // and timeline edit decisions. Preserve it when focus changes contexts.
+    sourcePlaybackState_.playbackRatePercent = clampedRate;
+    timelinePlaybackState_.playbackRatePercent = clampedRate;
     notifyStateChanged(EditorChange::Playback);
 }
 

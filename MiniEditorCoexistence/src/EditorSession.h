@@ -72,6 +72,7 @@ public:
     void setPlaybackDuration(int durationFrames, bool resetToBeginning);
     void updatePlaybackFromBackend(int currentFrame, int durationFrames,
                                    bool isPlaying, bool isPaused);
+    void updatePlaybackRatePercent(int ratePercent);
     // Explicit timeline editing may replace a frozen paused preview without
     // moving the playhead. Call this before publishing the new selection so
     // every observer resolves that selection as the edit target.

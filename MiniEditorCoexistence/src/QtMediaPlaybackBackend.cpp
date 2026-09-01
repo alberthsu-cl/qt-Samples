@@ -223,7 +223,8 @@ void QtMediaPlaybackBackend::setSourceMetadataChangedHandler(
 
 unsigned int QtMediaPlaybackBackend::tickIntervalMilliseconds() const
 {
-    return PlaybackClockController::kTickIntervalMilliseconds;
+    return PlaybackClockController::tickIntervalMillisecondsForRate(
+        session_.playbackState().playbackRatePercent);
 }
 
 PlaybackClockAction QtMediaPlaybackBackend::executeCommand(
@@ -299,6 +300,7 @@ PlaybackClockAction QtMediaPlaybackBackend::executeCommand(
 
 PlaybackClockAction QtMediaPlaybackBackend::synchronize()
 {
+    applyPlaybackRate();
     if (session_.isTimelineFocused()) {
         const PlaybackClockAction action = synchronizeTimelinePlayback();
         synchronizeTimelineAudio(desiredTimelineAudioPlan(), false);
@@ -672,6 +674,15 @@ bool QtMediaPlaybackBackend::shouldMuteVideoTrackAudio() const
 {
     return session_.isTimelineFocused()
         && session_.timelineAudioMixState().isVideoTrackMuted;
+}
+
+void QtMediaPlaybackBackend::applyPlaybackRate()
+{
+    const qreal rate = session_.playbackState().playbackRatePercent / 100.0;
+    if (!qFuzzyCompare(player_.playbackRate(), rate))
+        player_.setPlaybackRate(rate);
+    if (!qFuzzyCompare(timelineAudioPlayer_.playbackRate(), rate))
+        timelineAudioPlayer_.setPlaybackRate(rate);
 }
 
 void QtMediaPlaybackBackend::stopRealPlayback()

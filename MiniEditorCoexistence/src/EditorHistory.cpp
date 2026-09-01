@@ -15,9 +15,15 @@ void applySelection(EditorCommandContext &context,
 void applyTimelineInteraction(EditorCommandContext &context,
                               const TimelineInteractionState &interaction)
 {
+    const int playbackRatePercent =
+        context.sourcePlaybackState.playbackRatePercent;
     applySelection(context, interaction.selection);
     context.sourcePlaybackState = interaction.sourcePlayback;
     context.timelinePlaybackState = interaction.timelinePlayback;
+    // Undo restores the edit-time head and focus, but preview speed is a
+    // current transport preference and must not travel through edit history.
+    context.sourcePlaybackState.playbackRatePercent = playbackRatePercent;
+    context.timelinePlaybackState.playbackRatePercent = playbackRatePercent;
 }
 
 } // namespace

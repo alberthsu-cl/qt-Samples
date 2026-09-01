@@ -751,6 +751,32 @@ void playbackClockControllerKeepsTimerPolicyFrameworkNeutral()
 
     require(clock.synchronize() == PlaybackClockAction::Stop,
             "A stopped session must tell every UI timer host to stop.");
+    SimulatedPlaybackBackend backend(session);
+    require(backend.tickIntervalMilliseconds() == 33,
+            "Normal-speed simulated playback must use the base timer cadence.");
+    session.updatePlaybackRatePercent(50);
+    require(backend.tickIntervalMilliseconds() == 66,
+            "Half-speed preview must halve the simulated clock cadence.");
+    session.updatePlaybackRatePercent(150);
+    require(backend.tickIntervalMilliseconds() == 22,
+            "One-and-a-half speed must derive a matching timer cadence.");
+    session.updatePlaybackRatePercent(200);
+    require(backend.tickIntervalMilliseconds() == 17,
+            "Double-speed preview must double the simulated clock cadence.");
+    require(session.sourcePlaybackState().playbackRatePercent == 200
+                && session.timelinePlaybackState().playbackRatePercent == 200,
+            "Source and timeline preview must share one playback rate.");
+
+    EditorSession historySession(1);
+    historySession.addTimelineClip(1, TimelineTrackType::Video, 0, 90);
+    historySession.updatePlaybackRatePercent(200);
+    require(historySession.undo()
+                && historySession.playbackState().playbackRatePercent == 200,
+            "Undo must not restore an obsolete preview playback rate.");
+    EditorProject replacement = EditorProject::createDefault(1);
+    historySession.replaceProject(replacement);
+    require(historySession.playbackState().playbackRatePercent == 200,
+            "Opening a project must preserve the current preview playback rate.");
 
     session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
     require(clock.synchronize() == PlaybackClockAction::EnsureRunning,
