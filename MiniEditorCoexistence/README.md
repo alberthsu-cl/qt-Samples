@@ -9,6 +9,7 @@ project for gradual MFC-to-Qt migration, not a video editor implementation.
 The playback-engine refactoring is documented as a learning project:
 
 - [Current playback architecture](docs/architecture/current-playback-architecture.md)
+- [Target playback architecture](docs/architecture/target-playback-architecture.md)
 - [Living presentation](docs/Timeline-Playback-Engine-Learning.pptx)
 
 The presentation stays intentionally short. It is updated only when an
