@@ -164,6 +164,9 @@ void QtPreviewPanel::paintEvent(QPaintEvent *)
 
     const ClipSettings &settings = previewState_.settings;
     const QRect videoRect = videoRectangle(availableRect, settings);
+    const bool isRealStillImageVisible = previewState_.hasMedia
+        && previewState_.mediaKind == MediaKind::Image
+        && !fallbackImage_.isNull();
     painter.fillRect(availableRect, QColor(24, 26, 30));
     if (!previewState_.hasMedia) {
         painter.setPen(QColor(166, 171, 183));
@@ -229,10 +232,11 @@ void QtPreviewPanel::paintEvent(QPaintEvent *)
         }
     }
 
-    // Real video is already communicating motion through its decoded frames.
-    // Keep the frame-time overlay for the sample renderer only; placing it on
-    // top of real footage is visual noise during normal playback.
-    if (isDecodedVideoVisible_
+    // Real visual media is the preview. Keep the educational frame-time
+    // overlay for generated sample cards and timeline gaps only. In
+    // particular, A1 playback must not cover a real V1 still image with an
+    // audio timeframe panel.
+    if (isDecodedVideoVisible_ || isRealStillImageVisible
         || (!playbackState_.isPlaying && !playbackState_.isPaused)) {
         return;
     }

@@ -43,6 +43,7 @@ private slots:
     void dspControlsEditCompleteClipSettings();
     void previewEffectPipelineProcessesOffTheUiThreadAndConflates();
     void realVideoPreviewUsesTimelineClipPresentation();
+    void realStillImagePlaybackDoesNotPaintAudioTimeOverlay();
     void transportRefreshAndButtonsUseSemanticCommands();
     void mediaLibrarySeparatesProgrammaticAndUserSelection();
     void mediaLibraryModelExposesDecodedRealImageThumbnail();
@@ -768,6 +769,38 @@ void MiniEditorQtWidgetTests::realVideoPreviewUsesTimelineClipPresentation()
     const QColor fallbackPixel = rendered.pixelColor(500, 300);
     QVERIFY(fallbackPixel.red() > fallbackPixel.blue());
     QVERIFY(fallbackPixel.red() > fallbackPixel.green());
+}
+
+void MiniEditorQtWidgetTests::realStillImagePlaybackDoesNotPaintAudioTimeOverlay()
+{
+    QtPreviewPanel panel;
+    panel.resize(640, 400);
+
+    QImage stillImage(640, 360, QImage::Format_RGB32);
+    stillImage.fill(QColor(210, 45, 30));
+    panel.setFallbackImage(stillImage);
+
+    PreviewState preview;
+    preview.mode = PreviewMode::Timeline;
+    preview.hasMedia = true;
+    preview.mediaKind = MediaKind::Image;
+    preview.hasAudio = true;
+    preview.audioSourceFrame = 90;
+    preview.audioSourceDurationFrames = 300;
+    panel.setPreviewState(preview);
+
+    PlaybackState playback;
+    playback.isPlaying = true;
+    playback.currentFrame = 90;
+    panel.setPlaybackState(playback);
+
+    panel.show();
+    QCoreApplication::processEvents();
+    const QColor centerPixel = panel.grab().toImage().pixelColor(
+        panel.width() / 2, panel.height() / 2);
+    QVERIFY(centerPixel.red() > 180);
+    QVERIFY(centerPixel.green() < 80);
+    QVERIFY(centerPixel.blue() < 80);
 }
 
 void MiniEditorQtWidgetTests::timelineClickSeekFocusAndDeleteUseSemanticHandlers()
