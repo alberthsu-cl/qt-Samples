@@ -215,6 +215,12 @@ void QtTimelineCanvas::setClipThumbnailResolver(ClipThumbnailResolver resolver)
     update();
 }
 
+void QtTimelineCanvas::setAudioWaveformResolver(AudioWaveformResolver resolver)
+{
+    audioWaveformResolver_ = std::move(resolver);
+    update();
+}
+
 void QtTimelineCanvas::setTimelineClipDeletedHandler(TimelineClipDeletedHandler handler)
 {
     timelineClipDeletedHandler_ = std::move(handler);
@@ -324,7 +330,9 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
         if (!presentation)
             return;
 
-        const QColor assetColor = presentation->color.darker(100);
+        const QColor assetColor = clip.trackType == TimelineTrackType::Audio
+            ? QColor(68, 63, 137)
+            : presentation->color.darker(100);
         const QRect clipRect = toQRect(timelineGeometry.clipRectangle(clip));
         painter.fillRect(clipRect, assetColor);
         if (clip.trackType == TimelineTrackType::Video) {
@@ -351,6 +359,29 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
                 }
             }
             painter.restore();
+        } else if (audioWaveformResolver_) {
+            const QRect contentRect = clipRect.adjusted(2, 3, -2, -3);
+            const std::vector<AudioWaveformPeak> peaks =
+                audioWaveformResolver_(clip, contentRect.width());
+            if (!peaks.empty()) {
+                painter.save();
+                painter.setClipRect(contentRect);
+                painter.setPen(QPen(QColor(196, 187, 255, 235), 1));
+                const int centerY = contentRect.center().y();
+                const qreal halfHeight = contentRect.height() * 0.46;
+                for (int index = 0;
+                     index < static_cast<int>(peaks.size()); ++index) {
+                    const int x = contentRect.left() + index;
+                    const int top = centerY - static_cast<int>(
+                        std::clamp(peaks[index].maximum, 0.0F, 1.0F)
+                        * halfHeight);
+                    const int bottom = centerY - static_cast<int>(
+                        std::clamp(peaks[index].minimum, -1.0F, 0.0F)
+                        * halfHeight);
+                    painter.drawLine(x, top, x, bottom);
+                }
+                painter.restore();
+            }
         }
         // The focus frame reads as selection through its colour, so it stays
         // thin enough not to eat into the clip's own content.

@@ -22,6 +22,7 @@ install_manifest.txt
 *.vcxproj.user
 
 # Local media and image files used while experimenting
+/SampleClips/
 *.mp4
 *.mkv
 *.avi

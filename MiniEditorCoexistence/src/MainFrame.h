@@ -10,6 +10,7 @@
 #include "WorkspaceSettings.h"
 
 #if MINI_EDITOR_USE_QT
+#include "QtAudioWaveformCache.h"
 #include "QtMediaPlaybackBackend.h"
 #include "QtThumbnailCache.h"
 #include "QtMediaLibraryHost.h"
@@ -100,6 +101,7 @@ private:
 
     CStatusBar statusBar_;
 #if MINI_EDITOR_USE_QT
+    QtAudioWaveformCache waveformCache_;
     QtThumbnailCache thumbnailCache_;
     QtMediaLibraryHost mediaLibraryHost_;
     QtPreviewHost previewHost_;

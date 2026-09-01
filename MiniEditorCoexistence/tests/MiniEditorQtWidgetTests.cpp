@@ -1,6 +1,7 @@
 #include "MediaLibrary.h"
 #include "MediaAssetModel.h"
 #include "QtMediaLibraryPanel.h"
+#include "QtAudioWaveformCache.h"
 #include "QtPropertiesPanel.h"
 #include "QtFrameEffectProcessor.h"
 #include "QtPreviewEffectPipeline.h"
@@ -13,6 +14,7 @@
 #include "TimelineGeometry.h"
 
 #include <QComboBox>
+#include <QDataStream>
 #include <QFile>
 #include <QGroupBox>
 #include <QLabel>
@@ -47,6 +49,8 @@ private slots:
     void mediaLibraryPaintsAudioArtworkWithoutDecodedThumbnail();
     void timelineThumbnailCacheRegeneratesPerClipEffects();
     void timelineCanvasRequestsDistinctTrimmedSourceFrames();
+    void timelineCanvasPaintsResolvedAudioWaveform();
+    void audioWaveformCacheDecodesRealPcm();
     void timelineClickSeekFocusAndDeleteUseSemanticHandlers();
     void timelineBodyDragEmitsFrameBasedMove();
     void timelineEndTrimEmitsTrimmedState();
@@ -212,6 +216,105 @@ void MiniEditorQtWidgetTests::timelineCanvasRequestsDistinctTrimmedSourceFrames(
     QCOMPARE(requestedSourceFrames.front(), 60);
     QVERIFY(std::any_of(requestedSourceFrames.begin(), requestedSourceFrames.end(),
                         [](int frame) { return frame > 60; }));
+}
+
+void MiniEditorQtWidgetTests::timelineCanvasPaintsResolvedAudioWaveform()
+{
+    QtTimelineCanvas canvas;
+    canvas.resize(1000, TimelineGeometry::kCanvasHeight);
+
+    TimelineClip clip{ 31, 202, TimelineTrackType::Audio,
+                       { 0, 240, 0 }, {} };
+    TimelinePresentationState state;
+    state.clips = { clip };
+    state.durationFrames = 600;
+    state.view.isAudioTrackVisible = true;
+    canvas.setPresentationState(state);
+    canvas.setAssetPresentationResolver([](int) {
+        TimelineAssetPresentation presentation;
+        presentation.displayName = QStringLiteral("Real audio");
+        presentation.color = QColor(68, 63, 137);
+        presentation.mediaKind = MediaKind::Audio;
+        presentation.isRealAsset = true;
+        return std::optional<TimelineAssetPresentation>(presentation);
+    });
+    canvas.setAudioWaveformResolver(
+        [](const TimelineClip &, int pixelWidth) {
+            std::vector<AudioWaveformPeak> peaks(pixelWidth);
+            for (int x = 0; x < pixelWidth; ++x) {
+                const float amplitude = (x % 12 < 6) ? 0.25F : 0.85F;
+                peaks[x] = { -amplitude, amplitude };
+            }
+            return peaks;
+        });
+
+    canvas.show();
+    QCoreApplication::processEvents();
+    const QImage paintedCanvas = canvas.grab().toImage();
+
+    const TimelineGeometry geometry(100, state.durationFrames);
+    const TimelineRectangle clipRectangle = geometry.clipRectangle(clip);
+    int waveformPixelCount = 0;
+    for (int y = clipRectangle.top + 3;
+         y < clipRectangle.top + clipRectangle.height - 3; ++y) {
+        for (int x = clipRectangle.left + 2;
+             x < clipRectangle.left + clipRectangle.width - 2; ++x) {
+            const QColor pixel = paintedCanvas.pixelColor(x, y);
+            if (pixel.red() > 150 && pixel.blue() > 200)
+                ++waveformPixelCount;
+        }
+    }
+    QVERIFY2(waveformPixelCount > 100,
+             "A1 must paint the PCM peak columns supplied by the waveform cache.");
+}
+
+void MiniEditorQtWidgetTests::audioWaveformCacheDecodesRealPcm()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString audioPath = directory.filePath(QStringLiteral("levels.wav"));
+
+    constexpr quint32 sampleRate = 8000;
+    constexpr quint16 channelCount = 1;
+    constexpr quint16 bitsPerSample = 16;
+    constexpr quint32 sampleCount = sampleRate;
+    constexpr quint32 bytesPerSample = bitsPerSample / 8;
+    constexpr quint32 pcmByteCount = sampleCount * bytesPerSample;
+
+    QFile audioFile(audioPath);
+    QVERIFY(audioFile.open(QIODevice::WriteOnly));
+    QDataStream stream(&audioFile);
+    stream.setByteOrder(QDataStream::LittleEndian);
+    stream.writeRawData("RIFF", 4);
+    stream << quint32(36 + pcmByteCount);
+    stream.writeRawData("WAVEfmt ", 8);
+    stream << quint32(16) << quint16(1) << channelCount << sampleRate
+           << quint32(sampleRate * channelCount * bytesPerSample)
+           << quint16(channelCount * bytesPerSample) << bitsPerSample;
+    stream.writeRawData("data", 4);
+    stream << pcmByteCount;
+    for (quint32 sampleIndex = 0; sampleIndex < sampleCount; ++sampleIndex) {
+        const qint16 amplitude = sampleIndex < sampleCount / 2 ? 2000 : 24000;
+        stream << qint16(sampleIndex % 2 == 0 ? amplitude : -amplitude);
+    }
+    audioFile.close();
+
+    MediaLibrary library;
+    const std::optional<int> assetId = library.addFile(
+        std::filesystem::path(audioPath.toStdWString()));
+    QVERIFY(assetId.has_value());
+
+    QtAudioWaveformCache cache;
+    QSignalSpy waveformSpy(&cache, &QtAudioWaveformCache::waveformChanged);
+    cache.refresh(library);
+    QVERIFY2(waveformSpy.wait(5000), "The WAV decoder did not produce PCM peaks.");
+
+    TimelineClip clip{ 41, *assetId, TimelineTrackType::Audio,
+                       { 0, 30, 0 }, {} };
+    const std::vector<AudioWaveformPeak> peaks = cache.peaksForClip(clip, 80);
+    QCOMPARE(peaks.size(), std::size_t(80));
+    QVERIFY(peaks[10].maximum < 0.2F);
+    QVERIFY(peaks[70].maximum > 0.6F);
 }
 
 void MiniEditorQtWidgetTests::propertiesModelRefreshDoesNotEmitUserEdit()

@@ -138,6 +138,9 @@ source_group("Layout" FILES
 )
 
 source_group("Playback" FILES
+    src/AudioWaveform.h
+    src/QtAudioWaveformCache.h
+    src/QtAudioWaveformCache.cpp
     src/TimelinePlaybackResolver.h
     src/TimelinePlaybackResolver.cpp
     src/MediaPlaybackPlan.h
@@ -256,6 +259,9 @@ target_compile_definitions(MiniEditorCoexistence PRIVATE
 
 if(MINI_EDITOR_USE_QT)
     target_sources(MiniEditorCoexistence PRIVATE
+        src/AudioWaveform.h
+        src/QtAudioWaveformCache.h
+        src/QtAudioWaveformCache.cpp
         src/TimelineAssetPresentation.h
         src/QtThumbnailCache.h
         src/QtThumbnailCache.cpp
@@ -318,6 +324,9 @@ if(MINI_EDITOR_USE_QT)
     if(BUILD_TESTING)
         add_executable(MiniEditorQtWidgetTests
             tests/MiniEditorQtWidgetTests.cpp
+            src/AudioWaveform.h
+            src/QtAudioWaveformCache.h
+            src/QtAudioWaveformCache.cpp
             src/ProjectState.h
             src/MediaKind.h
             src/MediaLibrary.h

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AudioWaveform.h"
 #include "ProjectState.h"
 #include "TimelineAssetPresentation.h"
 #include "TimelineClipEdit.h"
@@ -29,6 +30,9 @@ public:
         std::function<std::optional<TimelineAssetPresentation>(int mediaAssetId)>;
     using ClipThumbnailResolver = std::function<QImage(const TimelineClip &clip,
                                                         int sourceFrame)>;
+    using AudioWaveformResolver =
+        std::function<std::vector<AudioWaveformPeak>(const TimelineClip &clip,
+                                                     int pixelWidth)>;
     using TimelineClipDeletedHandler = std::function<void(int clipId)>;
     using TimelineClipSelectedHandler = std::function<void(int clipId)>;
     using TimelineFocusRequestedHandler = std::function<void()>;
@@ -49,6 +53,7 @@ public:
     void setMediaAssetDroppedHandler(MediaAssetDroppedHandler handler);
     void setAssetPresentationResolver(AssetPresentationResolver resolver);
     void setClipThumbnailResolver(ClipThumbnailResolver resolver);
+    void setAudioWaveformResolver(AudioWaveformResolver resolver);
     void setTimelineClipDeletedHandler(TimelineClipDeletedHandler handler);
     void setTimelineClipSelectedHandler(TimelineClipSelectedHandler handler);
     void setTimelineFocusRequestedHandler(TimelineFocusRequestedHandler handler);
@@ -83,6 +88,7 @@ private:
     MediaAssetDroppedHandler mediaAssetDroppedHandler_;
     AssetPresentationResolver assetPresentationResolver_;
     ClipThumbnailResolver clipThumbnailResolver_;
+    AudioWaveformResolver audioWaveformResolver_;
     TimelineClipDeletedHandler timelineClipDeletedHandler_;
     TimelineClipSelectedHandler timelineClipSelectedHandler_;
     TimelineFocusRequestedHandler timelineFocusRequestedHandler_;

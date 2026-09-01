@@ -86,6 +86,13 @@ void QtTimelineCanvasHost::setClipThumbnailResolver(ClipThumbnailResolver resolv
         canvas_->setClipThumbnailResolver(std::move(resolver));
 }
 
+void QtTimelineCanvasHost::setAudioWaveformResolver(
+    AudioWaveformResolver resolver)
+{
+    if (canvas_)
+        canvas_->setAudioWaveformResolver(std::move(resolver));
+}
+
 void QtTimelineCanvasHost::setTimelineClipDeletedHandler(TimelineClipDeletedHandler handler)
 {
     if (canvas_)

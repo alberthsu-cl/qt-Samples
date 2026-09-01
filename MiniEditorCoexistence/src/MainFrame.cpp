@@ -126,7 +126,12 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
                      &thumbnailCache_, [this](int) {
                          refreshEditorViews(EditorChange::TimelineClip);
                      });
+    QObject::connect(&waveformCache_, &QtAudioWaveformCache::waveformChanged,
+                     &waveformCache_, [this](int) {
+                         refreshEditorViews(EditorChange::TimelineClip);
+                     });
     thumbnailCache_.refresh(mediaLibrary_);
+    waveformCache_.refresh(mediaLibrary_);
     playbackBackend_.setVideoOutput(previewHost_.videoSink());
     playbackBackend_.setVideoVisibilityHandler(
         [this](bool visible) { previewHost_.setDecodedVideoVisible(visible); });
@@ -174,6 +179,10 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     timelineCanvasHost_.setClipThumbnailResolver(
         [this](const TimelineClip &clip, int sourceFrame) {
             return thumbnailCache_.timelineImageFor(clip, sourceFrame);
+        });
+    timelineCanvasHost_.setAudioWaveformResolver(
+        [this](const TimelineClip &clip, int pixelWidth) {
+            return waveformCache_.peaksForClip(clip, pixelWidth);
         });
     timelineCanvasHost_.setTimelineClipDeletedHandler(
         [this](int clipId) {
@@ -408,6 +417,7 @@ void MainFrame::OnFileNew()
     }
 #if MINI_EDITOR_USE_QT
     mediaLibraryHost_.refreshAssets();
+    waveformCache_.refresh(mediaLibrary_);
 #endif
     projectFilePath_.clear();
     updateWindowTitle();
@@ -746,8 +756,10 @@ void MainFrame::importMediaFile()
     }
 
 #if MINI_EDITOR_USE_QT
-    if (importedFileCount > 0)
+    if (importedFileCount > 0) {
         mediaLibraryHost_.refreshAssets();
+        waveformCache_.refresh(mediaLibrary_);
+    }
 #endif
     if (!failures.IsEmpty())
         AfxMessageBox(failures, MB_ICONWARNING | MB_OK);
@@ -759,6 +771,7 @@ void MainFrame::removeMediaAsset(int assetIndex, int assetId)
     if (result.succeeded()) {
 #if MINI_EDITOR_USE_QT
         mediaLibraryHost_.refreshAssets();
+        waveformCache_.refresh(mediaLibrary_);
 #endif
         return;
     }
@@ -801,6 +814,7 @@ bool MainFrame::openProject(const std::filesystem::path &path)
     }
 #if MINI_EDITOR_USE_QT
     mediaLibraryHost_.refreshAssets();
+    waveformCache_.refresh(mediaLibrary_);
 #endif
     // Opening a project enters timeline-preview mode. At frame 0 this selects
     // the first visible clip, or visibly focuses the empty timeline until a
