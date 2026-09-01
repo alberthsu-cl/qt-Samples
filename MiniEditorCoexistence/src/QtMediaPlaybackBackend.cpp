@@ -13,6 +13,22 @@
 #include <filesystem>
 #include <utility>
 
+namespace {
+
+bool isPlayableMediaStatus(QMediaPlayer::MediaStatus status)
+{
+    switch (status) {
+    case QMediaPlayer::LoadedMedia:
+    case QMediaPlayer::BufferingMedia:
+    case QMediaPlayer::BufferedMedia:
+        return true;
+    default:
+        return false;
+    }
+}
+
+} // namespace
+
 QtMediaPlaybackBackend::QtMediaPlaybackBackend(
     EditorSession &session, MediaLibrary &mediaLibrary)
     : session_(session)
@@ -30,7 +46,7 @@ QtMediaPlaybackBackend::QtMediaPlaybackBackend(
             stopTimelineAudioPlayback();
             return;
         }
-        if (status != QMediaPlayer::LoadedMedia
+        if (!isPlayableMediaStatus(status)
             || !session_.isTimelineFocused()) {
             return;
         }
@@ -76,7 +92,7 @@ QtMediaPlaybackBackend::QtMediaPlaybackBackend(
                 hasPendingTimelineSeek_ = false;
                 cancelSilentFirstFrameDecode();
                 setDecodedVideoVisible(false);
-            } else if (status == QMediaPlayer::LoadedMedia) {
+            } else if (isPlayableMediaStatus(status)) {
                 // Some backends discard a seek made immediately after
                 // setSource(). Reapply the exact trimmed source frame only
                 // after the replacement file is ready.
@@ -116,19 +132,25 @@ QtMediaPlaybackBackend::QtMediaPlaybackBackend(
             session_.updatePlaybackFromBackend(
                 state.currentFrame, state.durationFrames, false, false);
             setDecodedVideoVisible(false);
-        } else if (status == QMediaPlayer::LoadedMedia) {
+        } else if (isPlayableMediaStatus(status)) {
+            const bool sourceBecameReady = !loadedSourceMediaReady_;
             loadedSourceMediaReady_ = true;
-            // Some multimedia backends discard a seek issued while the source
-            // is still loading. Always reapply the plan's source frame after
-            // loading, whether the destination state is playing or paused.
-            player_.setPosition(positionMillisecondsForFrame(
-                pendingSourceSeekFrame_));
+            if (sourceBecameReady) {
+                // Some multimedia backends discard a seek issued while the
+                // source is still loading. Reapply it once when the source
+                // first becomes playable. Later buffering transitions must
+                // not jump active playback back to this old position.
+                player_.setPosition(positionMillisecondsForFrame(
+                    pendingSourceSeekFrame_));
+            }
 
             const MediaPlaybackPlan plan = desiredPlaybackPlan();
-            if (pauseAfterFirstVideoFrame_) {
+            if (pauseAfterFirstVideoFrame_ && sourceBecameReady) {
                 // Decode one frame, then pause in the video-sink callback.
                 player_.play();
-            } else if (plan.shouldPlay) {
+            } else if (plan.shouldPlay
+                       && player_.playbackState()
+                           != QMediaPlayer::PlayingState) {
                 audioOutput_.setMuted(false);
                 player_.play();
             }

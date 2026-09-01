@@ -307,6 +307,9 @@ void MiniEditorQtWidgetTests::audioWaveformCacheDecodesRealPcm()
     QtAudioWaveformCache cache;
     QSignalSpy waveformSpy(&cache, &QtAudioWaveformCache::waveformChanged);
     cache.refresh(library);
+    // Placing an asset while its library preload is still pending queues a
+    // newer generation. The stale preload must not suppress the A1 result.
+    cache.requestForTimeline(*assetId);
     QVERIFY2(waveformSpy.wait(5000), "The WAV decoder did not produce PCM peaks.");
 
     TimelineClip clip{ 41, *assetId, TimelineTrackType::Audio,

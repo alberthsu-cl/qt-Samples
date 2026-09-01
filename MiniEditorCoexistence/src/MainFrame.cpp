@@ -157,7 +157,14 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     });
     timelineCanvasHost_.setMediaAssetDroppedHandler(
         [this](int mediaAssetId, int frame) {
-            timelineController_.insertMediaAsset(mediaAssetId, frame);
+            if (!timelineController_.insertMediaAsset(mediaAssetId, frame))
+                return;
+
+            // Insertion changes playback ownership from Source to Timeline.
+            // Stop/synchronize the source player before retrying a waveform
+            // decode for the newly placed A1 clip.
+            synchronizePlaybackTimer();
+            waveformCache_.requestForTimeline(mediaAssetId);
         });
     timelineCanvasHost_.setAssetPresentationResolver(
         [this](int mediaAssetId) -> std::optional<TimelineAssetPresentation> {
@@ -214,6 +221,10 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     // host and forwards session state to the migrated Qt panel boundaries.
     mediaLibraryHost_.setAssetSelectedHandler([this](int assetIndex) {
         timelineController_.selectSourceAsset(assetIndex);
+        // Selection changes the active playback context from Timeline to
+        // Source. Synchronize immediately so the newly selected decoder is
+        // loaded and its position callbacks can drive the transport bar.
+        synchronizePlaybackTimer();
     });
     mediaLibraryHost_.setImportHandler([this] { importMediaFile(); });
     mediaLibraryHost_.setRemoveHandler(
@@ -284,6 +295,7 @@ void MainFrame::OnSelectMediaAsset(UINT commandId)
 {
     timelineController_.selectSourceAsset(
         static_cast<int>(commandId - ID_MEDIA_ASSET_FIRST));
+    synchronizePlaybackTimer();
 }
 
 void MainFrame::OnPlaybackCommand(UINT commandId)

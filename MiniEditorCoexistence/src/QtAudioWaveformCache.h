@@ -5,6 +5,7 @@
 
 #include <QHash>
 #include <QObject>
+#include <QSet>
 #include <QThread>
 
 #include <cstdint>
@@ -23,6 +24,7 @@ public:
     ~QtAudioWaveformCache() override;
 
     void refresh(const MediaLibrary &mediaLibrary);
+    void requestForTimeline(int mediaAssetId);
     std::vector<AudioWaveformPeak> peaksForClip(
         const TimelineClip &clip, int pixelWidth,
         int timelineFramesPerSecond = 30) const;
@@ -37,5 +39,6 @@ private:
     QHash<int, QString> audioFilePaths_;
     QHash<int, std::uint64_t> generations_;
     QHash<int, AudioWaveformData> waveforms_;
+    QSet<int> pendingAssetIds_;
     std::uint64_t nextGeneration_ = 1;
 };

@@ -131,20 +131,31 @@ private:
         if (!isDecoding_)
             return;
 
+        // QAudioDecoder is a one-request worker here. Reusing the same
+        // instance immediately after finished/error is backend-dependent and
+        // caused a queued timeline retry to stall on Windows Multimedia.
+        // A fresh decoder gives every queued generation an independent,
+        // deterministic lifecycle.
+        QAudioDecoder *finishedDecoder = decoder_;
+        decoder_ = nullptr;
+        finishedDecoder->deleteLater();
+
         flushPendingPeak();
-        if (succeeded && waveform_.sampleRate > 0
-            && !waveform_.peaks.empty()) {
-            const int mediaAssetId = current_.mediaAssetId;
-            const std::uint64_t generation = current_.generation;
-            AudioWaveformData waveform = std::move(waveform_);
-            QMetaObject::invokeMethod(
-                deliveryContext_,
-                [handler = decodedHandler_, mediaAssetId, generation,
-                 waveform = std::move(waveform)]() mutable {
-                    handler(mediaAssetId, generation, std::move(waveform));
-                },
-                Qt::QueuedConnection);
-        }
+        if (!succeeded)
+            waveform_ = {};
+
+        // Report both success and failure. The cache must clear its in-flight
+        // marker after a failure so a later timeline placement can retry.
+        const int mediaAssetId = current_.mediaAssetId;
+        const std::uint64_t generation = current_.generation;
+        AudioWaveformData waveform = std::move(waveform_);
+        QMetaObject::invokeMethod(
+            deliveryContext_,
+            [handler = decodedHandler_, mediaAssetId, generation,
+             waveform = std::move(waveform)]() mutable {
+                handler(mediaAssetId, generation, std::move(waveform));
+            },
+            Qt::QueuedConnection);
         isDecoding_ = false;
         QTimer::singleShot(0, this, [this] { startNext(); });
     }
@@ -170,6 +181,9 @@ QtAudioWaveformCache::QtAudioWaveformCache(QObject *parent)
         [this](int mediaAssetId, std::uint64_t generation,
                AudioWaveformData waveform) {
             if (generations_.value(mediaAssetId) != generation)
+                return;
+            pendingAssetIds_.remove(mediaAssetId);
+            if (waveform.sampleRate <= 0 || waveform.peaks.empty())
                 return;
             waveforms_.insert(mediaAssetId, std::move(waveform));
             emit waveformChanged(mediaAssetId);
@@ -206,21 +220,47 @@ void QtAudioWaveformCache::refresh(const MediaLibrary &mediaLibrary)
             continue;
         }
         waveforms_.remove(iterator.key());
+        pendingAssetIds_.remove(iterator.key());
         generations_.insert(iterator.key(), nextGeneration_++);
         iterator = audioFilePaths_.erase(iterator);
     }
 
     for (auto iterator = requestedPaths.cbegin();
          iterator != requestedPaths.cend(); ++iterator) {
-        if (audioFilePaths_.value(iterator.key()) == iterator.value())
+        const bool pathChanged =
+            audioFilePaths_.value(iterator.key()) != iterator.value();
+        if (!pathChanged
+            && (waveforms_.contains(iterator.key())
+                || pendingAssetIds_.contains(iterator.key()))) {
             continue;
+        }
 
         audioFilePaths_.insert(iterator.key(), iterator.value());
-        waveforms_.remove(iterator.key());
+        if (pathChanged)
+            waveforms_.remove(iterator.key());
         const std::uint64_t generation = nextGeneration_++;
         generations_.insert(iterator.key(), generation);
+        pendingAssetIds_.insert(iterator.key());
         emit decodeRequested(iterator.key(), iterator.value(), generation);
     }
+}
+
+void QtAudioWaveformCache::requestForTimeline(int mediaAssetId)
+{
+    if (waveforms_.contains(mediaAssetId))
+        return;
+
+    const QString filePath = audioFilePaths_.value(mediaAssetId);
+    if (filePath.isEmpty())
+        return;
+
+    // A timeline placement is a stronger request than library preloading.
+    // Queue a fresh generation even when an earlier decode is still pending:
+    // the old completion becomes stale, while this request retries after it.
+    const std::uint64_t generation = nextGeneration_++;
+    generations_.insert(mediaAssetId, generation);
+    pendingAssetIds_.insert(mediaAssetId);
+    emit decodeRequested(mediaAssetId, filePath, generation);
 }
 
 std::vector<AudioWaveformPeak> QtAudioWaveformCache::peaksForClip(
