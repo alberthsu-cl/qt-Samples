@@ -1,5 +1,6 @@
 #include "QtAudioWaveformCache.h"
 
+#include "AudioWaveformSampler.h"
 #include "MediaLibrary.h"
 
 #include <QAudioBuffer>
@@ -186,6 +187,7 @@ QtAudioWaveformCache::QtAudioWaveformCache(QObject *parent)
             if (waveform.sampleRate <= 0 || waveform.peaks.empty())
                 return;
             waveforms_.insert(mediaAssetId, std::move(waveform));
+            displayCache_.invalidateMediaAsset(mediaAssetId);
             emit waveformChanged(mediaAssetId);
         });
     worker->moveToThread(&workerThread_);
@@ -220,6 +222,7 @@ void QtAudioWaveformCache::refresh(const MediaLibrary &mediaLibrary)
             continue;
         }
         waveforms_.remove(iterator.key());
+        displayCache_.invalidateMediaAsset(iterator.key());
         pendingAssetIds_.remove(iterator.key());
         generations_.insert(iterator.key(), nextGeneration_++);
         iterator = audioFilePaths_.erase(iterator);
@@ -236,8 +239,10 @@ void QtAudioWaveformCache::refresh(const MediaLibrary &mediaLibrary)
         }
 
         audioFilePaths_.insert(iterator.key(), iterator.value());
-        if (pathChanged)
+        if (pathChanged) {
             waveforms_.remove(iterator.key());
+            displayCache_.invalidateMediaAsset(iterator.key());
+        }
         const std::uint64_t generation = nextGeneration_++;
         generations_.insert(iterator.key(), generation);
         pendingAssetIds_.insert(iterator.key());
@@ -263,9 +268,9 @@ void QtAudioWaveformCache::requestForTimeline(int mediaAssetId)
     emit decodeRequested(mediaAssetId, filePath, generation);
 }
 
-std::vector<AudioWaveformPeak> QtAudioWaveformCache::peaksForClip(
+SharedAudioWaveform QtAudioWaveformCache::waveformForClip(
     const TimelineClip &clip, int pixelWidth,
-    int timelineFramesPerSecond) const
+    int timelineFramesPerSecond)
 {
     const auto waveform = waveforms_.constFind(clip.mediaAssetId);
     if (waveform == waveforms_.constEnd() || waveform->sampleRate <= 0
@@ -275,36 +280,22 @@ std::vector<AudioWaveformPeak> QtAudioWaveformCache::peaksForClip(
 
     pixelWidth = std::min(pixelWidth, 8192);
     timelineFramesPerSecond = std::max(1, timelineFramesPerSecond);
-    std::vector<AudioWaveformPeak> result(pixelWidth);
-    for (int pixel = 0; pixel < pixelWidth; ++pixel) {
-        const std::int64_t firstTimelineFrame = clip.state.sourceInFrame
-            + static_cast<std::int64_t>(clip.state.durationFrames) * pixel
-                / pixelWidth;
-        const std::int64_t lastTimelineFrame = clip.state.sourceInFrame
-            + static_cast<std::int64_t>(clip.state.durationFrames) * (pixel + 1)
-                / pixelWidth;
-        const std::int64_t firstSampleFrame = firstTimelineFrame
-            * waveform->sampleRate / timelineFramesPerSecond;
-        const std::int64_t lastSampleFrame = std::max(
-            firstSampleFrame + 1,
-            lastTimelineFrame * waveform->sampleRate
-                / timelineFramesPerSecond);
-        const int firstPeak = std::clamp(
-            static_cast<int>(firstSampleFrame / waveform->sampleFramesPerPeak),
-            0, static_cast<int>(waveform->peaks.size()) - 1);
-        const int lastPeak = std::clamp(
-            static_cast<int>((lastSampleFrame - 1)
-                             / waveform->sampleFramesPerPeak),
-            firstPeak, static_cast<int>(waveform->peaks.size()) - 1);
+    const AudioWaveformDisplayKey key{
+        clip.mediaAssetId,
+        clip.state.sourceInFrame,
+        clip.state.durationFrames,
+        pixelWidth,
+        timelineFramesPerSecond
+    };
+    if (const SharedAudioWaveform cached = displayCache_.find(key))
+        return cached;
 
-        AudioWaveformPeak aggregate = waveform->peaks[firstPeak];
-        for (int peak = firstPeak + 1; peak <= lastPeak; ++peak) {
-            aggregate.minimum = std::min(aggregate.minimum,
-                                         waveform->peaks[peak].minimum);
-            aggregate.maximum = std::max(aggregate.maximum,
-                                         waveform->peaks[peak].maximum);
-        }
-        result[pixel] = aggregate;
-    }
-    return result;
+    return displayCache_.store(
+        key,
+        AudioWaveformSampler::sample(
+            *waveform,
+            clip.state.sourceInFrame,
+            clip.state.durationFrames,
+            pixelWidth,
+            timelineFramesPerSecond));
 }

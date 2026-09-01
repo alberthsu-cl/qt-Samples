@@ -1,6 +1,6 @@
 #pragma once
 
-#include "AudioWaveform.h"
+#include "AudioWaveformDisplayCache.h"
 #include "ProjectState.h"
 #include "TimelineClipEdit.h"
 #include "TimelineAssetPresentation.h"
@@ -32,8 +32,8 @@ public:
     using ClipThumbnailResolver = std::function<QImage(const TimelineClip &clip,
                                                         int sourceFrame)>;
     using AudioWaveformResolver =
-        std::function<std::vector<AudioWaveformPeak>(const TimelineClip &clip,
-                                                     int pixelWidth)>;
+        std::function<SharedAudioWaveform(const TimelineClip &clip,
+                                          int pixelWidth)>;
     using TimelineClipDeletedHandler = std::function<void(int clipId)>;
     using TimelineClipSelectedHandler = std::function<void(int clipId)>;
     using TimelineFocusRequestedHandler = std::function<void()>;

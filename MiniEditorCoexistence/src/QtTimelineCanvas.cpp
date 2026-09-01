@@ -361,26 +361,30 @@ void QtTimelineCanvas::paintEvent(QPaintEvent *)
             painter.restore();
         } else if (audioWaveformResolver_) {
             const QRect contentRect = clipRect.adjusted(2, 3, -2, -3);
-            const std::vector<AudioWaveformPeak> peaks =
+            const SharedAudioWaveform peaks =
                 audioWaveformResolver_(clip, contentRect.width());
-            if (!peaks.empty()) {
+            if (peaks && !peaks->empty()) {
                 painter.save();
                 painter.setClipRect(contentRect);
                 painter.setPen(QPen(QColor(196, 187, 255, 235), 1));
                 const int centerY = contentRect.center().y();
                 const qreal halfHeight = contentRect.height() * 0.46;
                 for (int index = 0;
-                     index < static_cast<int>(peaks.size()); ++index) {
+                     index < static_cast<int>(peaks->size()); ++index) {
                     const int x = contentRect.left() + index;
                     const int top = centerY - static_cast<int>(
-                        std::clamp(peaks[index].maximum, 0.0F, 1.0F)
+                        std::clamp((*peaks)[index].maximum, 0.0F, 1.0F)
                         * halfHeight);
                     const int bottom = centerY - static_cast<int>(
-                        std::clamp(peaks[index].minimum, -1.0F, 0.0F)
+                        std::clamp((*peaks)[index].minimum, -1.0F, 0.0F)
                         * halfHeight);
                     painter.drawLine(x, top, x, bottom);
                 }
                 painter.restore();
+            } else if (presentation->isRealAsset) {
+                painter.setPen(QColor(180, 176, 204));
+                painter.drawText(contentRect, Qt::AlignCenter,
+                                 QStringLiteral("Generating waveform..."));
             }
         }
         // The focus frame reads as selection through its colour, so it stays

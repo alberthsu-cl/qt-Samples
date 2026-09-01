@@ -41,6 +41,11 @@ add_executable(MiniEditorCoexistence WIN32
     src/MediaLibrary.cpp
     src/ThumbnailRequestModel.h
     src/ThumbnailRequestModel.cpp
+    src/AudioWaveform.h
+    src/AudioWaveformSampler.h
+    src/AudioWaveformSampler.cpp
+    src/AudioWaveformDisplayCache.h
+    src/AudioWaveformDisplayCache.cpp
     src/TimelineModel.h
     src/TimelineModel.cpp
     src/TimelineGeometry.h
@@ -138,7 +143,6 @@ source_group("Layout" FILES
 )
 
 source_group("Playback" FILES
-    src/AudioWaveform.h
     src/QtAudioWaveformCache.h
     src/QtAudioWaveformCache.cpp
     src/TimelinePlaybackResolver.h
@@ -166,6 +170,11 @@ source_group("Controller" FILES
 
 source_group("Presentation" FILES
     src/FrameTimecode.h
+    src/AudioWaveform.h
+    src/AudioWaveformSampler.h
+    src/AudioWaveformSampler.cpp
+    src/AudioWaveformDisplayCache.h
+    src/AudioWaveformDisplayCache.cpp
     src/PreviewStateResolver.h
     src/PreviewStateResolver.cpp
     src/ClipPropertiesStateResolver.h
@@ -194,6 +203,11 @@ if(BUILD_TESTING)
         src/MediaLibrary.cpp
         src/ThumbnailRequestModel.h
         src/ThumbnailRequestModel.cpp
+        src/AudioWaveform.h
+        src/AudioWaveformSampler.h
+        src/AudioWaveformSampler.cpp
+        src/AudioWaveformDisplayCache.h
+        src/AudioWaveformDisplayCache.cpp
         src/TimelineModel.h
         src/TimelineModel.cpp
         src/TimelineGeometry.h
@@ -259,7 +273,6 @@ target_compile_definitions(MiniEditorCoexistence PRIVATE
 
 if(MINI_EDITOR_USE_QT)
     target_sources(MiniEditorCoexistence PRIVATE
-        src/AudioWaveform.h
         src/QtAudioWaveformCache.h
         src/QtAudioWaveformCache.cpp
         src/TimelineAssetPresentation.h
@@ -325,6 +338,10 @@ if(MINI_EDITOR_USE_QT)
         add_executable(MiniEditorQtWidgetTests
             tests/MiniEditorQtWidgetTests.cpp
             src/AudioWaveform.h
+            src/AudioWaveformSampler.h
+            src/AudioWaveformSampler.cpp
+            src/AudioWaveformDisplayCache.h
+            src/AudioWaveformDisplayCache.cpp
             src/QtAudioWaveformCache.h
             src/QtAudioWaveformCache.cpp
             src/ProjectState.h

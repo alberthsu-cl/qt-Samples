@@ -189,7 +189,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         });
     timelineCanvasHost_.setAudioWaveformResolver(
         [this](const TimelineClip &clip, int pixelWidth) {
-            return waveformCache_.peaksForClip(clip, pixelWidth);
+            return waveformCache_.waveformForClip(clip, pixelWidth);
         });
     timelineCanvasHost_.setTimelineClipDeletedHandler(
         [this](int clipId) {

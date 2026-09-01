@@ -245,7 +245,8 @@ void MiniEditorQtWidgetTests::timelineCanvasPaintsResolvedAudioWaveform()
                 const float amplitude = (x % 12 < 6) ? 0.25F : 0.85F;
                 peaks[x] = { -amplitude, amplitude };
             }
-            return peaks;
+            return std::make_shared<const std::vector<AudioWaveformPeak>>(
+                std::move(peaks));
         });
 
     canvas.show();
@@ -314,10 +315,11 @@ void MiniEditorQtWidgetTests::audioWaveformCacheDecodesRealPcm()
 
     TimelineClip clip{ 41, *assetId, TimelineTrackType::Audio,
                        { 0, 30, 0 }, {} };
-    const std::vector<AudioWaveformPeak> peaks = cache.peaksForClip(clip, 80);
-    QCOMPARE(peaks.size(), std::size_t(80));
-    QVERIFY(peaks[10].maximum < 0.2F);
-    QVERIFY(peaks[70].maximum > 0.6F);
+    const SharedAudioWaveform peaks = cache.waveformForClip(clip, 80);
+    QVERIFY(peaks != nullptr);
+    QCOMPARE(peaks->size(), std::size_t(80));
+    QVERIFY((*peaks)[10].maximum < 0.2F);
+    QVERIFY((*peaks)[70].maximum > 0.6F);
 }
 
 void MiniEditorQtWidgetTests::propertiesModelRefreshDoesNotEmitUserEdit()

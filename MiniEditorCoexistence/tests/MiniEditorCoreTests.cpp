@@ -1,5 +1,7 @@
 #include "ClipFade.h"
 #include "ClipPropertiesStateResolver.h"
+#include "AudioWaveformDisplayCache.h"
+#include "AudioWaveformSampler.h"
 #include "EditorSession.h"
 #include "EditorCommandController.h"
 #include "FrameTimecode.h"
@@ -37,6 +39,42 @@ void require(bool condition, const char *message)
 {
     if (!condition)
         throw std::runtime_error(message);
+}
+
+void audioWaveformSamplingAndDisplayCacheRespectTrimAndWidth()
+{
+    AudioWaveformData decoded;
+    decoded.sampleRate = 300;
+    decoded.sampleFramesPerPeak = 10;
+    for (int frame = 0; frame < 30; ++frame) {
+        const float amplitude = static_cast<float>(frame) / 30.0F;
+        decoded.peaks.push_back({ -amplitude, amplitude });
+    }
+
+    const std::vector<AudioWaveformPeak> columns =
+        AudioWaveformSampler::sample(decoded, 5, 10, 5, 30);
+    require(columns.size() == 5,
+            "Waveform sampling must produce one column per requested pixel.");
+    require(columns.front().maximum > 0.19F
+                && columns.front().maximum < 0.21F,
+            "The first column must begin at the clip's trimmed source frame.");
+    require(columns.back().maximum > columns.front().maximum,
+            "Later columns must sample later source audio.");
+
+    AudioWaveformDisplayCache cache(2);
+    const AudioWaveformDisplayKey key{ 7, 5, 10, 5, 30 };
+    const SharedAudioWaveform stored = cache.store(key, columns);
+    require(stored != nullptr && cache.find(key) == stored,
+            "An identical trim/width request must reuse its cached columns.");
+
+    AudioWaveformDisplayKey zoomedKey = key;
+    zoomedKey.pixelWidth = 10;
+    require(cache.find(zoomedKey) == nullptr,
+            "A zoom width change must request a distinct waveform level.");
+
+    cache.invalidateMediaAsset(7);
+    require(cache.find(key) == nullptr && cache.size() == 0,
+            "Replacing source PCM must invalidate every derived display level.");
 }
 
 void thumbnailRequestModelUsesSourceTimeForTimelineStrips()
@@ -1919,6 +1957,7 @@ void sourcePlaybackDoesNotMoveTheTimelinePlayhead()
 int main()
 {
     try {
+        audioWaveformSamplingAndDisplayCacheRespectTrimAndWidth();
         editorSessionOwnsAndClampsState();
         editorSessionUndoRedoTracksOnlyClipEdits();
         editorSessionUndoRedoTracksTimelineClipMoves();

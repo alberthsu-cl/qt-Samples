@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AudioWaveform.h"
+#include "AudioWaveformDisplayCache.h"
 #include "TimelineModel.h"
 
 #include <QHash>
@@ -25,9 +26,9 @@ public:
 
     void refresh(const MediaLibrary &mediaLibrary);
     void requestForTimeline(int mediaAssetId);
-    std::vector<AudioWaveformPeak> peaksForClip(
+    SharedAudioWaveform waveformForClip(
         const TimelineClip &clip, int pixelWidth,
-        int timelineFramesPerSecond = 30) const;
+        int timelineFramesPerSecond = 30);
 
 signals:
     void decodeRequested(int mediaAssetId, QString filePath,
@@ -40,5 +41,6 @@ private:
     QHash<int, std::uint64_t> generations_;
     QHash<int, AudioWaveformData> waveforms_;
     QSet<int> pendingAssetIds_;
+    AudioWaveformDisplayCache displayCache_;
     std::uint64_t nextGeneration_ = 1;
 };
