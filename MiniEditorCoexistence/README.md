@@ -447,8 +447,11 @@ independent renderers, and no Qt preview code coupled to MFC drawing types.
 `IPlaybackBackend` keeps transport intent independent of the playback engine.
 The pure-MFC build uses `SimulatedPlaybackBackend`. The Qt-enabled build uses
 `QtMediaPlaybackBackend`. An existing selected video/audio file is routed
-through `QMediaPlayer` and `QAudioOutput`. Decoded video is presented by the
-`QVideoWidget` owned by `QtPreviewPanel`.
+through `QMediaPlayer` and `QAudioOutput`. `QtPreviewPanel` receives decoded
+frames through a `QVideoSink` and paints them itself with
+`QPainter::drawImage`, rather than embedding a `QVideoWidget`. Owning the paint
+step is what lets the preview apply placement settings and DSP to the decoded
+frame.
 
 The source player publishes its decoded position and duration back into the
 active `PlaybackState`; existing Qt transport controls therefore display the
@@ -471,8 +474,16 @@ at a clip boundary. Still-image placements and empty timeline gaps deliberately
 keep using the simulated timeline clock; this makes the current scope explicit.
 The V1 track-header speaker independently mutes or enables the embedded audio
 from video clips, while the A1 track continues through its separate player and
-output. Applying opacity/position/fade effects to decoded video remains a later
-rendering phase.
+output.
+
+Placement settings now reach decoded video: `videoRectangle()` applies scale
+and position to the destination rectangle, and the painter opacity comes from
+`PreviewState::effectiveOpacityPercent`, which `PreviewStateResolver` has
+already modulated by the clip's fade ramp. The per-clip DSP effect is applied
+to the frame itself on the worker thread. What remains a later phase is doing
+this composition on the **GPU**: the frame arrives as a `QVideoFrame` and
+`toImage()` forces a readback, so a `QRhi`-based path would avoid that
+round-trip without changing the `PreviewState` contract.
 
 ## Framework-neutral editor commands
 
@@ -553,7 +564,7 @@ fades; version 7 and older documents load with no DSP effect; version 8 and
 older documents load with V1 audio enabled. Every loaded placement is
 re-clamped to its own duration.
 
-## Phase 23 — DSP preview effects on a worker thread
+## Phase 23 — DSP clip effects on a worker thread
 
 The DSP group reserved in the Properties inspector now holds a real effect
 selector: **None / Grayscale / Invert / Blur**, plus an intensity slider that
