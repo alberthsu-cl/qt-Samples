@@ -15,6 +15,7 @@ struct TimelinePresentationState {
     int durationFrames = 0;
     PlaybackState playback;
     TimelineViewState view;
+    TimelineAudioMixState audioMix;
     bool splitEnabled = false;
 };
 

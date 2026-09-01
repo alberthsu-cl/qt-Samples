@@ -118,3 +118,10 @@ void QtTimelineCanvasHost::setAudioTrackVisibilityHandler(
     if (canvas_)
         canvas_->setAudioTrackVisibilityHandler(std::move(handler));
 }
+
+void QtTimelineCanvasHost::setVideoTrackAudioMutedHandler(
+    VideoTrackAudioMutedHandler handler)
+{
+    if (canvas_)
+        canvas_->setVideoTrackAudioMutedHandler(std::move(handler));
+}

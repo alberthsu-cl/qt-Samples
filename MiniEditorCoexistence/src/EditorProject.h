@@ -15,6 +15,7 @@ struct EditorProject {
     std::vector<ClipSettings> clipSettings;
     std::vector<TimelineClipState> timelineClips;
     std::vector<TimelineClip> timelineItems;
+    TimelineAudioMixState timelineAudioMix;
 
     static EditorProject createDefault(std::size_t assetCount);
 };

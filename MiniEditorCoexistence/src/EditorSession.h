@@ -30,6 +30,7 @@ public:
     const PlaybackState &sourcePlaybackState() const;
     const PlaybackState &timelinePlaybackState() const;
     const TimelineViewState &timelineViewState() const;
+    const TimelineAudioMixState &timelineAudioMixState() const;
     EditorProject projectSnapshot() const;
     const TimelineModel &timelineModel() const;
     int selectedTimelineClipId() const;
@@ -76,6 +77,7 @@ public:
     // every observer resolves that selection as the edit target.
     void leavePausedTimelinePlaybackForEditing();
     void updateTimelineViewState(const TimelineViewState &state);
+    void updateTimelineAudioMixState(const TimelineAudioMixState &state);
     void fitTimeline();
 
     // Restoring settings happens before views are constructed, so this does
@@ -110,6 +112,7 @@ private:
     PlaybackState sourcePlaybackState_;
     PlaybackState timelinePlaybackState_;
     TimelineViewState timelineViewState_;
+    TimelineAudioMixState timelineAudioMixState_;
     bool projectDirty_ = false;
     EditorHistory history_;
     struct TimelineClipboard {

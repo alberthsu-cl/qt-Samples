@@ -55,6 +55,7 @@ private slots:
     void timelineBodyDragEmitsFrameBasedMove();
     void timelineEndTrimEmitsTrimmedState();
     void timelineAudioVisibilitySeparatesRefreshAndUserToggle();
+    void timelineVideoAudioMuteSeparatesRefreshAndUserToggle();
     void timelinePresentationRefreshUpdatesToolbarAtomically();
 };
 
@@ -927,6 +928,38 @@ void MiniEditorQtWidgetTests::timelineAudioVisibilitySeparatesRefreshAndUserTogg
     canvas.setViewState(state);
     QCOMPARE(visibilityEditCount, 1);
     QVERIFY(!visibilityButton->isChecked());
+}
+
+void MiniEditorQtWidgetTests::timelineVideoAudioMuteSeparatesRefreshAndUserToggle()
+{
+    QtTimelineCanvas canvas;
+    canvas.resize(1000, TimelineGeometry::kCanvasHeight);
+    int muteEditCount = 0;
+    bool requestedMute = false;
+    canvas.setVideoTrackAudioMutedHandler([&](bool isMuted) {
+        ++muteEditCount;
+        requestedMute = isMuted;
+    });
+
+    TimelinePresentationState state;
+    state.audioMix.isVideoTrackMuted = false;
+    canvas.setPresentationState(state);
+    QCOMPARE(muteEditCount, 0);
+
+    QToolButton *audioButton = canvas.findChild<QToolButton *>(
+        QStringLiteral("videoTrackAudioButton"));
+    QVERIFY(audioButton != nullptr);
+    QVERIFY(audioButton->isChecked());
+    QVERIFY(!audioButton->icon().isNull());
+
+    QTest::mouseClick(audioButton, Qt::LeftButton);
+    QCOMPARE(muteEditCount, 1);
+    QVERIFY(requestedMute);
+
+    state.audioMix.isVideoTrackMuted = true;
+    canvas.setPresentationState(state);
+    QCOMPARE(muteEditCount, 1);
+    QVERIFY(!audioButton->isChecked());
 }
 
 void MiniEditorQtWidgetTests::timelinePresentationRefreshUpdatesToolbarAtomically()

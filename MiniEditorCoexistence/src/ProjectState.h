@@ -87,6 +87,12 @@ struct TimelineViewState {
     bool isRippleEditingEnabled = false;
 };
 
+// Project-owned audio routing for the timeline. Unlike TimelineViewState,
+// this changes the produced mix and must therefore be saved in the project.
+struct TimelineAudioMixState {
+    bool isVideoTrackMuted = false;
+};
+
 // Project-edit state for one clip on the timeline. Unlike TimelineViewState,
 // this is part of the edit decision and therefore belongs in Undo/Redo.
 struct TimelineClipState {

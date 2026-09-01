@@ -208,6 +208,13 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         // instead of waiting for the next playback timer tick.
         synchronizePlaybackTimer();
     });
+    timelineCanvasHost_.setVideoTrackAudioMutedHandler([this](bool isMuted) {
+        TimelineAudioMixState state = editorSession_.timelineAudioMixState();
+        state.isVideoTrackMuted = isMuted;
+        editorSession_.updateTimelineAudioMixState(state);
+        // Apply the new mix immediately during active timeline playback.
+        synchronizePlaybackTimer();
+    });
     if (!mediaLibraryHost_.create(GetSafeHwnd(), mediaLibrary_, &thumbnailCache_))
         return -1;
     if (!propertiesHost_.create(GetSafeHwnd()))
@@ -578,6 +585,7 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     const bool playbackChanged = includesChange(changes, EditorChange::Playback);
     const bool timelineViewChanged = includesChange(changes, EditorChange::TimelineView);
     const bool timelineClipChanged = includesChange(changes, EditorChange::TimelineClip);
+    const bool audioMixChanged = includesChange(changes, EditorChange::AudioMix);
 
 #if MINI_EDITOR_USE_QT
     const TimelinePresentationState timelinePresentationState =
@@ -604,7 +612,7 @@ void MainFrame::refreshEditorViews(EditorChange changes)
         propertiesHost_.setViewState(propertiesViewState);
     }
     if (selectionChanged || clipSettingsChanged || playbackChanged
-        || timelineViewChanged || timelineClipChanged) {
+        || timelineViewChanged || timelineClipChanged || audioMixChanged) {
         timelineCanvasHost_.setPresentationState(timelinePresentationState);
         timelineToolbarHost_.setPresentationState(timelinePresentationState);
     }

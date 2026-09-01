@@ -37,6 +37,7 @@ public:
     using TimelineClipSelectedHandler = std::function<void(int clipId)>;
     using TimelineFocusRequestedHandler = std::function<void()>;
     using AudioTrackVisibilityHandler = std::function<void(bool isVisible)>;
+    using VideoTrackAudioMutedHandler = std::function<void(bool isMuted)>;
 
     explicit QtTimelineCanvas(QWidget *parent = nullptr);
 
@@ -58,6 +59,7 @@ public:
     void setTimelineClipSelectedHandler(TimelineClipSelectedHandler handler);
     void setTimelineFocusRequestedHandler(TimelineFocusRequestedHandler handler);
     void setAudioTrackVisibilityHandler(AudioTrackVisibilityHandler handler);
+    void setVideoTrackAudioMutedHandler(VideoTrackAudioMutedHandler handler);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -78,11 +80,13 @@ private:
     void updateMouseCursor(const QPoint &point);
     void layoutTrackHeaderControls();
     void updateAudioTrackVisibilityButton();
+    void updateVideoTrackAudioButton();
     bool updateMediaDropPreview(const QMimeData *mimeData, int timelineX);
     void clearMediaDropPreview();
 
     PlaybackState playbackState_;
     TimelineViewState viewState_;
+    TimelineAudioMixState audioMixState_;
     SeekHandler seekHandler_;
     TimelineClipEditedHandler timelineClipEditedHandler_;
     MediaAssetDroppedHandler mediaAssetDroppedHandler_;
@@ -93,7 +97,9 @@ private:
     TimelineClipSelectedHandler timelineClipSelectedHandler_;
     TimelineFocusRequestedHandler timelineFocusRequestedHandler_;
     AudioTrackVisibilityHandler audioTrackVisibilityHandler_;
+    VideoTrackAudioMutedHandler videoTrackAudioMutedHandler_;
     QToolButton *audioTrackVisibilityButton_ = nullptr;
+    QToolButton *videoTrackAudioButton_ = nullptr;
     std::vector<TimelineClip> timelineClips_;
     int timelineDurationFrames_ = 600;
     TimelineClipHitRegion dragRegion_ = TimelineClipHitRegion::None;

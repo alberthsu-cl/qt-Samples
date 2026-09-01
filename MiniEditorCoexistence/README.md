@@ -461,8 +461,10 @@ the timeline playhead to its active video placement and source-media frame.
 `QtMediaPlaybackBackend` then loads or seeks that file, and switches the player
 at a clip boundary. Still-image placements and empty timeline gaps deliberately
 keep using the simulated timeline clock; this makes the current scope explicit.
-Timeline audio mixing and applying opacity/position/fade effects to decoded
-video remain later rendering and audio-engine phases.
+The V1 track-header speaker independently mutes or enables the embedded audio
+from video clips, while the A1 track continues through its separate player and
+output. Applying opacity/position/fade effects to decoded video remains a later
+rendering phase.
 
 ## Framework-neutral editor commands
 
@@ -537,10 +539,11 @@ because its arrow is not an interactive target on its own.
 The spin boxes also use `setKeyboardTracking(false)`, so typing `120` is one
 edit and one Undo entry instead of three.
 
-Project format v8 stores both fade lengths and DSP settings per timeline
-placement. Version 6 and older documents load with no fades; version 7 and
-older documents load with no DSP effect. Every loaded placement is re-clamped
-to its own duration.
+Project format v9 stores both the existing per-placement fade/DSP settings and
+the V1 embedded-audio mute state. Version 6 and older documents load with no
+fades; version 7 and older documents load with no DSP effect; version 8 and
+older documents load with V1 audio enabled. Every loaded placement is
+re-clamped to its own duration.
 
 ## Phase 23 — DSP preview effects on a worker thread
 

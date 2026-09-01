@@ -261,6 +261,9 @@ void projectDocumentRoundTripsEditState()
         2, TimelineTrackType::Audio, 500, 4170);
     sourceSession.selectTimelineClip(insertedTimelineClipId);
     sourceSession.updateSelectedClipSettings(settings);
+    TimelineAudioMixState audioMix;
+    audioMix.isVideoTrackMuted = true;
+    sourceSession.updateTimelineAudioMixState(audioMix);
     require(sourceSession.moveTimelineClip(insertedTimelineClipId,
                                            { 120, 240, 30 }),
             "Source-aware placement must accept a valid video source-in frame.");
@@ -304,6 +307,8 @@ void projectDocumentRoundTripsEditState()
                 && loadedAudioClip->trackType == TimelineTrackType::Audio
                 && loadedAudioClip->state.durationFrames == 4170,
             "Loaded project must restore timeline track and duration.");
+    require(destinationSession.timelineAudioMixState().isVideoTrackMuted,
+            "Loaded project must restore the V1 embedded-audio mute state.");
     require(!destinationSession.canUndo(), "Loading a project must begin with clean edit history.");
     require(!destinationSession.isProjectDirty(), "Loading a project must clear dirty state.");
     destinationSession.markProjectSaved();
@@ -335,6 +340,8 @@ void version5ProjectMigratesToSourceInZero()
             "Version 5 project must remain loadable after the v6 migration.");
     require(project->timelineItems.front().state.sourceInFrame == 0,
             "A version 5 placement must migrate with source-in frame zero.");
+    require(!project->timelineAudioMix.isVideoTrackMuted,
+            "Projects before version 9 must migrate with V1 audio enabled.");
 }
 
 void projectSerializerValidatesTimedSourcesButAllowsStillDuration()
@@ -1631,7 +1638,7 @@ void clipFadesTravelThroughSessionUndoAndProjectFiles()
                 && savedVideoClip->settings.fadeOutFrames == 20
                 && savedVideoClip->settings.effect == ClipEffectKind::Grayscale
                 && savedVideoClip->settings.effectIntensityPercent == 65,
-            "Format version 8 must round-trip fades and DSP settings.");
+            "The current project format must round-trip fades and DSP settings.");
 
     // Save must reject values above the editor's supported maximum even when
     // the clip itself is long enough. Otherwise load would silently clamp the
@@ -1901,6 +1908,9 @@ void timelinePresentationResolverBuildsOneCompleteViewSnapshot()
     view.isAudioTrackVisible = false;
     view.isRippleEditingEnabled = true;
     session.updateTimelineViewState(view);
+    TimelineAudioMixState audioMix;
+    audioMix.isVideoTrackMuted = true;
+    session.updateTimelineAudioMixState(audioMix);
 
     const TimelinePresentationState state =
         TimelinePresentationStateResolver::resolve(session, true);
@@ -1912,6 +1922,7 @@ void timelinePresentationResolverBuildsOneCompleteViewSnapshot()
                 && state.view.zoomPercent == 150
                 && !state.view.isAudioTrackVisible
                 && state.view.isRippleEditingEnabled
+                && state.audioMix.isVideoTrackMuted
                 && state.splitEnabled,
             "The timeline snapshot must contain canvas and toolbar state together.");
 }

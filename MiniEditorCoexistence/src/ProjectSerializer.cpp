@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr int kCurrentFormatVersion = 8;
+constexpr int kCurrentFormatVersion = 9;
 
 std::string utf8FromWide(const std::wstring &value)
 {
@@ -158,6 +158,17 @@ std::optional<std::string> stringValue(const std::string &object, const char *ke
     return match[1].str();
 }
 
+std::optional<bool> booleanValue(const std::string &object, const char *key)
+{
+    const std::regex expression(std::string("\\\"") + key
+                                + "\\\"\\s*:\\s*(true|false)");
+    std::smatch match;
+    if (!std::regex_search(object, match, expression))
+        return std::nullopt;
+
+    return match[1].str() == "true";
+}
+
 } // namespace
 
 bool ProjectSerializer::save(const std::filesystem::path &path,
@@ -223,6 +234,9 @@ bool ProjectSerializer::save(const std::filesystem::path &path,
 
     output << "{\n"
            << "  \"formatVersion\": " << kCurrentFormatVersion << ",\n"
+           << "  \"isVideoTrackMuted\": "
+           << (project.timelineAudioMix.isVideoTrackMuted ? "true" : "false")
+           << ",\n"
            << "  \"mediaAssets\": [\n";
     for (std::size_t index = 0; index < project.mediaAssets.size(); ++index) {
         const LibraryMediaAsset &asset = project.mediaAssets[index];
@@ -283,6 +297,14 @@ std::optional<EditorProject> ProjectSerializer::load(const std::filesystem::path
     }
 
     EditorProject project;
+    if (*formatVersion >= 9) {
+        const auto isVideoTrackMuted = booleanValue(json, "isVideoTrackMuted");
+        if (!isVideoTrackMuted) {
+            setError(errorMessage, L"The project has invalid audio mix settings.");
+            return std::nullopt;
+        }
+        project.timelineAudioMix.isVideoTrackMuted = *isVideoTrackMuted;
+    }
     if (*formatVersion >= 4) {
         const std::regex mediaExpression("\\{\\s*\\\"id\\\"[^}]*\\\"filePath\\\"[^}]*\\}");
         for (std::sregex_iterator iterator(json.begin(), json.end(), mediaExpression), end;

@@ -9,7 +9,9 @@ enum class EditorChange : unsigned int {
     Playback = 1 << 2,
     TimelineView = 1 << 3,
     TimelineClip = 1 << 4,
+    AudioMix = 1 << 5,
     All = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4)
+        | (1 << 5)
 };
 
 constexpr EditorChange operator|(EditorChange left, EditorChange right)

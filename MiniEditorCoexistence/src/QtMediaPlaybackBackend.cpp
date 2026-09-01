@@ -107,7 +107,7 @@ QtMediaPlaybackBackend::QtMediaPlaybackBackend(
                 } else if (session_.timelinePlaybackState().isPlaying) {
                     // Loading and seeking were silent; actual timeline audio
                     // begins only after the requested source frame is applied.
-                    audioOutput_.setMuted(false);
+                    audioOutput_.setMuted(shouldMuteVideoTrackAudio());
                     player_.play();
                 }
             }
@@ -551,6 +551,7 @@ PlaybackClockAction QtMediaPlaybackBackend::synchronizeTimelinePlayback(
 
     if (timeline.isPlaying) {
         cancelSilentFirstFrameDecode();
+        audioOutput_.setMuted(shouldMuteVideoTrackAudio());
         player_.play();
         return PlaybackClockAction::EnsureRunning;
     }
@@ -664,7 +665,13 @@ void QtMediaPlaybackBackend::cancelSilentFirstFrameDecode()
 {
     pauseAfterFirstVideoFrame_ = false;
     if (!hasPendingTimelineSeek_)
-        audioOutput_.setMuted(false);
+        audioOutput_.setMuted(shouldMuteVideoTrackAudio());
+}
+
+bool QtMediaPlaybackBackend::shouldMuteVideoTrackAudio() const
+{
+    return session_.isTimelineFocused()
+        && session_.timelineAudioMixState().isVideoTrackMuted;
 }
 
 void QtMediaPlaybackBackend::stopRealPlayback()

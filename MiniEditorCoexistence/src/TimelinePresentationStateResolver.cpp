@@ -11,6 +11,7 @@ TimelinePresentationState TimelinePresentationStateResolver::resolve(
     state.durationFrames = session.timelineModel().durationFrames();
     state.playback = session.timelinePlaybackState();
     state.view = session.timelineViewState();
+    state.audioMix = session.timelineAudioMixState();
     state.splitEnabled = splitEnabled;
     return state;
 }

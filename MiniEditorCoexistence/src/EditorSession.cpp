@@ -152,9 +152,15 @@ const TimelineViewState &EditorSession::timelineViewState() const
     return timelineViewState_;
 }
 
+const TimelineAudioMixState &EditorSession::timelineAudioMixState() const
+{
+    return timelineAudioMixState_;
+}
+
 EditorProject EditorSession::projectSnapshot() const
 {
-    return { {}, clipSettings_, timelineClipStates_, timelineModel_.clips() };
+    return { {}, clipSettings_, timelineClipStates_, timelineModel_.clips(),
+             timelineAudioMixState_ };
 }
 
 const TimelineModel &EditorSession::timelineModel() const
@@ -643,6 +649,7 @@ void EditorSession::replaceProject(const EditorProject &project)
         timelineClipStates_[index] = clampedTimelineClipState(project.timelineClips[index]);
     }
     timelineModel_ = std::move(restoredTimeline);
+    timelineAudioMixState_ = project.timelineAudioMix;
     selectedAssetIndex_ = -1;
     selectedTimelineClipId_ = 0;
     isTimelineFocused_ = false;
@@ -811,6 +818,17 @@ void EditorSession::updateTimelineViewState(const TimelineViewState &state)
                                                  kMinimumTimelineZoom,
                                                  kMaximumTimelineZoom);
     notifyStateChanged(EditorChange::TimelineView);
+}
+
+void EditorSession::updateTimelineAudioMixState(
+    const TimelineAudioMixState &state)
+{
+    if (timelineAudioMixState_.isVideoTrackMuted == state.isVideoTrackMuted)
+        return;
+
+    timelineAudioMixState_ = state;
+    projectDirty_ = true;
+    notifyStateChanged(EditorChange::AudioMix);
 }
 
 void EditorSession::fitTimeline()

@@ -112,6 +112,44 @@ QIcon audioTrackEyeIcon(bool isVisible)
     return QIcon(pixmap);
 }
 
+QIcon videoTrackSpeakerIcon(bool isEnabled)
+{
+    QPixmap pixmap(20, 20);
+    pixmap.fill(Qt::transparent);
+
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+    const QColor iconColor(215, 223, 235);
+    painter.setPen(QPen(iconColor, 1.8, Qt::SolidLine,
+                        Qt::RoundCap, Qt::RoundJoin));
+    painter.setBrush(iconColor);
+
+    QPainterPath speaker;
+    speaker.moveTo(2.5, 8);
+    speaker.lineTo(6.5, 8);
+    speaker.lineTo(11, 4.5);
+    speaker.lineTo(11, 15.5);
+    speaker.lineTo(6.5, 12);
+    speaker.lineTo(2.5, 12);
+    speaker.closeSubpath();
+    painter.drawPath(speaker);
+
+    painter.setBrush(Qt::NoBrush);
+    if (isEnabled) {
+        painter.drawArc(QRectF(8.5, 5, 7, 10), -60 * 16, 120 * 16);
+        painter.drawArc(QRectF(9, 2.5, 10, 15), -55 * 16, 110 * 16);
+    } else {
+        painter.setPen(QPen(QColor(35, 37, 43), 4.2, Qt::SolidLine,
+                            Qt::RoundCap, Qt::RoundJoin));
+        painter.drawLine(QPointF(3, 3), QPointF(17, 17));
+        painter.setPen(QPen(iconColor, 2.1, Qt::SolidLine,
+                            Qt::RoundCap, Qt::RoundJoin));
+        painter.drawLine(QPointF(3, 3), QPointF(17, 17));
+    }
+
+    return QIcon(pixmap);
+}
+
 } // namespace
 
 QtTimelineCanvas::QtTimelineCanvas(QWidget *parent)
@@ -140,6 +178,24 @@ QtTimelineCanvas::QtTimelineCanvas(QWidget *parent)
                     audioTrackVisibilityHandler_(isVisible);
             });
     updateAudioTrackVisibilityButton();
+
+    videoTrackAudioButton_ = new QToolButton(this);
+    videoTrackAudioButton_->setObjectName(QStringLiteral("videoTrackAudioButton"));
+    videoTrackAudioButton_->setAutoRaise(true);
+    videoTrackAudioButton_->setCheckable(true);
+    videoTrackAudioButton_->setFixedSize(26, 26);
+    videoTrackAudioButton_->setIconSize(QSize(20, 20));
+    videoTrackAudioButton_->setStyleSheet(QStringLiteral(
+        "QToolButton#videoTrackAudioButton { border: 0; background: transparent; }"
+        "QToolButton#videoTrackAudioButton:hover { background: #3c5572; border-radius: 3px; }"
+        "QToolButton#videoTrackAudioButton:pressed { background: #2a88eb; }"));
+    connect(videoTrackAudioButton_, &QToolButton::toggled, this,
+            [this](bool isEnabled) {
+                updateVideoTrackAudioButton();
+                if (videoTrackAudioMutedHandler_)
+                    videoTrackAudioMutedHandler_(!isEnabled);
+            });
+    updateVideoTrackAudioButton();
 }
 
 void QtTimelineCanvas::setPresentationState(
@@ -149,9 +205,11 @@ void QtTimelineCanvas::setPresentationState(
     selectedClipId_ = state.selectedClipId;
     playbackState_ = state.playback;
     viewState_ = state.view;
+    audioMixState_ = state.audioMix;
     timelineDurationFrames_ = std::max(600, state.durationFrames);
     setMinimumWidth(geometry().contentWidth());
     updateAudioTrackVisibilityButton();
+    updateVideoTrackAudioButton();
     update();
 }
 
@@ -241,6 +299,12 @@ void QtTimelineCanvas::setAudioTrackVisibilityHandler(
     AudioTrackVisibilityHandler handler)
 {
     audioTrackVisibilityHandler_ = std::move(handler);
+}
+
+void QtTimelineCanvas::setVideoTrackAudioMutedHandler(
+    VideoTrackAudioMutedHandler handler)
+{
+    videoTrackAudioMutedHandler_ = std::move(handler);
 }
 
 void QtTimelineCanvas::paintEvent(QPaintEvent *)
@@ -820,12 +884,19 @@ void QtTimelineCanvas::updateMouseCursor(const QPoint &point)
 
 void QtTimelineCanvas::layoutTrackHeaderControls()
 {
-    if (audioTrackVisibilityButton_ == nullptr)
+    if (audioTrackVisibilityButton_ == nullptr
+        || videoTrackAudioButton_ == nullptr) {
         return;
+    }
 
+    const TimelineRectangle videoTrack = geometry().trackRectangle(
+        TimelineTrackType::Video, width());
     const TimelineRectangle audioTrack = geometry().trackRectangle(
         TimelineTrackType::Audio, width());
     const int buttonSize = audioTrackVisibilityButton_->width();
+    videoTrackAudioButton_->move(
+        TimelineGeometry::kTimelineLeft - buttonSize - 5,
+        videoTrack.top + (videoTrack.height - buttonSize) / 2);
     audioTrackVisibilityButton_->move(
         TimelineGeometry::kTimelineLeft - buttonSize - 5,
         audioTrack.top + (audioTrack.height - buttonSize) / 2);
@@ -843,4 +914,18 @@ void QtTimelineCanvas::updateAudioTrackVisibilityButton()
     audioTrackVisibilityButton_->setToolTip(isVisible
         ? QStringLiteral("Hide audio track")
         : QStringLiteral("Show audio track"));
+}
+
+void QtTimelineCanvas::updateVideoTrackAudioButton()
+{
+    if (videoTrackAudioButton_ == nullptr)
+        return;
+
+    const QSignalBlocker blocker(videoTrackAudioButton_);
+    const bool isEnabled = !audioMixState_.isVideoTrackMuted;
+    videoTrackAudioButton_->setChecked(isEnabled);
+    videoTrackAudioButton_->setIcon(videoTrackSpeakerIcon(isEnabled));
+    videoTrackAudioButton_->setToolTip(isEnabled
+        ? QStringLiteral("Mute V1 audio")
+        : QStringLiteral("Unmute V1 audio"));
 }
