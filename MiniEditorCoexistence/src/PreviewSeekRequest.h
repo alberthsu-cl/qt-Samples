@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MediaPlaybackPlan.h"
+#include "TimelineAudioPlaybackPlan.h"
 
 #include <cstdint>
 #include <optional>
@@ -13,8 +14,10 @@ class MediaLibrary;
 // again while an asynchronous seek is in flight.
 struct PreviewSeekRequest {
     std::uint64_t requestId = 0;
+    MediaPlaybackContext context = MediaPlaybackContext::None;
     int timelineFrame = 0;
     MediaPlaybackPlan playbackPlan;
+    TimelineAudioPlaybackPlan audioPlaybackPlan;
 
     bool isValid() const;
 };

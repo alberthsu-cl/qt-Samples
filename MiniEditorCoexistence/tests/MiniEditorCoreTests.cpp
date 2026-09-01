@@ -12,6 +12,7 @@
 #include "TimelineClipEdit.h"
 #include "TimelineTrackPolicy.h"
 #include "TimelinePlaybackResolver.h"
+#include "TimelineAudioPlaybackPlan.h"
 #include "TimelinePresentationStateResolver.h"
 #include "TimelineGeometry.h"
 #include "TimelineEditingController.h"
@@ -1710,7 +1711,9 @@ void previewSeekRequestsSnapshotIntentAndRejectStaleResults()
 
     const PreviewSeekRequest first = PreviewSeekRequestResolver::resolve(
         41, session, library);
-    require(first.isValid() && first.timelineFrame == 140
+    require(first.isValid()
+                && first.context == MediaPlaybackContext::Timeline
+                && first.timelineFrame == 140
                 && first.playbackPlan.context == MediaPlaybackContext::Timeline
                 && first.playbackPlan.timelineClipId == clipId
                 && first.playbackPlan.sourceFrame == 70,
@@ -1734,6 +1737,50 @@ void previewSeekRequestsSnapshotIntentAndRejectStaleResults()
             "Completing the newest seek must clear pending work.");
     require(!tracker.begin(first),
             "An old request ID must remain stale after completion.");
+}
+
+void timelineAudioPlaybackPlanResolvesA1Independently()
+{
+    MediaLibrary library;
+    const int audioId = library.addKnownAsset(
+        L"D:/media/a1-music.mp3", MediaKind::Audio, 500, 0x2878B4);
+
+    EditorSession session(1);
+    const int audioClipId = session.addTimelineClip(
+        audioId, TimelineTrackType::Audio, 90, 200);
+    require(session.moveTimelineClip(audioClipId, { 90, 200, 20 }),
+            "A1 plan test requires a trimmed audio placement.");
+    session.selectTimelineClip(audioClipId, 0);
+    ClipSettings settings;
+    settings.fadeInFrames = 20;
+    session.updateSelectedClipSettings(settings);
+    session.setPlaybackDuration(
+        session.timelineModel().contentDurationFrames(), false);
+    session.seekTimeline(100);
+
+    TimelineAudioPlaybackPlan plan =
+        TimelineAudioPlaybackPlanResolver::resolve(session, library);
+    require(plan.hasAudio() && plan.timelineClipId == audioClipId
+                && plan.mediaAssetId == audioId && plan.sourceFrame == 30
+                && plan.fadeGainPercent == 50 && !plan.shouldPlay,
+            "A1 must resolve trim and fade state independently of V1.");
+
+    session.handlePlaybackCommand(PlaybackCommand::TogglePlayPause);
+    plan = TimelineAudioPlaybackPlanResolver::resolve(session, library);
+    require(plan.shouldPlay,
+            "A1 plan must publish real playback intent with the timeline clock.");
+
+    TimelineViewState viewState = session.timelineViewState();
+    viewState.isAudioTrackVisible = false;
+    session.updateTimelineViewState(viewState);
+    require(!TimelineAudioPlaybackPlanResolver::resolve(session, library).hasAudio(),
+            "A hidden A1 lane must not publish audible decoder work.");
+
+    viewState.isAudioTrackVisible = true;
+    session.updateTimelineViewState(viewState);
+    session.seekTimeline(50);
+    require(!TimelineAudioPlaybackPlanResolver::resolve(session, library).hasAudio(),
+            "An A1 gap must stop the real audio decoder.");
 }
 
 void editorSessionAcceptsAuthoritativeBackendPlaybackState()
@@ -1891,6 +1938,7 @@ int main()
         simulatedPlaybackBackendOwnsTheInitialPlaybackImplementation();
         mediaPlaybackPlanResolverCentralizesDecoderIntent();
         previewSeekRequestsSnapshotIntentAndRejectStaleResults();
+        timelineAudioPlaybackPlanResolvesA1Independently();
         editorSessionAcceptsAuthoritativeBackendPlaybackState();
         previewStateResolverKeepsPreviewPolicyFrameworkNeutral();
         clipFadeOwnsRampPolicyIndependentlyOfAnyRenderer();

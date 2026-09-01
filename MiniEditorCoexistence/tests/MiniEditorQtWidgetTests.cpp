@@ -13,6 +13,7 @@
 #include "TimelineGeometry.h"
 
 #include <QComboBox>
+#include <QFile>
 #include <QGroupBox>
 #include <QLabel>
 #include <QListView>
@@ -43,6 +44,7 @@ private slots:
     void transportRefreshAndButtonsUseSemanticCommands();
     void mediaLibrarySeparatesProgrammaticAndUserSelection();
     void mediaLibraryModelExposesDecodedRealImageThumbnail();
+    void mediaLibraryPaintsAudioArtworkWithoutDecodedThumbnail();
     void timelineThumbnailCacheRegeneratesPerClipEffects();
     void timelineCanvasRequestsDistinctTrimmedSourceFrames();
     void timelineClickSeekFocusAndDeleteUseSemanticHandlers();
@@ -73,6 +75,44 @@ void MiniEditorQtWidgetTests::mediaLibraryModelExposesDecodedRealImageThumbnail(
         .data(MediaAssetModel::ThumbnailImageRole).value<QImage>();
     QVERIFY(!thumbnail.isNull());
     QCOMPARE(thumbnail.size(), sourceImage.size());
+}
+
+void MiniEditorQtWidgetTests::mediaLibraryPaintsAudioArtworkWithoutDecodedThumbnail()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString audioPath = directory.filePath(QStringLiteral("music.mp3"));
+    QFile audioFile(audioPath);
+    QVERIFY(audioFile.open(QIODevice::WriteOnly));
+    audioFile.close();
+
+    MediaLibrary library;
+    QVERIFY(library.addFile(
+        std::filesystem::path(audioPath.toStdWString())).has_value());
+
+    QtMediaLibraryPanel panel(library);
+    panel.resize(360, 280);
+    panel.show();
+    QCoreApplication::processEvents();
+
+    QListView *assetView = panel.findChild<QListView *>(
+        QStringLiteral("assetView"));
+    QVERIFY(assetView != nullptr);
+    QCOMPARE(assetView->model()->rowCount(), 1);
+    const QRect itemRect = assetView->visualRect(assetView->model()->index(0, 0));
+    QVERIFY(itemRect.isValid());
+    const QImage paintedItem = assetView->viewport()->grab(itemRect).toImage();
+
+    int cyanPixelCount = 0;
+    for (int y = 0; y < paintedItem.height(); ++y) {
+        for (int x = 0; x < paintedItem.width(); ++x) {
+            const QColor pixel = paintedItem.pixelColor(x, y);
+            if (pixel.red() < 80 && pixel.green() > 130 && pixel.blue() > 160)
+                ++cyanPixelCount;
+        }
+    }
+    QVERIFY2(cyanPixelCount > 30,
+             "Audio cards must paint recognizable cyan waveform artwork.");
 }
 
 void MiniEditorQtWidgetTests::timelineThumbnailCacheRegeneratesPerClipEffects()

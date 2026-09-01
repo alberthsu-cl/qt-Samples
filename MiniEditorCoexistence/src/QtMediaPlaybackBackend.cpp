@@ -21,6 +21,43 @@ QtMediaPlaybackBackend::QtMediaPlaybackBackend(
 {
     audioOutput_.setVolume(0.75F);
     player_.setAudioOutput(&audioOutput_);
+    timelineAudioOutput_.setVolume(0.75F);
+    timelineAudioPlayer_.setAudioOutput(&timelineAudioOutput_);
+
+    QObject::connect(&timelineAudioPlayer_, &QMediaPlayer::mediaStatusChanged,
+                     [this](QMediaPlayer::MediaStatus status) {
+        if (status == QMediaPlayer::InvalidMedia) {
+            stopTimelineAudioPlayback();
+            return;
+        }
+        if (status != QMediaPlayer::LoadedMedia
+            || !session_.isTimelineFocused()) {
+            return;
+        }
+
+        const TimelineAudioPlaybackPlan plan = desiredTimelineAudioPlan();
+        if (!plan.hasAudio()
+            || plan.mediaAssetId != loadedTimelineAudioAssetId_
+            || plan.timelineClipId != loadedTimelineAudioClipId_) {
+            return;
+        }
+
+        // Loading can finish several timeline ticks after setSource(). Seek
+        // to the current plan rather than replaying the now-stale load frame.
+        if (hasPendingTimelineAudioSeek_) {
+            pendingTimelineAudioSourceFrame_ = plan.sourceFrame;
+            timelineAudioPlayer_.setPosition(positionMillisecondsForFrame(
+                pendingTimelineAudioSourceFrame_));
+            hasPendingTimelineAudioSeek_ = false;
+        }
+        timelineAudioOutput_.setVolume(
+            0.75F * plan.fadeGainPercent / 100.0F);
+        timelineAudioOutput_.setMuted(!plan.shouldPlay);
+        if (plan.shouldPlay)
+            timelineAudioPlayer_.play();
+        else
+            timelineAudioPlayer_.pause();
+    });
 
     QObject::connect(&player_, &QMediaPlayer::positionChanged,
                      [this](qint64) { updateSessionFromPlayer(); });
@@ -179,16 +216,24 @@ PlaybackClockAction QtMediaPlaybackBackend::executeCommand(
 
         if (command == PlaybackCommand::Stop) {
             stopRealPlayback();
+            stopTimelineAudioPlayback();
         } else if (stateBeforeCommand.isPlaying
                    && command == PlaybackCommand::TogglePlayPause) {
             player_.pause();
+            timelineAudioPlayer_.pause();
         }
 
         // A stopped edit preview may intentionally show the focused clip's
         // first frame while the head remains elsewhere. Starting playback
         // must therefore seek once to the head before player_.play().
-        return synchronizeTimelinePlayback(isStartingPlayback);
+        const PlaybackClockAction action =
+            synchronizeTimelinePlayback(isStartingPlayback);
+        synchronizeTimelineAudio(desiredTimelineAudioPlan(),
+                                 isStartingPlayback);
+        return action;
     }
+
+    stopTimelineAudioPlayback();
 
     const MediaPlaybackPlan plan = desiredPlaybackPlan();
     if (plan.context != MediaPlaybackContext::Source
@@ -232,8 +277,13 @@ PlaybackClockAction QtMediaPlaybackBackend::executeCommand(
 
 PlaybackClockAction QtMediaPlaybackBackend::synchronize()
 {
-    if (session_.isTimelineFocused())
-        return synchronizeTimelinePlayback();
+    if (session_.isTimelineFocused()) {
+        const PlaybackClockAction action = synchronizeTimelinePlayback();
+        synchronizeTimelineAudio(desiredTimelineAudioPlan(), false);
+        return action;
+    }
+
+    stopTimelineAudioPlayback();
 
     const MediaPlaybackPlan plan = desiredPlaybackPlan();
     if (plan.context != MediaPlaybackContext::Source
@@ -258,8 +308,14 @@ PlaybackClockAction QtMediaPlaybackBackend::seek(
         return synchronize();
 
     const MediaPlaybackPlan &plan = request.playbackPlan;
-    if (plan.context == MediaPlaybackContext::Timeline)
-        return synchronizeTimelinePlayback(plan, true);
+    if (request.context == MediaPlaybackContext::Timeline) {
+        const PlaybackClockAction action =
+            synchronizeTimelinePlayback(plan, true);
+        synchronizeTimelineAudio(request.audioPlaybackPlan, true);
+        return action;
+    }
+
+    stopTimelineAudioPlayback();
 
     if (plan.context != MediaPlaybackContext::Source
         || !plan.usesMediaDecoder()) {
@@ -294,16 +350,23 @@ PlaybackClockAction QtMediaPlaybackBackend::advanceOneFrame()
         // authoritative source for the head and the transport progress bar.
         QCoreApplication::processEvents(QEventLoop::AllEvents, 2);
 
-        if (!session_.timelinePlaybackState().isPlaying)
-            return synchronizeTimelinePlayback();
+        if (!session_.timelinePlaybackState().isPlaying) {
+            const PlaybackClockAction action = synchronizeTimelinePlayback();
+            synchronizeTimelineAudio(desiredTimelineAudioPlan(), false);
+            return action;
+        }
 
         // This advances video clips, still images, and gaps consistently. The
         // subsequent synchronisation maps the new head position to a decoded
         // video clip when one exists, and switches the player only at a clip
         // boundary.
         simulatedBackend_.advanceOneFrame();
-        return synchronizeTimelinePlayback();
+        const PlaybackClockAction action = synchronizeTimelinePlayback();
+        synchronizeTimelineAudio(desiredTimelineAudioPlan(), false);
+        return action;
     }
+
+    stopTimelineAudioPlayback();
 
     const MediaPlaybackPlan plan = desiredPlaybackPlan();
     if (plan.context != MediaPlaybackContext::Source
@@ -477,6 +540,82 @@ PlaybackClockAction QtMediaPlaybackBackend::synchronizeTimelinePlayback(
 
     player_.pause();
     return PlaybackClockAction::Stop;
+}
+
+TimelineAudioPlaybackPlan QtMediaPlaybackBackend::desiredTimelineAudioPlan() const
+{
+    return TimelineAudioPlaybackPlanResolver::resolve(session_, mediaLibrary_);
+}
+
+bool QtMediaPlaybackBackend::ensureTimelineAudioLoaded(
+    const TimelineAudioPlaybackPlan &plan, bool seekToTimelineFrame)
+{
+    if (!plan.hasAudio())
+        return false;
+
+    const LibraryMediaAsset *asset = mediaLibrary_.findAsset(plan.mediaAssetId);
+    if (asset == nullptr || asset->kind != MediaKind::Audio
+        || asset->filePath.empty()) {
+        return false;
+    }
+
+    std::error_code error;
+    if (!std::filesystem::is_regular_file(asset->filePath, error))
+        return false;
+
+    const bool changedClip = loadedTimelineAudioAssetId_ != asset->id
+        || loadedTimelineAudioClipId_ != plan.timelineClipId;
+    if (changedClip) {
+        timelineAudioOutput_.setMuted(true);
+        timelineAudioPlayer_.stop();
+        loadedTimelineAudioAssetId_ = asset->id;
+        loadedTimelineAudioClipId_ = plan.timelineClipId;
+        pendingTimelineAudioSourceFrame_ = plan.sourceFrame;
+        hasPendingTimelineAudioSeek_ = true;
+        timelineAudioPlayer_.setSource(QUrl::fromLocalFile(
+            QString::fromStdWString(asset->filePath.wstring())));
+    }
+
+    if (changedClip || seekToTimelineFrame) {
+        pendingTimelineAudioSourceFrame_ = plan.sourceFrame;
+        hasPendingTimelineAudioSeek_ = true;
+        timelineAudioPlayer_.setPosition(positionMillisecondsForFrame(
+            pendingTimelineAudioSourceFrame_));
+    }
+    return true;
+}
+
+void QtMediaPlaybackBackend::synchronizeTimelineAudio(
+    const TimelineAudioPlaybackPlan &plan, bool seekToTimelineFrame)
+{
+    if (!ensureTimelineAudioLoaded(plan, seekToTimelineFrame)) {
+        stopTimelineAudioPlayback();
+        return;
+    }
+
+    timelineAudioOutput_.setVolume(
+        0.75F * plan.fadeGainPercent / 100.0F);
+    if (plan.shouldPlay) {
+        timelineAudioOutput_.setMuted(false);
+        timelineAudioPlayer_.play();
+    } else {
+        // Seeking while stopped or paused prepares the decoder position but
+        // must never leak a short packet through the speakers.
+        timelineAudioOutput_.setMuted(true);
+        timelineAudioPlayer_.pause();
+    }
+}
+
+void QtMediaPlaybackBackend::stopTimelineAudioPlayback()
+{
+    timelineAudioOutput_.setMuted(true);
+    if (timelineAudioPlayer_.playbackState() != QMediaPlayer::StoppedState)
+        timelineAudioPlayer_.stop();
+    timelineAudioPlayer_.setSource({});
+    loadedTimelineAudioAssetId_ = 0;
+    loadedTimelineAudioClipId_ = 0;
+    pendingTimelineAudioSourceFrame_ = 0;
+    hasPendingTimelineAudioSeek_ = false;
 }
 
 void QtMediaPlaybackBackend::beginSilentFrameDecode(int targetSourceFrame)

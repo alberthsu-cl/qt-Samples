@@ -2,6 +2,7 @@
 
 #include "MediaPlaybackPlan.h"
 #include "PlaybackBackend.h"
+#include "TimelineAudioPlaybackPlan.h"
 
 #include <QAudioOutput>
 #include <QMediaPlayer>
@@ -47,6 +48,12 @@ private:
         bool seekToTimelineFrame = false);
     PlaybackClockAction synchronizeTimelinePlayback(
         const MediaPlaybackPlan &plan, bool seekToTimelineFrame);
+    TimelineAudioPlaybackPlan desiredTimelineAudioPlan() const;
+    bool ensureTimelineAudioLoaded(const TimelineAudioPlaybackPlan &plan,
+                                   bool seekToTimelineFrame);
+    void synchronizeTimelineAudio(const TimelineAudioPlaybackPlan &plan,
+                                  bool seekToTimelineFrame);
+    void stopTimelineAudioPlayback();
     void beginSilentFrameDecode(int targetSourceFrame);
     void finishSilentFirstFrameDecode();
     void cancelSilentFirstFrameDecode();
@@ -65,6 +72,8 @@ private:
     // after its output so it disconnects before QAudioOutput is destroyed.
     QAudioOutput audioOutput_;
     QMediaPlayer player_;
+    QAudioOutput timelineAudioOutput_;
+    QMediaPlayer timelineAudioPlayer_;
     int loadedAssetId_ = 0;
     int loadedTimelineClipId_ = 0;
     bool loadedForTimeline_ = false;
@@ -78,6 +87,10 @@ private:
     int pendingTimelineSeekFrame_ = 0;
     bool hasPendingTimelineSeek_ = false;
     bool decodedVideoVisible_ = false;
+    int loadedTimelineAudioAssetId_ = 0;
+    int loadedTimelineAudioClipId_ = 0;
+    int pendingTimelineAudioSourceFrame_ = 0;
+    bool hasPendingTimelineAudioSeek_ = false;
     PreviewSeekRequestTracker seekRequests_;
     VideoVisibilityHandler videoVisibilityHandler_;
     SourceMetadataChangedHandler sourceMetadataChangedHandler_;

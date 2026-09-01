@@ -14,8 +14,11 @@ PreviewSeekRequest PreviewSeekRequestResolver::resolve(
 {
     return {
         requestId,
+        session.isTimelineFocused() ? MediaPlaybackContext::Timeline
+                                    : MediaPlaybackContext::Source,
         session.playbackState().currentFrame,
-        MediaPlaybackPlanResolver::resolve(session, mediaLibrary)
+        MediaPlaybackPlanResolver::resolve(session, mediaLibrary),
+        TimelineAudioPlaybackPlanResolver::resolve(session, mediaLibrary)
     };
 }
 

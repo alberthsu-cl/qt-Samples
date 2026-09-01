@@ -188,6 +188,9 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         TimelineViewState state = editorSession_.timelineViewState();
         state.isAudioTrackVisible = isVisible;
         editorSession_.updateTimelineViewState(state);
+        // A1 visibility is also its audition state. Apply mute/unmute now
+        // instead of waiting for the next playback timer tick.
+        synchronizePlaybackTimer();
     });
     if (!mediaLibraryHost_.create(GetSafeHwnd(), mediaLibrary_, &thumbnailCache_))
         return -1;
