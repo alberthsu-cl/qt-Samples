@@ -4,6 +4,17 @@ This sample models the **UI structure** of a desktop video editor and now has
 an intentionally small real source-media playback path. It is a learning
 project for gradual MFC-to-Qt migration, not a video editor implementation.
 
+## Timeline playback engine study
+
+The playback-engine refactoring is documented as a learning project:
+
+- [Current playback architecture](docs/architecture/current-playback-architecture.md)
+- [Living presentation](docs/Timeline-Playback-Engine-Learning.pptx)
+
+The presentation stays intentionally short. It is updated only when an
+architecture decision is accepted or an implementation milestone changes what
+the system can demonstrate.
+
 ## Phase 0 — Pure MFC baseline
 
 The application contains four focused custom MFC child windows:
