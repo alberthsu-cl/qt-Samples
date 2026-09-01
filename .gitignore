@@ -21,6 +21,9 @@ install_manifest.txt
 *.tlog
 *.vcxproj.user
 
+# Temporary Microsoft Office lock files
+~$*.pptx
+
 # Local media and image files used while experimenting
 /SampleClips/
 *.mp4
