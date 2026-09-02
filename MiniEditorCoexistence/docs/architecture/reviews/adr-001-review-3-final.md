@@ -286,7 +286,7 @@ is open; noted so the flip is not forgotten.
 
 ## Ready to change from Proposed to Accepted?
 
-**Yes, once F1 lands.**
+**Yes, once F1 lands.** — *Satisfied; see [Closure](#closure--2026-09-02) below.*
 
 F1 requires adding operators to a list, not making a decision. Nothing else in
 the ADR changes, no conclusion is revisited, and the four editorial suggestions
@@ -301,6 +301,35 @@ Recommended sequence:
    says future decisions will cover playback authority — already covered by
    ADR-002.
 4. Implementation issues may then depend on ADR-001.
+
+## Closure — 2026-09-02
+
+All items from this gate were applied and verified against the working tree.
+ADR-001 is now **Accepted**; the gate is closed and no follow-up review round is
+required.
+
+| Item | Outcome |
+| --- | --- |
+| F1 | **Closed.** Same-type `==`, `!=`, `<`, `<=`, `>`, `>=` granted; cross-type and cross-origin comparison remain ill-formed; five `::zero()` constants added; unary negation added for the three signed types. |
+| E1 | **Applied.** Decision 6's conceptual block is now a three-step derivation naming `sequenceElapsedFor()` and `frameAtSequenceTime()` instead of the forbidden multiply. |
+| E2 | **Applied,** and beyond what was asked: rounding toward zero is stated, the helpers are declared not to be exact inverses, and re-anchoring is told to carry the exact anchor rather than round-trip through both helpers. |
+| E3 | **Applied.** Criterion 5 now separates the debug precondition from the caller-clamp test. |
+| E4 | **Applied.** Criterion 1 is reframed as header review rather than an automated test. |
+| E5 | **Applied.** Status is `Accepted`, dated, and the index status column agrees. |
+
+Two changes went further than this review requested, both in the right
+direction:
+
+- `FrameRate` gained rational *relational* comparison, not only equality;
+- `MasterClockTime` deliberately has **no** `zero()`. A monotonic clock's epoch
+  is arbitrary, so a zero master-clock instant would be meaningless. Omitting it
+  is correct.
+
+The stale line in [`../decisions/README.md`](../decisions/README.md) was fixed
+in the same pass: playback authority is now attributed to ADR-002 rather than
+listed as a future decision.
+
+Implementation issues may now depend on ADR-001.
 
 ## Reviewer's note
 
