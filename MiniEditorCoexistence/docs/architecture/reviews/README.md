@@ -47,7 +47,7 @@ raises one new blocking finding, `B3`: the code closing B1 redeclares
 `MediaKind` with different values than the type already defined in
 `MediaKind.h` and used in sixteen existing files, which will not compile once
 both reach the same translation unit. The fix is one line and needs no new
-decision. ADR-003 remains Proposed pending it.
+decision. The blocker was corrected and ADR-003 is now Accepted.
 
 ## Reading order for ADR-002
 

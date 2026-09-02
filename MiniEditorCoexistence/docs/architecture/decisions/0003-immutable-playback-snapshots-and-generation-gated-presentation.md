@@ -1,6 +1,6 @@
 # ADR-003: Immutable Playback Snapshots and Generation-Gated Presentation
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-09-02
 
@@ -59,13 +59,12 @@ struct SequencePlaybackSnapshot {
 The descriptor is an explicit framework-neutral value:
 
 ```cpp
-enum class MediaKind { Video, StillImage, Audio };
 enum class MediaAvailability { Available, Unavailable };
 struct PlaybackCapabilities {}; // Opaque, immutable decoder capabilities.
 
 struct PlaybackMediaDescriptor {
     MediaAssetId mediaAssetId;
-    MediaKind mediaKind;
+    MediaKind mediaKind; // Reuses the framework-neutral MediaKind type.
     std::string immutableSourceLocator;
     MediaAvailability availability;
     std::optional<SourceTimestamp> sourceExtent;
