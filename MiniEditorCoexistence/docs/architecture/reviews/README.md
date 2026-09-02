@@ -23,17 +23,18 @@ cite them:
 | [ADR-001 review 3](adr-001-review-3-final.md) | Final acceptance gate | 3 — final | Accept with minor editorial changes — closed |
 | [ADR-002 review 1](adr-002-review-1-playback-authority.md) | PlaybackSession is the playback-state authority | 1 — original | Accept with revisions |
 | [ADR-002 review 2](adr-002-review-2-resolutions.md) | Owner resolutions to review 1 | 2 — resolutions | Accept with blocking revisions |
+| [ADR-002 review 3](adr-002-review-3-final.md) | Final acceptance gate | 3 — final | Accept with minor editorial changes |
 
 ## Reading order for ADR-002
 
 Read review 1 for findings `B1` through `B8` and the reasoning behind each,
 then review 2 for the owner's resolutions.
 
-Review 2 closes five of the eight and leaves three items blocking: `B9`
-(source-preview progress is not computable under ADR-001), `B10` (clip
-selection is a presentation concern, not a transport command) and `B11`
-(`HoldLastFrame` has no phase consistent with Stopped-implies-start). `B3` and
-`B7` are partially resolved. ADR-002 remains Proposed.
+Review 2 closed five of the eight and raised three more: `B9`, `B10` and `B11`.
+Review 3 is the acceptance gate for revision `9448227`: all eleven findings are
+closed, and two new ones remain, `F1` (command rejection has no channel) and
+`F2` (`OpenSource` has no in-flight phase). ADR-002 may change from Proposed to
+Accepted once those two land.
 
 ## Reading order for ADR-001
 
