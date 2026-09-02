@@ -21,6 +21,14 @@ cite them:
 | [ADR-001 review 1](adr-001-review-1-time-domains.md) | Strong Media Time Domains | 1 — original | Accept with revisions |
 | [ADR-001 review 2](adr-001-review-2-resolutions.md) | Owner resolutions to review 1 | 2 — resolutions | 4 of 5 blockers closed |
 | [ADR-001 review 3](adr-001-review-3-final.md) | Final acceptance gate | 3 — final | Accept with minor editorial changes — closed |
+| [ADR-002 review 1](adr-002-review-1-playback-authority.md) | PlaybackSession is the playback-state authority | 1 — original | Accept with revisions |
+
+## Reading order for ADR-002
+
+ADR-002 has one open review round. Its blocking findings are `B1` through
+`B8`; section 4 carries the state/command grid the ADR still needs, and
+sections 5 and 6 carry the recommended `PlaybackStatus` and
+command/observation contract.
 
 ## Reading order for ADR-001
 
