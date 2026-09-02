@@ -56,9 +56,24 @@ struct SequencePlaybackSnapshot {
 };
 ```
 
-`PlaybackMediaDescriptor` is a value describing the media kind, immutable source
-locator, optional source extent, availability, and capabilities required by
-playback. It contains no player, decoder, widget, callback, or reference to a
+The descriptor is an explicit framework-neutral value:
+
+```cpp
+enum class MediaKind { Video, StillImage, Audio };
+enum class MediaAvailability { Available, Unavailable };
+struct PlaybackCapabilities {}; // Opaque, immutable decoder capabilities.
+
+struct PlaybackMediaDescriptor {
+    MediaAssetId mediaAssetId;
+    MediaKind mediaKind;
+    std::string immutableSourceLocator;
+    MediaAvailability availability;
+    std::optional<SourceTimestamp> sourceExtent;
+    PlaybackCapabilities capabilities;
+};
+```
+
+It contains no player, decoder, widget, callback, or reference to a
 media-library row. A still image has no running `sourceIn`; video and audio do.
 Detailed decoder error and encoded-media metadata evolve behind this descriptor
 without exposing Qt types.
@@ -70,8 +85,8 @@ not change the sequence revision or invalidate timeline work.
 A library entry whose local file is missing becomes an explicit unavailable
 descriptor; this does not make the snapshot structurally partial. Attempting to
 resolve it produces the deterministic media-failure/placeholder policy owned by
-the media adapter. A clip whose media identity has no descriptor at all is a
-snapshot-build error.
+the media adapter and decoder contract defined by ADR-005. A clip whose media
+identity has no descriptor at all is a snapshot-build error.
 
 Clip vectors are normalized into deterministic timeline order. Milestone 1
 retains one non-overlapping V1 vector and one non-overlapping A1 vector, but the
@@ -190,8 +205,9 @@ cancellation is a performance optimization only. Duplicate matching results
 remain idempotent under ADR-002.
 
 The generation advances exactly at the invalidation boundaries accepted by
-ADR-002: every seek, source replacement, snapshot replacement, stop/shutdown
-that invalidates work, and natural completion. Generation assignment happens on
+ADR-002: every seek, source replacement, snapshot replacement, and
+stop/shutdown that invalidates work. ADR-003 extends those generation
+invalidation rules with natural completion. Generation assignment happens on
 the engine thread; UI and workers never invent it.
 
 ## Presentation is separate from transport
@@ -201,8 +217,10 @@ target for one preview viewport. It consumes immutable playback status, editor
 selection intent, and immutable frame results. It does not advance playback,
 change phase, seek the session, or mutate a snapshot.
 
-Each coordinator lifetime receives a unique `PresentationSessionId`. Each
-visual request then receives a monotonic, at-least-64-bit
+Each coordinator lifetime receives a unique `PresentationSessionId`. A new
+presentation session is created whenever the coordinator or its project
+runtime is recreated. Each visual request then receives a monotonic,
+at-least-64-bit
 `PresentationRequestId` scoped to that presentation session. Neither identity
 may wrap or be reused during its scope:
 
@@ -221,6 +239,21 @@ using PresentationAuthority = std::variant<
     TransportPresentationIdentity,
     EditingPresentationIdentity>;
 
+struct SourcePresentationTarget {
+    MediaAssetId mediaAssetId;
+    SourceTimestamp sourceTimestamp;
+};
+
+struct SequencePresentationTarget {
+    SequenceId sequenceId;
+    SequenceRevision sequenceRevision;
+    TimelineFrame timelineFrame;
+};
+
+using PresentationTarget = std::variant<
+    SourcePresentationTarget,
+    SequencePresentationTarget>;
+
 struct FramePresentationRequest {
     PresentationSessionId presentationSessionId;
     PresentationRequestId requestId;
@@ -230,8 +263,10 @@ struct FramePresentationRequest {
 ```
 
 `PresentationTarget` is a domain-safe source timestamp or sequence frame plus
-the immutable snapshot/media information required to resolve it. Parallel
-source and timeline fields are not used.
+the immutable snapshot/media information required to resolve it. A sequence
+target carries only `TimelineFrame`; clip identity is resolved from the
+referenced `(SequenceId, SequenceRevision)` snapshot, so parallel position
+fields cannot disagree.
 
 The coordinator increments `PresentationRequestId` whenever the desired visual
 target changes, including repeated scrubbing, clip selection, source changes,
@@ -243,7 +278,8 @@ The precedence policy is explicit:
 
 - `Playing`, `Seeking`, and `Prerolling` use transport presentation derived from
   `PlaybackStatus` only;
-- `Stopped` may show an idle editing target;
+- `Stopped` uses the same selection-derived editing-preview mechanism as
+  `Paused` and may show an idle editing target;
 - `Paused` keeps transport frozen, but explicit timeline-clip selection may
   temporarily show an editing target without moving the playhead or changing
   phase;
@@ -269,6 +305,23 @@ struct CompositedVideoFrame {
     PresentedPosition position;
     VideoFrameBuffer buffer;
 };
+```
+
+```cpp
+struct PresentedSourcePosition {
+    MediaAssetId mediaAssetId;
+    SourceTimestamp sourceTimestamp;
+};
+
+struct PresentedSequencePosition {
+    SequenceId sequenceId;
+    SequenceRevision sequenceRevision;
+    TimelineFrame timelineFrame;
+};
+
+using PresentedPosition = std::variant<
+    PresentedSourcePosition,
+    PresentedSequencePosition>;
 ```
 
 `PresentedPosition` is a variant matching the source or sequence domain.
@@ -410,15 +463,16 @@ ADR-003 is implemented when:
    work.
 8. Snapshot replacement preserves or clamps position and preserves ADR-002's
    pending transport intent.
-9. Selecting a clip while paused changes only presentation request identity;
-   playhead, playback generation, and phase remain unchanged.
+9. The presentation coordinator's paused clip-selection path changes only
+   presentation request identity; playhead, playback generation, and phase
+   remain unchanged.
 10. Resuming transport supersedes an editing-preview frame request.
 11. Frame pixels and position metadata are accepted and published atomically.
 12. `FramePresented` is distinguishable from decode/composition readiness and
     cannot advance transport.
 13. Empty snapshots, unavailable media descriptors, missing descriptor
-    references, duplicate results, out-of-order snapshot installs, viewport
-    clear, and shutdown have deterministic tests.
+    references, duplicate results, out-of-order snapshot installs, project
+    reload, viewport clear, and shutdown have deterministic tests.
 14. Existing Qt widget tests pass unmodified through the feature-flagged
     presentation adapter.
 
