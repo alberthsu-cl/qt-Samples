@@ -22,13 +22,18 @@ cite them:
 | [ADR-001 review 2](adr-001-review-2-resolutions.md) | Owner resolutions to review 1 | 2 — resolutions | 4 of 5 blockers closed |
 | [ADR-001 review 3](adr-001-review-3-final.md) | Final acceptance gate | 3 — final | Accept with minor editorial changes — closed |
 | [ADR-002 review 1](adr-002-review-1-playback-authority.md) | PlaybackSession is the playback-state authority | 1 — original | Accept with revisions |
+| [ADR-002 review 2](adr-002-review-2-resolutions.md) | Owner resolutions to review 1 | 2 — resolutions | Accept with blocking revisions |
 
 ## Reading order for ADR-002
 
-ADR-002 has one open review round. Its blocking findings are `B1` through
-`B8`; section 4 carries the state/command grid the ADR still needs, and
-sections 5 and 6 carry the recommended `PlaybackStatus` and
-command/observation contract.
+Read review 1 for findings `B1` through `B8` and the reasoning behind each,
+then review 2 for the owner's resolutions.
+
+Review 2 closes five of the eight and leaves three items blocking: `B9`
+(source-preview progress is not computable under ADR-001), `B10` (clip
+selection is a presentation concern, not a transport command) and `B11`
+(`HoldLastFrame` has no phase consistent with Stopped-implies-start). `B3` and
+`B7` are partially resolved. ADR-002 remains Proposed.
 
 ## Reading order for ADR-001
 
