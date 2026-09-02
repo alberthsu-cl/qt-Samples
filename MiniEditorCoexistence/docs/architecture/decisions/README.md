@@ -16,7 +16,8 @@ An ADR moves through these states:
 | [ADR-001](0001-strong-media-time-domains.md) | Strong timeline, source, sequence, and master-clock time domains | Accepted |
 | [ADR-002](0002-playback-session-is-the-state-authority.md) | PlaybackSession is the sole playback-state authority | Accepted |
 | [ADR-003](0003-immutable-playback-snapshots-and-generation-gated-presentation.md) | Immutable playback snapshots and generation-gated presentation | Accepted |
+| [ADR-004](0004-audio-monotonic-master-clock-policy.md) | Audio/monotonic master-clock policy | Proposed |
 
-Future decisions will cover master-clock policy, thread ownership, sequence
-identity, and framework boundaries. Immutable snapshots and presentation
-generation are accepted in ADR-003.
+Future decisions will cover thread ownership, sequence identity, and framework
+boundaries. Master-clock policy is proposed in ADR-004; immutable snapshots and
+presentation generation are accepted in ADR-003.
