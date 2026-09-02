@@ -1,8 +1,10 @@
 # ADR-005: Engine, Decoder, Audio Callback, and UI Thread Ownership
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-09-02
+
+Accepted: 2026-09-02 after independent review rounds 1 and 2
 
 ## Context
 
