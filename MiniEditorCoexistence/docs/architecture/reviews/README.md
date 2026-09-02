@@ -12,6 +12,7 @@ cite them:
 - `B<n>` — blocking. Must be resolved before implementation depends on the ADR.
 - `N<n>` — non-blocking improvement.
 - `RB<n>` — blocking issue still open after a resolution round.
+- `F<n>` — finding from a final acceptance gate.
 
 ## Index
 
@@ -19,9 +20,15 @@ cite them:
 | --- | --- | --- | --- |
 | [ADR-001 review 1](adr-001-review-1-time-domains.md) | Strong Media Time Domains | 1 — original | Accept with revisions |
 | [ADR-001 review 2](adr-001-review-2-resolutions.md) | Owner resolutions to review 1 | 2 — resolutions | 4 of 5 blockers closed |
+| [ADR-001 review 3](adr-001-review-3-final.md) | Final acceptance gate | 3 — final | Accept with minor editorial changes |
 
 ## Reading order for ADR-001
 
-Read review 1 for the reasoning behind each finding, then review 2 for what is
-still open and for the minimal type set milestone 1 should implement. Review 2
-supersedes review 1 wherever the two disagree, and records one correction to it.
+Read review 1 for the reasoning behind each finding, review 2 for the owner's
+resolutions and the minimal type set, and review 3 for the acceptance gate. Each
+round supersedes the previous one wherever they disagree, and each records the
+positions it withdraws rather than dropping them.
+
+Review 3 left one finding open, `F1`. The acceptance revision resolved it by
+adding same-type relational comparisons, explicit zero values, and unary
+negation for signed difference types. ADR-001 is now Accepted.
