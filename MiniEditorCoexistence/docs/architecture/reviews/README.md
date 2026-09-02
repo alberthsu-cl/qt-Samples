@@ -25,15 +25,21 @@ cite them:
 | [ADR-002 review 2](adr-002-review-2-resolutions.md) | Owner resolutions to review 1 | 2 — resolutions | Accept with blocking revisions |
 | [ADR-002 review 3](adr-002-review-3-final.md) | Final acceptance gate | 3 — final | Accept with minor editorial changes — closed |
 | [ADR-003 review 1](adr-003-review-1-snapshots.md) | Immutable playback snapshots and generation-gated presentation | 1 — original | Accept with revisions |
+| [ADR-003 review 2](adr-003-review-2-resolutions.md) | Owner resolutions to review 1 | 2 — resolutions | Accept with revisions |
 
 ## Reading order for ADR-003
 
-ADR-003 has one open review round. Its one blocking finding is `B1`: three
-central types (`PlaybackMediaDescriptor`, `PresentationTarget`,
-`PresentedPosition`) are described only in prose, which leaves the ADR's own
-"no parallel domain fields" promise unenforced by any type. Six non-blocking
-items refine citation accuracy, deferral naming, and acceptance-criteria
-coverage. ADR-003 remains Proposed.
+Read review 1 for `B1` and `N1`-`N6`, then review 2 for the owner's
+resolutions.
+
+Review 2 closes N1 and N3 through N6, and closes two of B1's three types:
+`PresentationTarget` and `PresentedPosition` are now domain-safe variants, but
+`PlaybackMediaDescriptor` is still described in prose rather than fields.
+Examining the new `PresentationTarget` variant surfaced `B2`: its sequence
+alternative carries both `ClipId` and `TimelineFrame`, two position
+descriptors that can disagree with nothing preventing it. N2 (naming an owner
+for the media-failure/placeholder policy) also remains open. ADR-003 remains
+Proposed.
 
 ## Reading order for ADR-002
 
