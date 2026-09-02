@@ -35,8 +35,12 @@ struct ProjectRuntime {
     std::vector<TimelineSequence> sequences;
     std::optional<SequenceId> activeSequenceId;
     ProjectReadiness readiness;
+    std::optional<ProjectError> error;
 };
 ```
+
+`ProjectError` is a framework-neutral value. `error` is engaged if and only if
+`readiness == ProjectReadiness::Failed`.
 
 `SequenceId` is unique for the lifetime of one loaded project runtime. Loading
 or reloading a project creates a new runtime sequence identity, even when the
@@ -46,6 +50,19 @@ to each accepted playback-affecting editor state as required by ADR-003.
 The active sequence is selected explicitly by project/editor state. Playback
 never infers its sequence from UI focus, a selected media-library item, a
 timeline widget, or the first available sequence.
+
+`ProjectRuntime` deliberately differs from the target document's `EditorProject`
+file-shaped sketch. The existing `EditorProject` represents serialized project
+data; this value represents one loaded runtime. `MediaLibrary` stays outside
+this struct because playback snapshots contain only descriptors referenced by
+the active sequence.
+
+For milestone 1, loading the existing flat project format synthesizes exactly
+one default `TimelineSequence` at 30/1. Saving continues to write the existing
+flat `timelineItems`; sequence `FrameRate` is not persisted. Creating or
+deleting sequences is a target-state capability of this model, not a
+milestone-1 UI requirement. Persisting a sequence frame rate is a prerequisite
+before exposing any other sequence rate.
 
 ## Project readiness
 
@@ -62,9 +79,10 @@ enum class ProjectReadiness {
 
 - `Loading` means project data is still being assembled; no snapshot is
   published from partial state.
-- `Ready` means at least one valid sequence can produce a snapshot.
-- `Empty` means the project loaded successfully but has no active sequence or
-  no timeline clips. It is valid state, not an error.
+- `Ready` means an active sequence exists and contains at least one timeline
+  clip from which playback can resolve content.
+- `Empty` means the project loaded successfully but has no active sequence, or
+  its active sequence has zero timeline clips. It is valid state, not an error.
 - `Failed` means project loading or validation failed and carries a
   framework-neutral project error outside the sequence value.
 
@@ -87,6 +105,13 @@ available under ADR-002.
    sequence, revisions must be strictly newer as specified by ADR-003.
 6. Closing a project clears the active sequence before the old runtime is
    destroyed and invalidates playback work through ADR-002/ADR-003.
+
+A project reload preserves `PlaybackSessionId` when the existing engine session
+continues to run, but it advances `PlaybackGeneration` and creates a new
+project runtime, sequence identities, and revisions. Project-runtime recreation
+also creates a new `PresentationSessionId` for the preview coordinator, as
+defined by ADR-003. A new `PlaybackSessionId` is created only when the
+`PlaybackSession` itself is recreated.
 
 `SequenceId` and `SequenceRevision` are runtime identities, not persisted
 project-format fields in the current migration. Persisted sequence names,
