@@ -23,7 +23,7 @@ The runtime has four ownership domains:
 
 | Domain | Owns | May communicate through |
 | --- | --- | --- |
-| GUI/UI thread | Qt widgets, MFC windows, view state, editor commands | queued UI commands and immutable publications |
+| GUI/UI thread | `EditorSession`, Qt widgets, MFC windows, view state, editor commands | queued UI commands and immutable publications |
 | Engine thread | `PlaybackSession`, scheduler, anchor, generation, snapshot install | serialized engine command queue |
 | Decoder/compositor workers | decoder instances and frame work for one request | bounded work queues and immutable results |
 | Audio callback/device thread | audio ring-buffer consumption and device observations | non-blocking audio port only |
@@ -57,13 +57,15 @@ anchor, and pending transport intent. All commands are serialized through an
 engine command queue. The engine thread is the only writer of those values.
 
 An engine command is a value object. It contains no Qt/MFC object or mutable
-editor reference. Commands include play, pause, stop, seek, rate change,
-source replacement, snapshot installation, clock selection, and shutdown.
-
-The command queue is bounded or back-pressured by policy. A command that is
-superseded by a newer seek or snapshot may be coalesced, but command ordering
-must remain observable at the engine boundary. The queue never executes user
-callbacks inline on a producer thread.
+editor reference. The command queue is bounded or back-pressured by policy.
+Commands include play,
+pause, stop, seek, rate change, source replacement, snapshot installation, and
+shutdown; clock selection is an engine-internal decision governed by ADR-004,
+not a new caller-facing command. A command that is superseded by a newer seek
+or snapshot may have its scheduled decode/composition work coalesced, but the
+command itself is still individually accepted or rejected and acknowledged per
+ADR-002. Command ordering must remain observable at the engine boundary. The
+queue never executes user callbacks inline on a producer thread.
 
 ## Decoder and compositor workers
 
@@ -80,7 +82,15 @@ buffering policy from ADR-004. Workers never access widgets, editor models,
 Worker completion is delivered as an immutable result to the engine or
 presentation coordinator through a queue. The completion callback itself does
 not decide whether a result is current; identity validation at the consumer is
-the authority.
+the authority. A decode failure or an unavailable-media descriptor is delivered
+as an immutable failure result; the engine consumer validates its identity and
+performs the `PlaybackPhase::Failed` transition with a framework-neutral
+`PlaybackError`. The detailed decoder error taxonomy remains an implementation
+contract owned by this ADR and may be refined without exposing Qt types.
+
+This worker domain may later split into dedicated decoder and GPU-compositor
+domains when D3D11/QRhi composition is introduced; the ownership and result
+identity rules remain unchanged.
 
 ## Audio callback and device boundary
 
@@ -113,8 +123,10 @@ this order:
 2. Engine stops scheduling work, invalidates its generation, and asks workers
    and audio adapters to stop accepting new work.
 3. Engine waits for application-owned workers and decoder resources to finish.
-4. The owning event loops process queued completions and deferred deletions.
-5. The engine thread exits; the GUI thread destroys UI adapters and widgets.
+4. Engine publishes the final ADR-002 shutdown acknowledgment status, with the
+   playback phase unchanged, before command acceptance closes.
+5. The owning event loops process queued completions and deferred deletions.
+6. The engine thread exits; the GUI thread destroys UI adapters and widgets.
 
 No worker completion is allowed to call a deleted receiver. Queued signals are
 either disconnected during the ownership transition or carry a lifetime-safe
@@ -124,8 +136,11 @@ handle whose consumer still performs identity validation.
 
 MFC windows remain GUI-thread objects. An MFC adapter posts framework-neutral
 commands to the engine and receives immutable publications through the MFC
-message loop. A Qt adapter follows the same contract using queued signals or
-event-loop posts. Neither adapter becomes a second playback authority.
+message loop through the target architecture's UI notification bridge. A Qt
+adapter follows the same contract using queued signals or event-loop posts.
+The legacy pattern of calling `QCoreApplication::processEvents()` from an MFC
+timer is retired by this model. Neither adapter becomes a second playback
+authority.
 
 This permits gradual migration: a Qt preview panel can consume the same engine
 publication as an MFC preview panel, and either adapter can be removed without
@@ -141,7 +156,8 @@ ADR-005 is implemented when:
    anchor, generation, and transport position.
 3. Commands and asynchronous results contain no Qt/MFC objects or mutable
    editor references.
-4. Decoder/compositor workers reject stale results using ADR-003 identities.
+4. Consumers reject stale decoder/compositor results using ADR-003 identities;
+   workers never decide their own currency.
 5. Audio-callback tests prove no blocking, allocation, UI call, or engine-lock
    contention occurs on the callback path.
 6. Audio underflow and device observations reach the engine without allowing
