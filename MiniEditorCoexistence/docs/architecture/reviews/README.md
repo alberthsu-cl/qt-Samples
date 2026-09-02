@@ -16,22 +16,22 @@ cite them:
 
 ## Index
 
-| Review | Subject | Round | Verdict |
-| --- | --- | --- | --- |
-| [ADR-001 review 1](adr-001-review-1-time-domains.md) | Strong Media Time Domains | 1 — original | Accept with revisions |
-| [ADR-001 review 2](adr-001-review-2-resolutions.md) | Owner resolutions to review 1 | 2 — resolutions | 4 of 5 blockers closed |
-| [ADR-001 review 3](adr-001-review-3-final.md) | Final acceptance gate | 3 — final | Accept with minor editorial changes — closed |
-| [ADR-002 review 1](adr-002-review-1-playback-authority.md) | PlaybackSession is the playback-state authority | 1 — original | Accept with revisions |
-| [ADR-002 review 2](adr-002-review-2-resolutions.md) | Owner resolutions to review 1 | 2 — resolutions | Accept with blocking revisions |
-| [ADR-002 review 3](adr-002-review-3-final.md) | Final acceptance gate | 3 — final | Accept with minor editorial changes — closed |
-| [ADR-003 review 1](adr-003-review-1-snapshots.md) | Immutable playback snapshots and generation-gated presentation | 1 — original | Accept with revisions |
-| [ADR-003 review 2](adr-003-review-2-resolutions.md) | Owner resolutions to review 1 | 2 — resolutions | Accept with revisions |
-| [ADR-003 review 3](adr-003-review-3-acceptance.md) | Final acceptance gate | 3 — final | Accepted with revisions |
-| [ADR-004 review 1](adr-004-review-1-master-clock.md) | Audio/monotonic master-clock policy | 1 — original | Accept with revisions |
-| [ADR-004 review 2](adr-004-review-2-resolutions.md) | Resolution verification | 2 — resolutions | Accepted |
-| [ADR-005 review 1](adr-005-review-1-thread-ownership.md) | Engine, decoder, and UI thread ownership | 1 — original | Accept with revisions |
-| [ADR-005 review 2](adr-005-review-2-resolutions.md) | Resolution verification | 2 — resolutions | Accepted |
-| [ADR-006 review 1](adr-006-review-1-sequence-identity.md) | Explicit sequence identity and project-ready model | 1 — original | Accept with revisions |
+| Review | Subject | # | Phase | Verdict |
+| --- | --- | --- | --- | --- |
+| [ADR-001 review 1](adr-001-review-1-time-domains.md) | Strong Media Time Domains | 1 | original | Accept with revisions |
+| [ADR-001 review 2](adr-001-review-2-resolutions.md) | Owner resolutions to review 1 | 2 | resolutions | 4 of 5 blockers closed |
+| [ADR-001 review 3](adr-001-review-3-final.md) | Final acceptance gate | 3 | final | Accept with minor editorial changes — closed |
+| [ADR-002 review 1](adr-002-review-1-playback-authority.md) | PlaybackSession is the playback-state authority | 1 | original | Accept with revisions |
+| [ADR-002 review 2](adr-002-review-2-resolutions.md) | Owner resolutions to review 1 | 2 | resolutions | Accept with blocking revisions |
+| [ADR-002 review 3](adr-002-review-3-final.md) | Final acceptance gate | 3 | final | Accept with minor editorial changes — closed |
+| [ADR-003 review 1](adr-003-review-1-snapshots.md) | Immutable playback snapshots and generation-gated presentation | 1 | original | Accept with revisions |
+| [ADR-003 review 2](adr-003-review-2-resolutions.md) | Owner resolutions to review 1 | 2 | resolutions | Accept with revisions |
+| [ADR-003 review 3](adr-003-review-3-acceptance.md) | Final acceptance gate | 3 | final | Accepted with revisions |
+| [ADR-004 review 1](adr-004-review-1-master-clock.md) | Audio/monotonic master-clock policy | 1 | original | Accept with revisions |
+| [ADR-004 review 2](adr-004-review-2-resolutions.md) | Resolution verification | 2 | resolutions | Accepted |
+| [ADR-005 review 1](adr-005-review-1-thread-ownership.md) | Engine, decoder, and UI thread ownership | 1 | original | Accept with revisions |
+| [ADR-005 review 2](adr-005-review-2-resolutions.md) | Resolution verification | 2 | resolutions | Accepted |
+| [ADR-006 review 1](adr-006-review-1-sequence-identity.md) | Explicit sequence identity and project-ready model | 1 | original | Accept with revisions |
 
 ## Reading order for ADR-006
 
