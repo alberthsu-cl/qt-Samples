@@ -23,7 +23,7 @@ cite them:
 | [ADR-001 review 3](adr-001-review-3-final.md) | Final acceptance gate | 3 — final | Accept with minor editorial changes — closed |
 | [ADR-002 review 1](adr-002-review-1-playback-authority.md) | PlaybackSession is the playback-state authority | 1 — original | Accept with revisions |
 | [ADR-002 review 2](adr-002-review-2-resolutions.md) | Owner resolutions to review 1 | 2 — resolutions | Accept with blocking revisions |
-| [ADR-002 review 3](adr-002-review-3-final.md) | Final acceptance gate | 3 — final | Accept with minor editorial changes |
+| [ADR-002 review 3](adr-002-review-3-final.md) | Final acceptance gate | 3 — final | Accept with minor editorial changes — closed |
 
 ## Reading order for ADR-002
 
@@ -32,9 +32,9 @@ then review 2 for the owner's resolutions.
 
 Review 2 closed five of the eight and raised three more: `B9`, `B10` and `B11`.
 Review 3 is the acceptance gate for revision `9448227`: all eleven findings are
-closed, and two new ones remain, `F1` (command rejection has no channel) and
-`F2` (`OpenSource` has no in-flight phase). ADR-002 may change from Proposed to
-Accepted once those two land.
+closed, and raised `F1` (command rejection had no channel) and `F2`
+(`OpenSource` had no in-flight phase). The acceptance revision resolved both;
+ADR-002 is now Accepted.
 
 ## Reading order for ADR-001
 

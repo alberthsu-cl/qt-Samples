@@ -479,6 +479,7 @@ Events leaving the engine are immutable values:
 ```cpp
 using PlaybackEvent = std::variant<
     StatusChanged,
+    PlaybackCommandRejected,
     VideoFrameReady,
     PlaybackEnded,
     MediaFailed>;

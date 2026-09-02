@@ -1,6 +1,6 @@
 # ADR-002: PlaybackSession Is the Playback-State Authority
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-09-01
 
@@ -78,6 +78,11 @@ struct PlaybackStatus {
     std::optional<PlaybackError> error;
     std::optional<PlaybackCommandId> lastAppliedCommandId;
 };
+
+struct PlaybackCommandRejected {
+    PlaybackCommandId id;
+    PlaybackRejectReason reason;
+};
 ```
 
 `PlaybackContext` is derived from the active `PlaybackSource` plus resolved
@@ -96,15 +101,18 @@ source-time zero. `sourceEndTime` is an instant, not a duration disguised as a
 obtains source-slider progress only through the named boundary conversion:
 
 ```cpp
+SourceTimestamp sourceTimeZero();
+
 int sourceProgressPermille(
     SourceTimestamp position,
     SourceTimestamp end);
 ```
 
-The result is clamped to `[0, 1000]` and is zero when `end` is source-time zero.
-The conversion implementation may access framework units inside the UI/media
-adapter, but raw source-time arithmetic does not escape that boundary. A
-display-only legacy frame value may likewise be produced by a named, lossy UI
+`sourceTimeZero()` is the named construction boundary for the source origin.
+The progress result is clamped to `[0, 1000]` and is zero when `end` equals that
+origin. The conversion implementation may access framework units inside the
+UI/media adapter, but raw source-time arithmetic does not escape that boundary.
+A display-only legacy frame value may likewise be produced by a named, lossy UI
 adapter; it never becomes engine input.
 
 `error` is engaged if and only if `phase == PlaybackPhase::Failed`. The
@@ -154,9 +162,12 @@ the session directly. They submit commands or observations to the engine.
 
 Command submission never waits for media work. Each queued command receives a
 `PlaybackCommandId`. Queue-closure rejection may be returned immediately;
-phase-dependent rejection is published by the engine with the command ID and
-a reason. An accepted command is acknowledged by a later status whose
-`lastAppliedCommandId` identifies it.
+phase-dependent rejection is published as `PlaybackCommandRejected` on the
+same ordered engine-event channel as status. An accepted command is
+acknowledged by a later status whose `lastAppliedCommandId` identifies it.
+
+`PlaybackRejectReason` is an opaque engine-level reason in this ADR. Detailed
+media and decoder error taxonomy belongs to ADR-003 and its decoder contract.
 
 The engine publishes immutable `PlaybackStatus` values. UI code may cache the
 latest status for painting controls, but that cache is not authoritative and
@@ -197,8 +208,8 @@ active transport, playback context comes only from `PlaybackStatus`; UI focus
 never changes playback authority.
 
 Selecting a source asset is different because it explicitly requests source
-preview. It submits `OpenSource`, requests the source's first frame, and
-finishes in `Stopped`. The legacy
+preview. It submits `OpenSource` and requests the source's first frame. With no
+later transport command, it finishes in `Stopped`. The legacy
 `leavePausedTimelinePlaybackForEditing()` workaround is not called on the new
 path.
 
@@ -276,7 +287,7 @@ The complete milestone-1 command policy is:
 
 | Command | Accepted phases and transition | Other phases |
 | --- | --- | --- |
-| `OpenSource` | From every phase except after shutdown: increment generation, replace the context, load and seek to source-time zero, then enter `Stopped` when the first frame is ready. From `Failed`, this is a recovery path and clears the error on success. The command carries `SourceCompletionPolicy`, which is echoed in status. | Rejected after shutdown. |
+| `OpenSource` | From every phase except after shutdown: increment generation, replace the context, and enter `Seeking` while loading and seeking to source-time zero. Pending intent initially is `Stopped`; without a later command, first-frame readiness completes in `Stopped`. `Play` changes pending intent to `Playing`, `Pause` changes it to `Paused`, and `Seek` replaces the target while preserving the latest intent, using their normal in-flight rules below. From `Failed`, this is a recovery path and clears the error on success. The command carries `SourceCompletionPolicy`, which is echoed in status. | Rejected after shutdown. |
 | `InstallSnapshot` | From `Stopped`, `Paused`, or `Playing`: increment generation, replace the snapshot, preserve and clamp the requested position, and preserve transport intent. Playing returns through preroll to `Playing`; Paused returns to `Paused`; Stopped returns to `Stopped`. During `Seeking` or `Prerolling`, replace the in-flight request, increment generation, and preserve its pending Play/Pause intent. From `Failed`, clear the error, install the snapshot at sequence start, and enter `Stopped`. | Rejected after shutdown. |
 | `Play` | `Stopped` or `Paused` enters `Prerolling` and then `Playing`. `Playing` is an accepted idempotent no-op. During `Seeking` or `Prerolling`, pending intent becomes `Playing`. | Rejected from `Failed` or after shutdown. |
 | `Pause` | `Playing` enters `Paused`. `Stopped` or `Paused` is an accepted idempotent no-op. During `Seeking` or `Prerolling`, pending intent becomes `Paused` and successful completion enters `Paused`. | Rejected from `Failed` or after shutdown. |
@@ -291,6 +302,9 @@ accepted.
 
 Completion is intentionally asymmetric and comes from explicit policy rather
 than UI focus:
+
+Natural completion increments generation and invalidates pending media work;
+ADR-003 defines the mechanics of discarding that work.
 
 - source preview with `HoldLastFrame` finishes in `Paused` at
   `sourceEndTime`;
@@ -353,7 +367,8 @@ The migration proceeds in this order:
 3. Route timeline playback commands to the new session behind a compile-time
    feature flag.
 4. Stop calling `EditorSession::advancePlaybackFrame()` for the new path.
-5. Remove MFC timer advancement after regression parity is established.
+5. Remove MFC timer advancement from the legacy path after regression parity
+   is established; the new path never uses timer advancement.
 6. Remove or narrow legacy playback mutation APIs after source preview also
    migrates.
 
@@ -400,8 +415,8 @@ ADR-002 is implemented when:
    state-machine tests.
 8. A stale observation cannot change session state after source or generation
    replacement.
-9. The existing UI operates through the temporary backend/status adapters
-   without visible redesign.
+9. The existing Qt widget tests pass unmodified through the temporary
+   backend/status adapters, including their current visible behavior.
 10. `PlaybackContext` matches the active `PlaybackSource`, and `error` is
     engaged if and only if phase is `Failed`.
 11. An invalid command produces a rejection carrying its command ID and a
@@ -413,8 +428,8 @@ ADR-002 is implemented when:
     playback mutator is called.
 14. Selecting a timeline clip while paused leaves phase and playhead unchanged
     and changes only the editing-preview presentation target.
-15. Source-progress UI uses the named conversion rather than general
-    `SourceTimestamp` arithmetic.
+15. Source-progress tests cover zero end time and clamping below zero and above
+    1000 through the named conversion.
 
 ## Learning focus
 
