@@ -1,6 +1,6 @@
 # ADR-004: Audio/Monotonic Master-Clock Policy
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-09-02
 
@@ -110,8 +110,10 @@ restarting begins from the defined start position.
 
 ## Audio-master and video policy
 
-For this policy, audible audio is active when the session has an enabled audio
-track with non-zero output volume and the audio device is open for playback.
+For this policy, audible audio is active when the session has a resolved audio
+layer not silenced by the snapshot's mix state (`TimelineAudioMixState`), with
+non-zero output volume and an audio device open for playback. The view-only
+audio-track visibility toggle is not part of this determination.
 When audible audio is active, audio submission and the audio clock are not
 blocked by video decode or presentation. Video follows the target sequence
 time:
