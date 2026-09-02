@@ -27,6 +27,43 @@ cite them:
 | [ADR-003 review 1](adr-003-review-1-snapshots.md) | Immutable playback snapshots and generation-gated presentation | 1 — original | Accept with revisions |
 | [ADR-003 review 2](adr-003-review-2-resolutions.md) | Owner resolutions to review 1 | 2 — resolutions | Accept with revisions |
 | [ADR-003 review 3](adr-003-review-3-acceptance.md) | Final acceptance gate | 3 — final | Accepted with revisions |
+| [ADR-004 review 1](adr-004-review-1-master-clock.md) | Audio/monotonic master-clock policy | 1 — original | Accept with revisions |
+| [ADR-004 review 2](adr-004-review-2-resolutions.md) | Resolution verification | 2 — resolutions | Accepted |
+| [ADR-005 review 1](adr-005-review-1-thread-ownership.md) | Engine, decoder, and UI thread ownership | 1 — original | Accept with revisions |
+| [ADR-005 review 2](adr-005-review-2-resolutions.md) | Resolution verification | 2 — resolutions | Accepted |
+| [ADR-006 review 1](adr-006-review-1-sequence-identity.md) | Explicit sequence identity and project-ready model | 1 — original | Accept with revisions |
+
+## Reading order for ADR-006
+
+ADR-006 has one open review round. Its three blocking findings are: `B1`,
+the `Ready`/`Empty` readiness definitions overlap for an active sequence
+with zero clips, a state milestone 1 reaches immediately; `B2`, the document
+never states its milestone-1 scope, dropping a constraint the target
+document's own Decision 1 already states explicitly (one synthesized
+sequence, unchanged project format); and `B3`, the `ProjectRuntime` struct
+has no field for the error `Failed` readiness promises. All three are
+one-sentence-or-one-field fixes with no new design decision. ADR-006 remains
+Proposed.
+
+## Reading order for ADR-005
+
+Both rounds closed cleanly. Review 1 raised four blocking findings, all of
+the "missing sentence" kind rather than a structural type problem: `B1`,
+acceptance criterion 4 contradicted the body on who rejects a stale result;
+`B2`, ADR-003's decoder-contract promise to this ADR by name was
+unaddressed; `B3`, "may be coalesced" was ambiguous against ADR-002's
+per-seek acceptance model; `B4`, "clock selection" appeared as a ninth
+command though ADR-002's closed set has eight and ADR-004 frames it as
+automatic. Review 2 confirmed all four resolved along with `N1`-`N4`, with
+zero new blockers. ADR-005 is now Accepted.
+
+## Reading order for ADR-004
+
+Both rounds closed cleanly. Review 1 raised one blocking finding, `B1`: the
+document never stated whether it governs source-asset preview as well as
+sequence preview, though every equation assumed the latter. Review 2
+confirmed B1 and `N1`-`N10` all resolved, with zero new blockers. ADR-004 is
+now Accepted.
 
 ## Reading order for ADR-003
 
