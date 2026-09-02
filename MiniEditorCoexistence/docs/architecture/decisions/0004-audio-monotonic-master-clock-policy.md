@@ -35,6 +35,13 @@ The master-clock policy is:
 The UI may sample published `PlaybackStatus` for painting, but it never advances
 the clock or transport position.
 
+This ADR's anchor and re-anchoring machinery governs `SequencePreview`, where
+position is derived from a sequence snapshot and its frame rate. In milestone
+1, `SourceAssetPreview` continues to adopt position from backend observations
+as specified by ADR-002 and does not consume `IPlaybackClock`. A future decision
+may unify those paths without changing the ownership boundary; that unification
+is outside this ADR.
+
 ## Clock contract
 
 The clock is injected so engine tests can use a deterministic fake:
@@ -61,11 +68,14 @@ struct PlaybackAnchor {
 };
 ```
 
+`playbackRatePercent` is captured from the session's rate preference whenever a
+new anchor is created. It is not an independently mutable clock value.
+
 For a playing session:
 
 ```text
 elapsedClock = clock.now() - anchor.masterClock
-elapsedSequence = sequenceElapsedFor(elapsedClock, anchor.rate)
+elapsedSequence = sequenceElapsedFor(elapsedClock, anchor.playbackRatePercent)
 sequenceTime = anchor.sequenceTime + elapsedSequence
 timelineFrame = frameAtSequenceTime(sequenceTime, snapshot.frameRate)
 ```
@@ -91,14 +101,17 @@ creates a second transport state. Seek, source replacement, snapshot
 replacement, stop, and natural completion still advance the generation under
 ADR-002/ADR-003.
 
-Pause freezes the relationship between clock and sequence time: no elapsed
-clock time is converted while paused. Stop invalidates pending work and returns
+Pause evaluates the anchor equation once at the pause instant, captures that
+resolved sequence position, and holds it fixed; no later elapsed clock time is
+converted while paused. Stop invalidates pending work and returns
 to the defined start position. Natural completion publishes the final position,
 invalidates the generation, and enters the existing stopped/completed policy;
 restarting begins from the defined start position.
 
 ## Audio-master and video policy
 
+For this policy, audible audio is active when the session has an enabled audio
+track with non-zero output volume and the audio device is open for playback.
 When audible audio is active, audio submission and the audio clock are not
 blocked by video decode or presentation. Video follows the target sequence
 time:
@@ -107,10 +120,13 @@ time:
 - wait briefly when the next frame is early;
 - present the newest frame not later than the target time;
 - drop superseded late frames;
-- report an underflow without moving the master clock when no suitable frame is
-  available.
+- report a **video-frame underflow** without moving the master clock when no
+  suitable frame is available.
 
-The exact audio buffer depth, device-latency measurement, and drift thresholds
+An **audio-buffer underflow** means that the audio callback has insufficient
+queued samples. Its recovery behavior (silence, hold, device restart, or other
+policy) is a separate implementation decision; it must not let the UI advance
+transport time. The exact audio buffer depth, device-latency measurement, and drift thresholds
 are implementation parameters of this ADR's scheduler policy and must be
 covered by tests. The audio callback never waits for a video frame.
 
@@ -120,13 +136,17 @@ selection boundary and therefore re-anchors before more work is scheduled.
 
 ## Identity and thread boundaries
 
-Every clock sample and scheduled decode/composition request carries the active
-`PlaybackSessionId`, `PlaybackGeneration`, and sequence snapshot identity from
-ADR-003. A clock change or re-anchor cannot make an old result current.
+Every scheduled decode/composition request derived from a clock reading carries
+the active `PlaybackSessionId`, `PlaybackGeneration`, and sequence snapshot
+identity from ADR-003. A synchronous `clock.now()` read is engine-local and
+does not need an identity of its own. A clock change or re-anchor cannot make an
+old result current.
 
 The engine thread owns phase, anchor, generation, and clock selection. Audio
 callbacks and decoder workers publish observations or completed work; they do
-not mutate the anchor, phase, snapshot, or UI objects. Command-queue ownership,
+not mutate the anchor, phase, snapshot, or UI objects. The audio callback must
+not block, allocate, or contend on locks with the engine thread; it hands off
+observations through a lock-free or otherwise non-blocking path. Command-queue ownership,
 worker lifetime, and callback shutdown belong to ADR-005.
 
 ## Acceptance criteria
@@ -135,20 +155,23 @@ ADR-004 is implemented when:
 
 1. Playback position is derived from an injected `IPlaybackClock` and an
    anchor, never from UI callback count.
-2. Audio-master and monotonic-clock selection follow the policy above.
+2. The clock-selection logic runs when audible audio becomes active or
+   inactive, and each transition triggers exactly one re-anchor; milestone 1
+   may use the same `steady_clock` implementation for both branches.
 3. Tests use a fake clock to prove deterministic position conversion at 24,
    25, 30, and 30000/1001 frame rates through ADR-001 helpers.
 4. Pause freezes sequence time; resume re-anchors without a discontinuity.
 5. Seek, rate change, snapshot replacement, clock replacement, audio restart,
    stop, and natural completion re-anchor or invalidate work as specified.
-6. Video early/late/underflow behavior is bounded and does not block the audio
+6. Video early/late/video-frame-underflow behavior is bounded and does not block the audio
    callback or advance transport from the UI thread.
 7. Stale results after a clock change or re-anchor are rejected by the existing
    session/generation/snapshot identity checks.
 8. A/V policy tests prove that video follows the master clock and audio never
    waits for video.
-9. The Qt bridge remains a clock adapter; it does not become a second transport
-   authority.
+9. A test or code-level ownership check proves that the Qt bridge publishes
+   clock observations and never calls a playback-position or phase mutator on
+   `PlaybackSession`.
 
 ## Consequences
 
@@ -166,6 +189,7 @@ implicit behavior hidden in `QMediaPlayer`.
 
 ADR-005 defines engine/decoder/audio-callback/UI thread ownership and shutdown.
 Source-media time bases and variable-frame-rate metadata remain outside this
-decision. Device-specific latency measurement, resampling, and a complete
-audio drift-correction algorithm may require a follow-up implementation ADR if
-the scheduler tests expose requirements not settled here.
+decision. Device-specific latency measurement, resampling, audio-buffer-
+underflow recovery behavior, and a complete audio drift-correction algorithm
+may require a follow-up implementation ADR if the scheduler tests expose
+requirements not settled here.
