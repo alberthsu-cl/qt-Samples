@@ -17,8 +17,8 @@ An ADR moves through these states:
 | [ADR-002](0002-playback-session-is-the-state-authority.md) | PlaybackSession is the sole playback-state authority | Accepted |
 | [ADR-003](0003-immutable-playback-snapshots-and-generation-gated-presentation.md) | Immutable playback snapshots and generation-gated presentation | Accepted |
 | [ADR-004](0004-audio-monotonic-master-clock-policy.md) | Audio/monotonic master-clock policy | Accepted |
-| [ADR-005](0005-engine-decoder-and-ui-thread-ownership.md) | Engine, decoder, audio callback, and UI thread ownership | Proposed |
+| [ADR-005](0005-engine-decoder-and-ui-thread-ownership.md) | Engine, decoder, audio callback, and UI thread ownership | Accepted |
 
 Future decisions will cover sequence identity and framework boundaries. Thread
-ownership is proposed in ADR-005; master-clock policy, immutable snapshots, and
-presentation generation are accepted in ADR-003 and ADR-004.
+ownership, master-clock policy, immutable snapshots, and presentation
+generation are accepted in ADR-003 through ADR-005.

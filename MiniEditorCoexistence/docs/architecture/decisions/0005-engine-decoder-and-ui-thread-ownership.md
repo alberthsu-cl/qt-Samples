@@ -124,7 +124,8 @@ this order:
    and audio adapters to stop accepting new work.
 3. Engine waits for application-owned workers and decoder resources to finish.
 4. Engine publishes the final ADR-002 shutdown acknowledgment status, with the
-   playback phase unchanged, before command acceptance closes.
+   playback phase unchanged, before command acceptance closes; it closes
+   command acceptance immediately afterward.
 5. The owning event loops process queued completions and deferred deletions.
 6. The engine thread exits; the GUI thread destroys UI adapters and widgets.
 
@@ -136,7 +137,7 @@ handle whose consumer still performs identity validation.
 
 MFC windows remain GUI-thread objects. An MFC adapter posts framework-neutral
 commands to the engine and receives immutable publications through the MFC
-message loop through the target architecture's UI notification bridge. A Qt
+message loop using the target architecture's UI notification bridge. A Qt
 adapter follows the same contract using queued signals or event-loop posts.
 The legacy pattern of calling `QCoreApplication::processEvents()` from an MFC
 timer is retired by this model. Neither adapter becomes a second playback
@@ -158,17 +159,20 @@ ADR-005 is implemented when:
    editor references.
 4. Consumers reject stale decoder/compositor results using ADR-003 identities;
    workers never decide their own currency.
-5. Audio-callback tests prove no blocking, allocation, UI call, or engine-lock
+5. A validated decode failure or unavailable-media result transitions the
+   session to `PlaybackPhase::Failed` with a `PlaybackError`; a stale failure
+   result does not.
+6. Audio-callback tests prove no blocking, allocation, UI call, or engine-lock
    contention occurs on the callback path.
-6. Audio underflow and device observations reach the engine without allowing
+7. Audio underflow and device observations reach the engine without allowing
    the callback to mutate playback authority.
-7. Shutdown tests prove queued work cannot call destroyed receivers and every
+8. Shutdown tests prove queued work cannot call destroyed receivers and every
    application-owned worker is joined before its owner is destroyed.
-8. Qt `deleteLater()` objects are deleted only by their owning event loop.
-9. MFC and Qt adapters can issue the same engine commands and consume the same
+9. Qt `deleteLater()` objects are deleted only by their owning event loop.
+10. MFC and Qt adapters can issue the same engine commands and consume the same
    immutable publications without duplicating transport state.
-10. Core ownership tests run without Qt Widgets, MFC windows, real codecs, or
-    hardware.
+11. Core ownership tests run without Qt Widgets, MFC windows, real codecs, or
+   hardware.
 
 ## Consequences
 
