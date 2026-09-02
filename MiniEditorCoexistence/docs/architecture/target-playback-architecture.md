@@ -50,7 +50,10 @@ The first engine milestone does not implement:
 - GPU composition;
 - offline export;
 - background proxy generation;
-- live capture.
+- live capture;
+- measured or sample-exact A/V synchronization. Milestone 1 verifies that real
+  V1 and A1 sources can run concurrently, but its monotonic master clock does
+  not form a drift-correction loop with `QMediaPlayer` audio output.
 
 These features must remain possible without changing the engine's ownership or
 time contracts.
@@ -94,6 +97,11 @@ struct EditorProject {
 };
 ```
 
+For milestone 1 this structure is an in-memory model only. Loading the existing
+flat project format synthesizes one default sequence at `30/1`, and saving keeps
+writing the existing flat `timelineItems`. Persisting a sequence `FrameRate` is
+a hard precondition before the product exposes any other sequence rate.
+
 The editor may keep an `activeSequenceId` as workspace/session state. Playback
 does not infer its sequence from keyboard focus or selected widgets.
 
@@ -120,33 +128,35 @@ contracts do not change.
 The engine does not use one unqualified `int frame` for every time domain.
 
 ```cpp
-struct TimelineFrame {
-    std::int64_t value = 0;
-};
-
-struct SourceTimestamp {
-    std::chrono::microseconds value{};
-};
-
-struct PresentationTime {
-    std::chrono::microseconds value{};
-};
-
-struct FrameRate {
-    std::int32_t numerator = 30;
-    std::int32_t denominator = 1;
-};
+struct FrameRate;
+class TimelineFrame;
+class FrameCount;
+class SourceTimestamp;
+class SequenceTime;
+class SequenceDuration;
+class MasterClockTime;
+class ClockDuration;
 ```
 
 The roles are different:
 
-- `TimelineFrame` expresses an edit position in one sequence's frame rate.
-- `SourceTimestamp` expresses a decoder position in source-media time.
-- `PresentationTime` expresses elapsed playback-clock time.
+- `TimelineFrame` and `FrameCount` express positions and signed lengths on one
+  sequence's frame grid.
+- `SourceTimestamp` expresses a requested decoder position in source-media
+  time.
+- `SequenceTime` and `SequenceDuration` are relative to sequence zero.
+- `MasterClockTime` and `ClockDuration` are relative to the clock supplied by
+  `IPlaybackClock`.
 
 Conversions require a named function and a `FrameRate`. They are never
 implicit. Frame-to-time conversion is calculated from the absolute value using
 rational arithmetic; the engine does not accumulate rounded frame durations.
+Playback-rate conversion is the only bridge between `ClockDuration` and
+`SequenceDuration`. `PresentationTime` is retired because it combined
+incompatible origins and position/duration meanings.
+
+ADR-001 owns the exact type, arithmetic, rounding, legacy-source, and milestone
+clock contracts. This target document uses those names without weakening them.
 
 ### Consequence
 
@@ -202,7 +212,7 @@ struct SequencePlaybackSnapshot {
     SequenceId sequenceId;
     SequenceRevision revision;
     FrameRate frameRate;
-    TimelineFrame duration;
+    FrameCount duration;
     std::vector<PlaybackMediaDescriptor> media;
     std::vector<PlaybackClip> videoClips;
     std::vector<PlaybackClip> audioClips;
@@ -250,7 +260,7 @@ struct VideoDecodeRequest {
     PlaybackGeneration generation;
     MediaAssetId mediaAssetId;
     SourceTimestamp sourceTime;
-    PresentationTime deadline;
+    MasterClockTime deadline;
 };
 
 struct DecodedVideoFrame {
@@ -279,14 +289,22 @@ than a video-sink-only special case.
 Playback position is calculated from time; it is not advanced by adding one
 frame each time a UI timer fires.
 
-When audible audio is active, the audio-output clock is the master. When no
-audio is active, the scheduler uses `std::chrono::steady_clock`.
+The target-state policy uses the audio-output clock as master whenever audible
+audio is active, and a monotonic clock otherwise.
+
+Milestone 1 has an explicit exception: `IPlaybackClock` is backed by
+`std::chrono::steady_clock` even when A1 or embedded V1 audio is audible. The
+current `QMediaPlayer` plus `QAudioOutput` path remains self-clocked and reports
+position only as an observation. Selecting an audio-device clock and closing
+the A/V drift loop belong to ADR-004.
 
 Conceptually:
 
 ```text
-timeline position = anchor position
-                  + elapsed master-clock time * playback rate
+clock elapsed = current master-clock time - anchor master-clock time
+sequence time = anchor sequence time
+              + sequenceElapsedFor(clock elapsed, playback rate)
+timeline frame = frameAtSequenceTime(sequence time, sequence frame rate)
 ```
 
 The scheduler converts that position to the sequence's `TimelineFrame`, asks
@@ -308,8 +326,9 @@ heartbeat samples `PlaybackStatus`; it does not advance playback.
 
 ### Consequence
 
-Temporary UI stalls do not redefine media time, and V1/A1 synchronization has
-one measurable authority.
+Temporary UI stalls do not redefine media time. The target state gives V1/A1
+synchronization one measurable authority; milestone 1 validates concurrent
+playback and lifecycle behavior without claiming a synchronization tolerance.
 
 ## Decision 7: thread ownership is explicit
 
@@ -530,7 +549,8 @@ growing more reconciliation logic.
 
 ### Integration tests
 
-- one real V1 video plus one real A1 audio;
+- one real V1 video plus one real A1 audio, verifying concurrent playback and
+  lifecycle but not measured A/V synchronization;
 - seek into a trimmed non-zero source position;
 - pause retains the exact presented frame;
 - resume continues from the paused timeline position;
@@ -549,10 +569,13 @@ These rules are intended to become acceptance criteria and tests:
 4. Playback resolves only immutable snapshots.
 5. Every asynchronous request/result carries session and generation identity.
 6. Seek/source/snapshot changes invalidate older generations.
-7. Audio is the master clock when audible audio is active; otherwise a monotonic
-   clock is used.
+7. In the target state, audio is the master clock when audible audio is active;
+   otherwise a monotonic clock is used. Milestone 1 has the documented
+   steady-clock-only exception until ADR-004 removes it.
 8. Video timing follows the master clock; audio never waits for video.
-9. Timeline, source, and presentation times require explicit conversion.
+9. Timeline, source, sequence-relative, and master-clock values require explicit
+   conversion; sequence and clock durations cross only through playback-rate
+   conversion.
 10. Queue sizes are bounded and shutdown joins every application-owned worker.
 11. A playback session identifies its source explicitly, never through UI
     focus.
@@ -562,7 +585,7 @@ These rules are intended to become acceptance criteria and tests:
 
 Once this target is accepted, record its independently important decisions:
 
-- ADR-001: Strong timeline, source, and presentation time domains.
+- ADR-001: Strong timeline, source, sequence, and master-clock time domains.
 - ADR-002: PlaybackSession as the sole playback-state authority.
 - ADR-003: Immutable sequence snapshots and generation invalidation.
 - ADR-004: Audio/monotonic master-clock policy.
