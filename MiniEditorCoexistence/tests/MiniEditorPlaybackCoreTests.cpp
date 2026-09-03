@@ -1,6 +1,7 @@
 #include "PlaybackCoreBoundary.h"
 #include "MediaTime.h"
 #include "ProjectRuntime.h"
+#include "PlaybackClock.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -35,6 +36,30 @@ bool require(bool condition, const char *message)
     std::cerr << message << '\n';
     return false;
 }
+
+// A deterministic test double for IPlaybackClock (ADR-004). Production code
+// never sees this type; it exists only so engine tests can control elapsed
+// time exactly.
+class FakePlaybackClock final : public mini_editor::playback_core::IPlaybackClock {
+public:
+    explicit FakePlaybackClock(mini_editor::playback_core::MasterClockTime time)
+        : time_(time)
+    {
+    }
+
+    mini_editor::playback_core::MasterClockTime now() const override
+    {
+        return time_;
+    }
+
+    void set(mini_editor::playback_core::MasterClockTime time)
+    {
+        time_ = time;
+    }
+
+private:
+    mini_editor::playback_core::MasterClockTime time_;
+};
 
 bool throwsInvalidArgumentForInvalidFrameRate()
 {
@@ -161,6 +186,56 @@ bool verifyProjectRuntimeIdentityAndReadiness()
                    "A failed runtime must carry a framework-neutral error.");
 }
 
+bool verifyAnchorResolution(mini_editor::playback_core::FrameRate rate)
+{
+    using namespace mini_editor::playback_core;
+
+    // Anchor: sequence is at 2s when the clock reads 10s, at normal rate.
+    const PlaybackAnchor anchor{
+        MasterClockTime::fromMicroseconds(10'000'000),
+        SequenceTime::fromMicroseconds(2'000'000),
+        100
+    };
+
+    FakePlaybackClock clock(MasterClockTime::fromMicroseconds(10'000'000));
+    if (!require(resolveSequenceTime(anchor, clock)
+                     == SequenceTime::fromMicroseconds(2'000'000),
+                 "Reading the clock at the anchor instant must not move position.")) {
+        return false;
+    }
+
+    clock.set(MasterClockTime::fromMicroseconds(13'500'000));
+    if (!require(resolveSequenceTime(anchor, clock)
+                     == SequenceTime::fromMicroseconds(5'500'000),
+                 "Elapsed clock time must advance sequence time at normal rate.")) {
+        return false;
+    }
+
+    if (!require(resolveTimelineFrame(anchor, clock, rate)
+                     == frameAtSequenceTime(SequenceTime::fromMicroseconds(5'500'000), rate),
+                 "resolveTimelineFrame must compose the anchor equation with frameAtSequenceTime.")) {
+        return false;
+    }
+
+    // 200% rate: the same elapsed clock time must move sequence time twice as far.
+    const PlaybackAnchor fastAnchor{
+        MasterClockTime::fromMicroseconds(0),
+        SequenceTime::zero(),
+        200
+    };
+    clock.set(MasterClockTime::fromMicroseconds(1'000'000));
+    if (!require(resolveSequenceTime(fastAnchor, clock)
+                     == SequenceTime::fromMicroseconds(2'000'000),
+                 "A 200% rate anchor must double resolved sequence elapsed time.")) {
+        return false;
+    }
+
+    // Reading the clock twice without moving it must resolve to the same position.
+    return require(resolveSequenceTime(fastAnchor, clock)
+                       == resolveSequenceTime(fastAnchor, clock),
+                   "Resolving from an unchanged clock reading must be idempotent.");
+}
+
 } // namespace
 
 int main()
@@ -205,7 +280,11 @@ int main()
         || !verifyTwentyFourHourRange(FrameRate(30'000, 1'001))
         || !verifySourceMapping()
         || !verifyRateConversions()
-        || !verifyProjectRuntimeIdentityAndReadiness()) {
+        || !verifyProjectRuntimeIdentityAndReadiness()
+        || !verifyAnchorResolution(FrameRate(24, 1))
+        || !verifyAnchorResolution(FrameRate(25, 1))
+        || !verifyAnchorResolution(FrameRate(30, 1))
+        || !verifyAnchorResolution(FrameRate(30'000, 1'001))) {
         return 1;
     }
 
