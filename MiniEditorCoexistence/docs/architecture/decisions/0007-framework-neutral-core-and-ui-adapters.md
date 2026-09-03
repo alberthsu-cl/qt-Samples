@@ -55,12 +55,24 @@ using PlaybackEvent = std::variant<
     PlaybackEnded, MediaFailed>;
 ```
 
+The current four-member `PlaybackCommand` enum in `ProjectState.h` is renamed
+`LegacyPlaybackCommand` during coexistence. The eight-alternative engine
+`PlaybackCommand` is the only command type at the new engine boundary. The
+temporary `IPlaybackBackend` adapter translates legacy controls to the new
+command route and is removed once the core-backed path becomes the default.
+
 Every command/result carries the applicable identity from ADR-002/ADR-003.
 Adapters first reduce framework-specific gestures to the shared
 framework-neutral `EditorIntent`; shared translation maps that intent to the
 appropriate `PlaybackCommand`. Adapters never modify an event to make it
 current; they pass the immutable value to the core-side consumer that validates
 identity.
+
+`EditorIntent` represents user-facing editor actions. It must gain explicit
+seek and rate intents as those controls migrate. `OpenSource`,
+`InstallSnapshot`, and `Shutdown` are project/engine lifecycle commands sent
+by their owning adapter or service, not synthetic UI intents; toggle playback
+may resolve to `Play` or `Pause` from the last published phase.
 
 The core exposes a thread-safe UI notification queue through the
 `IPlaybackEventSink` port. It does not call UI code inline and does not require
