@@ -16,7 +16,7 @@ implementation steps. It is the practical bridge between:
 | --- | --- | --- |
 | 1. Core foundation | A framework-neutral C++ playback-core target and the explicit `LegacyPlaybackCommand` name for the existing UI path. | **Complete** |
 | 2. Project + snapshots | Strong time/identity values plus immutable project-runtime and sequence snapshots. | **Complete** |
-| 3. Playback authority | `PlaybackSession`, injected fake clock, engine commands, and stale-result rules. | In progress |
+| 3. Playback authority | `PlaybackSession`, injected fake clock, engine commands, and stale-result rules. | **Complete** |
 | 4. Media integration | Decoder, audio, compositor, and MFC/Qt notification adapters behind a feature flag. | Planned |
 | 5. Rollout + migration | Route timeline preview through the new core, compare behavior, make it default, and retire legacy timer advancement. | Planned |
 
@@ -38,11 +38,12 @@ human decision.
 
 ## Current milestone
 
-[Milestone 1 — Core Foundation](milestone-01-core-foundation.md) and
-[Milestone 2 — Project and snapshots](milestone-02-project-and-snapshots.md)
-are complete. [Milestone 3 — Playback authority](milestone-03-playback-authority.md)
-is in progress: it builds `PlaybackSession`, the injected clock/anchor, and the
-ADR-002 engine `PlaybackCommand` set entirely with fake ports. It deliberately
-does **not** introduce an engine thread, decoder, audio device, or UI
-notification bridge — those depend on the identity and state-machine values
-this milestone establishes, and are planned for Milestone 4.
+[Milestone 1 — Core Foundation](milestone-01-core-foundation.md),
+[Milestone 2 — Project and snapshots](milestone-02-project-and-snapshots.md),
+and [Milestone 3 — Playback authority](milestone-03-playback-authority.md)
+are complete. `PlaybackSession`, the injected clock/anchor, and the ADR-002
+engine `PlaybackCommand` set now exist entirely behind fake ports. Milestone 4
+adds the engine thread, decoder, audio device, and UI notification bridge
+that this milestone's identity and state-machine values were built for;
+nothing routes through the new session yet, so current application behavior
+is unchanged.

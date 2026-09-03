@@ -9,7 +9,58 @@ Milestone 4. Nothing in this milestone changes what the current application
 displays or how it plays media, because no UI path is routed through the new
 session yet.
 
-## Dependency graph
+## Completed issues
+
+1. **M3-01 — Injected playback clock and anchor resolution**
+   - `IPlaybackClock` and `PlaybackAnchor` (ADR-004), plus a named function
+     resolving sequence position from an anchor and a clock reading, built
+     only from the existing `MediaTime.h` rate-conversion helpers.
+   - A deterministic fake clock proves the equation at 24, 25, 30, and
+     30000/1001 fps.
+2. **M3-02 — PlaybackSession command/state machine**
+   - The ADR-002 value types and the full milestone-1 command-policy table
+     (`OpenSource`/`InstallSnapshot`/`Play`/`Pause`/`Stop`/`Seek`/`SetRate`/
+     `Shutdown`), applied synchronously — with no decoder to wait for,
+     Seeking/Prerolling resolve to their destination phase within the same
+     call, the same "completes without a decoder" case ADR-002/ADR-004
+     already describe for a still image or gap.
+   - Adds `MediaAssetId`, the one type ADR-002 names but never defines, as a
+     thin wrapper over the existing plain-int media-asset-id space.
+   - A session is constructed for one `PlaybackSource` kind and keeps it for
+     its lifetime this milestone; a command naming the other kind is
+     rejected as `SourceKindMismatch` rather than silently accepted.
+3. **M3-03 — Stale-result rejection and idempotent observations**
+   - `PlaybackSession::isCurrent()` coverage across every ADR-002-listed
+     generation-advancing trigger (seek, repeated scrubbing, source
+     replacement, snapshot replacement, stop, shutdown).
+   - `reportSourcePosition()`, a second synthetic observation beyond
+     `reportFailure()`, proving the stale/idempotent pattern generalizes.
+   - `PlaybackStatusGate`, the consumer-side "accept only a newer statusSeq
+     within a session, reset on a new session" rule.
+
+## What remains deliberately deferred
+
+No engine thread, command queue, decoder, audio device, compositor, UI
+notification bridge, or feature flag exists after this milestone. Nothing
+routes through `PlaybackSession` yet — the current application's playback
+behavior is unchanged. Those integrations are Milestone 4; making the new
+path the default and retiring MFC timer advancement is Milestone 5.
+
+## Verification
+
+The framework-neutral core tests (`MiniEditorPlaybackCoreTests`), the
+existing editor/Qt-widget regression tests (`MiniEditorCoreTests`,
+`MiniEditorQtWidgetTests`), and the full application all build and pass in
+both the Qt-enabled (`vs2022-x64`) and MFC-only (`vs2022-mfc-x64`)
+configurations.
+
+*Architecture: ADR-002, ADR-004 (partial), ADR-006/ADR-007 (reused
+unmodified).*
+
+## Original issue breakdown
+
+The dependency graph and per-issue scope below are kept as the planning
+record; see "Completed issues" above for what actually shipped.
 
 ```text
 M3-01  Injected playback clock and anchor resolution
