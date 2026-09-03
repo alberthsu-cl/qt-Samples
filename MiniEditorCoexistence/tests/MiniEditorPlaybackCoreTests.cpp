@@ -6,6 +6,7 @@
 #include "PlaybackStatusGate.h"
 #include "PreviewPresentation.h"
 #include "PlaybackEngine.h"
+#include "VideoWorkScheduler.h"
 
 #include <thread>
 #include <vector>
@@ -897,6 +898,171 @@ bool verifyPlaybackEngineCrossThreadSubmission()
                    "be accepted -- no rejections.");
 }
 
+// A deterministic test double for IVideoDecodeService: requestDecode()
+// captures the request and callback without invoking it, so a test controls
+// exactly when (and in what order) decodes complete.
+class FakeVideoDecodeService final : public mini_editor::playback_core::IVideoDecodeService {
+public:
+    void requestDecode(mini_editor::playback_core::VideoDecodeRequest request,
+                       std::function<void(mini_editor::playback_core::DecodedVideoFrame)> onDecoded) override
+    {
+        pending_.push_back({std::move(request), std::move(onDecoded)});
+    }
+
+    bool completeOldest(mini_editor::playback_core::DecodedVideoFrame frame)
+    {
+        if (pending_.empty())
+            return false;
+        auto entry = std::move(pending_.front());
+        pending_.erase(pending_.begin());
+        entry.second(std::move(frame));
+        return true;
+    }
+
+    std::size_t pendingCount() const { return pending_.size(); }
+
+    const mini_editor::playback_core::VideoDecodeRequest *oldestRequest() const
+    {
+        return pending_.empty() ? nullptr : &pending_.front().first;
+    }
+
+private:
+    std::vector<std::pair<mini_editor::playback_core::VideoDecodeRequest,
+                          std::function<void(mini_editor::playback_core::DecodedVideoFrame)>>>
+        pending_;
+};
+
+// A synchronous test double for IVideoCompositor: composites inline, so
+// tests don't need to separately drive composition completion.
+class FakeVideoCompositor final : public mini_editor::playback_core::IVideoCompositor {
+public:
+    void composite(mini_editor::playback_core::DecodedVideoFrame frame,
+                   mini_editor::playback_core::FramePresentationRequest request,
+                   std::function<void(mini_editor::playback_core::CompositedVideoFrame)> onComposited) override
+    {
+        using namespace mini_editor::playback_core;
+
+        const auto position = [&request]() -> PresentedPosition {
+            if (const auto *source = std::get_if<SourcePresentationTarget>(&request.target)) {
+                return PresentedPosition{PresentedSourcePosition{source->mediaAssetId, source->sourceTimestamp}};
+            }
+            const auto &sequence = std::get<SequencePresentationTarget>(request.target);
+            return PresentedPosition{PresentedSequencePosition{
+                sequence.sequenceId, sequence.sequenceRevision, sequence.timelineFrame}};
+        }();
+
+        onComposited(CompositedVideoFrame{
+            request.presentationSessionId, request.requestId, request.authority, position, frame.buffer
+        });
+    }
+};
+
+bool verifyVideoWorkSchedulerBoundedLatestWins()
+{
+    using namespace mini_editor::playback_core;
+
+    const SequenceId sequenceId = SequenceId::create();
+    FakePlaybackClock clock(MasterClockTime::fromMicroseconds(0));
+    PlaybackSession session(PlaybackSource{SequencePreview{sequenceId}}, clock);
+    auto snapshot = makeSnapshot(sequenceId, FrameRate(30, 1), FrameCount::fromFrames(300));
+    session.applyCommand(InstallSnapshot{snapshot}, PlaybackCommandId::create());
+
+    PreviewPresentationCoordinator coordinator;
+    coordinator.notifyPlaybackStatus(session.status(), true);
+
+    FakeVideoDecodeService decoder;
+    FakeVideoCompositor compositor;
+    std::vector<CompositedVideoFrame> presented;
+    VideoWorkScheduler scheduler(decoder, compositor,
+                                 [&presented](CompositedVideoFrame frame) {
+                                     presented.push_back(std::move(frame));
+                                 });
+
+    auto workIdentityFor = [](const PlaybackStatus &status) {
+        const auto &sequence = std::get<SequencePreviewStatus>(status.context);
+        return SequenceWorkIdentity{
+            PlaybackWorkIdentity{status.sessionId, status.generation}, sequence.sequenceId, sequence.revision
+        };
+    };
+
+    const auto requestA = coordinator.currentRequest();
+    const VideoDecodeRequest decodeA{
+        workIdentityFor(session.status()), MediaAssetId(1),
+        SourceTimestamp::fromMicroseconds(0), MasterClockTime::fromMicroseconds(1'000'000)
+    };
+    scheduler.requestFrame(decodeA, *requestA);
+    if (!require(scheduler.hasInFlightWork() && decoder.pendingCount() == 1,
+                 "The first request must start decoding immediately.")) {
+        return false;
+    }
+
+    // A second request while A is in flight becomes pending, not a second in-flight decode.
+    session.applyCommand(Seek{SequenceTime::fromMicroseconds(1'000'000)}, PlaybackCommandId::create());
+    coordinator.notifyPlaybackStatus(session.status(), true);
+    const auto requestB = coordinator.currentRequest();
+    const VideoDecodeRequest decodeB{
+        workIdentityFor(session.status()), MediaAssetId(1),
+        SourceTimestamp::fromMicroseconds(1'000'000), MasterClockTime::fromMicroseconds(2'000'000)
+    };
+    scheduler.requestFrame(decodeB, *requestB);
+    if (!require(decoder.pendingCount() == 1,
+                 "A second request while one is in flight must not start a second decode.")
+        || !require(scheduler.hasPendingWork(), "The second request must become the pending request.")) {
+        return false;
+    }
+
+    // A third request while A is still in flight replaces B as the pending request.
+    session.applyCommand(Seek{SequenceTime::fromMicroseconds(2'000'000)}, PlaybackCommandId::create());
+    coordinator.notifyPlaybackStatus(session.status(), true);
+    const auto requestC = coordinator.currentRequest();
+    const VideoDecodeRequest decodeC{
+        workIdentityFor(session.status()), MediaAssetId(1),
+        SourceTimestamp::fromMicroseconds(2'000'000), MasterClockTime::fromMicroseconds(3'000'000)
+    };
+    scheduler.requestFrame(decodeC, *requestC);
+    if (!require(decoder.pendingCount() == 1 && scheduler.hasPendingWork(),
+                 "A newer pending request must replace the older one, not queue alongside it.")) {
+        return false;
+    }
+
+    // Completing A (the stale in-flight decode) must be discarded -- because C is pending, the
+    // scheduler must move straight to decoding C, never presenting A or B.
+    decoder.completeOldest(DecodedVideoFrame{decodeA.sequence, decodeA.mediaAssetId, decodeA.sourceTime,
+                                             VideoFrameBuffer{1}});
+    if (!require(presented.empty(), "A stale in-flight completion must not be presented.")
+        || !require(!scheduler.hasPendingWork(), "Completing the in-flight decode must consume the pending slot.")
+        || !require(decoder.pendingCount() == 1, "The pending request (C) must start decoding immediately.")
+        || !require(decoder.oldestRequest() && *decoder.oldestRequest() == decodeC,
+                    "The newly-started decode must be exactly the superseding request (C), not B.")) {
+        return false;
+    }
+
+    // Completing C (the current, non-superseded decode) must be composited and presented exactly once.
+    decoder.completeOldest(DecodedVideoFrame{decodeC.sequence, decodeC.mediaAssetId, decodeC.sourceTime,
+                                             VideoFrameBuffer{3}});
+    if (!require(presented.size() == 1, "Exactly one frame (C's) must be presented.")
+        || !require(presented.front().buffer == VideoFrameBuffer{3},
+                    "The presented frame must carry C's decoded payload.")
+        || !require(presented.front().requestId == requestC->requestId,
+                    "The presented frame's identity must match C's presentation request.")) {
+        return false;
+    }
+
+    // Presentation-level staleness is a second, independent check: even a frame the scheduler
+    // successfully presented is only "current" while the coordinator has not moved on since.
+    if (!require(coordinator.isCurrentRequest(presented.front().presentationSessionId,
+                                              presented.front().requestId, presented.front().authority),
+                 "Immediately after presentation, the frame must still match the coordinator's current request.")) {
+        return false;
+    }
+    session.applyCommand(Seek{SequenceTime::fromMicroseconds(4'000'000)}, PlaybackCommandId::create());
+    coordinator.notifyPlaybackStatus(session.status(), true);
+    return require(!coordinator.isCurrentRequest(presented.front().presentationSessionId,
+                                                 presented.front().requestId, presented.front().authority),
+                   "Once the coordinator has moved on, a previously-presented frame's identity "
+                   "must no longer be recognized as current.");
+}
+
 } // namespace
 
 int main()
@@ -953,7 +1119,8 @@ int main()
         || !verifyStaleResultRejectionAndStatusGate()
         || !verifyPreviewPresentationCoordinator()
         || !verifyPlaybackEngineOrderingAndShutdown()
-        || !verifyPlaybackEngineCrossThreadSubmission()) {
+        || !verifyPlaybackEngineCrossThreadSubmission()
+        || !verifyVideoWorkSchedulerBoundedLatestWins()) {
         return 1;
     }
 
