@@ -141,13 +141,13 @@ void editorSessionOwnsAndClampsState()
     require(session.selectedClipSettings().opacityPercent == 65,
             "Session must keep the selected clip settings.");
 
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
     require(session.playbackState().isPlaying, "Play command must start playback.");
     session.advancePlaybackFrame();
     require(session.playbackState().currentFrame == 1,
             "Playing session must advance one frame.");
 
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::StepForward);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::StepForward);
     require(!session.playbackState().isPlaying, "Frame stepping must stop playback.");
     require(session.playbackState().currentFrame == 2, "Frame step must advance one frame.");
 
@@ -623,8 +623,8 @@ void timelineEditingControllerCoordinatesFocusAndSplitPolicy()
 
     controller.selectSourceAsset(1);
     session.seekTimeline(50);
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
     require(session.sourcePlaybackState().isPaused
                 && session.sourcePlaybackState().currentFrame == 50,
             "The source-selection reset test requires a paused source preview.");
@@ -646,8 +646,8 @@ void timelineEditingControllerCoordinatesFocusAndSplitPolicy()
     // Reproduce the UI ordering regression: pause over the first placement,
     // then click a different clip without moving the timeline head.
     session.seekTimeline(120);
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
     require(session.timelinePlaybackState().isPaused,
             "The selection regression requires a paused timeline preview.");
     require(controller.focusClip(insertedClipId, false),
@@ -673,7 +673,7 @@ void timelineEditingControllerCoordinatesFocusAndSplitPolicy()
                 && session.playbackState().currentFrame == 50,
             "A timeline gap must keep timeline focus while clearing placement focus.");
 
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
     session.seekTimeline(220);
     controller.followPlaybackFrame();
     require(session.playbackState().isPlaying
@@ -778,7 +778,7 @@ void playbackClockControllerKeepsTimerPolicyFrameworkNeutral()
     require(historySession.playbackState().playbackRatePercent == 200,
             "Opening a project must preserve the current preview playback rate.");
 
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
     require(clock.synchronize() == PlaybackClockAction::EnsureRunning,
             "Starting playback must request a running UI timer without depending on MFC or Qt.");
     require(clock.advanceOneFrame() == PlaybackClockAction::EnsureRunning
@@ -844,8 +844,8 @@ void previewStateResolverKeepsPreviewPolicyFrameworkNeutral()
             "A stopped focused video clip and decoder must resolve the same clip start.");
 
     session.seekTimeline(150);
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
     preview = PreviewStateResolver::resolve(session, library);
     require(preview.hasMedia && preview.sourceFrame == 70
                 && preview.hasAudio && preview.audioSourceFrame == 40,
@@ -1022,7 +1022,7 @@ void playbackStopsAtFocusedPreviewDuration()
     // Source preview preserves its final frame for inspection.
     EditorSession session(1);
     session.setPlaybackDuration(3, true);
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
     session.advancePlaybackFrame();
     session.advancePlaybackFrame();
     session.advancePlaybackFrame();
@@ -1039,7 +1039,7 @@ void playbackStopsAtFocusedPreviewDuration()
         1, TimelineTrackType::Video, 0, 3);
     session.selectTimelineClip(timelineClipId, 0);
     session.setPlaybackDuration(3, true);
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
     session.advancePlaybackFrame();
     session.advancePlaybackFrame();
     session.advancePlaybackFrame();
@@ -1053,18 +1053,18 @@ void pausedPlaybackPreservesItsCurrentFrame()
 {
     EditorSession session(1);
     session.setPlaybackDuration(20, true);
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
     session.advancePlaybackFrame();
     session.advancePlaybackFrame();
     const int pausedFrame = session.playbackState().currentFrame;
 
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
     require(!session.playbackState().isPlaying && session.playbackState().isPaused,
             "Play/Pause must enter an explicit paused state.");
     require(session.playbackState().currentFrame == pausedFrame,
             "Pausing must preserve the exact current frame.");
 
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::Stop);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::Stop);
     require(!session.playbackState().isPaused
                 && session.playbackState().currentFrame == 0,
             "Stop must remain distinct from Pause and return to frame zero.");
@@ -1620,8 +1620,8 @@ void clipFadesTravelThroughSessionUndoAndProjectFiles()
     session.focusTimeline();
     session.setPlaybackDuration(session.timelineModel().contentDurationFrames(), false);
     session.seekTimeline(20);
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
     PreviewState preview = PreviewStateResolver::resolve(session, library);
     require(preview.videoFadeGainPercent == 50 && preview.effectiveOpacityPercent == 50,
             "A paused playhead inside a fade-in must report the ramped opacity.");
@@ -1638,7 +1638,7 @@ void clipFadesTravelThroughSessionUndoAndProjectFiles()
     // Stopped editing shows the focused clip as an edit target, so its own
     // fade-in must not hide the placement being adjusted.
     session.selectTimelineClip(videoClipId, 0);
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::Stop);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::Stop);
     preview = PreviewStateResolver::resolve(session, library);
     require(preview.videoFadeGainPercent == 100
                 && preview.effectiveOpacityPercent == preview.settings.opacityPercent,
@@ -1722,11 +1722,11 @@ void mediaPlaybackPlanResolverCentralizesDecoderIntent()
                 && plan.needsSilentVideoPreroll(),
             "A stopped source video must request its selected frame as a silent preroll.");
 
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
     plan = MediaPlaybackPlanResolver::resolve(session, library);
     require(plan.shouldPlay && !plan.needsSilentVideoPreroll(),
             "A playing source must publish play intent instead of preroll intent.");
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::Stop);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::Stop);
 
     session.selectAsset(1);
     plan = MediaPlaybackPlanResolver::resolve(session, library);
@@ -1751,12 +1751,12 @@ void mediaPlaybackPlanResolverCentralizesDecoderIntent()
                 && plan.needsSilentVideoPreroll(),
             "A stopped timeline seek must resolve the exact frame under the head.");
 
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
     plan = MediaPlaybackPlanResolver::resolve(session, library);
     require(plan.sourceFrame == 100 && plan.shouldPlay,
             "Timeline playback must map the playhead to clip-local trimmed source time.");
 
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
     plan = MediaPlaybackPlanResolver::resolve(session, library);
     require(plan.sourceFrame == 100 && plan.isPaused && !plan.shouldPlay,
             "A paused timeline must preserve the exact playhead-derived source frame.");
@@ -1836,7 +1836,7 @@ void timelineAudioPlaybackPlanResolvesA1Independently()
                 && plan.fadeGainPercent == 50 && !plan.shouldPlay,
             "A1 must resolve trim and fade state independently of V1.");
 
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
     plan = TimelineAudioPlaybackPlanResolver::resolve(session, library);
     require(plan.shouldPlay,
             "A1 plan must publish real playback intent with the timeline clock.");
@@ -1969,7 +1969,7 @@ void sourcePlaybackDoesNotMoveTheTimelinePlayhead()
 
     session.selectAsset(0);
     session.setPlaybackDuration(120, true);
-    session.handleLegacyPlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
     session.advancePlaybackFrame();
     session.advancePlaybackFrame();
     require(session.playbackState().currentFrame == 2
