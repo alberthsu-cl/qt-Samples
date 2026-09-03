@@ -112,7 +112,7 @@ real editor. `MfcTransportBar` is the complete MFC fallback; when
 `MINI_EDITOR_USE_QT=ON`, `QtTransportPanel` replaces only that bar through
 `QtTransportHost`.
 
-The Qt buttons emit framework-neutral `PlaybackCommand` values. `MainFrame`
+The Qt buttons emit framework-neutral `LegacyPlaybackCommand` values. `MainFrame`
 owns `PlaybackState`, handles Play/Pause, Stop, and frame-step commands, and
 uses a simple MFC timer to advance the sample playhead. It then synchronizes
 the Qt timecode/button state and redraws the MFC Preview Canvas and Timeline.

@@ -31,7 +31,7 @@ public:
     void setSourceMetadataChangedHandler(SourceMetadataChangedHandler handler);
 
     unsigned int tickIntervalMilliseconds() const override;
-    PlaybackClockAction executeCommand(PlaybackCommand command) override;
+    PlaybackClockAction executeCommand(LegacyPlaybackCommand command) override;
     PlaybackClockAction seek(const PreviewSeekRequest &request) override;
     PlaybackClockAction synchronize() override;
     PlaybackClockAction advanceOneFrame() override;

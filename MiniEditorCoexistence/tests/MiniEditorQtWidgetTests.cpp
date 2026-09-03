@@ -697,8 +697,8 @@ void MiniEditorQtWidgetTests::transportRefreshAndButtonsUseSemanticCommands()
 
     QCOMPARE(commandSpy.count(), 2);
     QCOMPARE(commandSpy.at(0)[0].toInt(),
-             static_cast<int>(PlaybackCommand::TogglePlayPause));
-    QCOMPARE(commandSpy.at(1)[0].toInt(), static_cast<int>(PlaybackCommand::Stop));
+             static_cast<int>(LegacyPlaybackCommand::TogglePlayPause));
+    QCOMPARE(commandSpy.at(1)[0].toInt(), static_cast<int>(LegacyPlaybackCommand::Stop));
 }
 
 void MiniEditorQtWidgetTests::mediaLibrarySeparatesProgrammaticAndUserSelection()

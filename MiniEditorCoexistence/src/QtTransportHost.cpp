@@ -34,7 +34,7 @@ bool QtTransportHost::create(void *mfcParentWindowHandle)
                      [this](int commandValue) {
                          if (playbackCommandHandler_) {
                              playbackCommandHandler_(
-                                 static_cast<PlaybackCommand>(commandValue));
+                                 static_cast<LegacyPlaybackCommand>(commandValue));
                          }
                      });
     QObject::connect(panel_.get(), &QtTransportPanel::playbackPositionRequested,

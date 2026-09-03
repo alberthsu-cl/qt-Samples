@@ -66,7 +66,7 @@ public:
     bool canRedo() const;
     bool undo();
     bool redo();
-    void handlePlaybackCommand(PlaybackCommand command);
+    void handlePlaybackCommand(LegacyPlaybackCommand command);
     void advancePlaybackFrame();
     void seekTimeline(int frame);
     void setPlaybackDuration(int durationFrames, bool resetToBeginning);

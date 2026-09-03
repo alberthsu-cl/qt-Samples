@@ -4,7 +4,7 @@
 #include "PreviewSeekRequest.h"
 
 class EditorSession;
-enum class PlaybackCommand;
+enum class LegacyPlaybackCommand;
 
 // A playback backend translates transport intent into editor state and tells
 // its host whether a periodic UI tick is currently required. The simulated
@@ -16,7 +16,7 @@ public:
     virtual ~IPlaybackBackend() = default;
 
     virtual unsigned int tickIntervalMilliseconds() const = 0;
-    virtual PlaybackClockAction executeCommand(PlaybackCommand command) = 0;
+    virtual PlaybackClockAction executeCommand(LegacyPlaybackCommand command) = 0;
     virtual PlaybackClockAction seek(const PreviewSeekRequest &request) = 0;
     virtual PlaybackClockAction synchronize() = 0;
     virtual PlaybackClockAction advanceOneFrame() = 0;
@@ -30,7 +30,7 @@ public:
     explicit SimulatedPlaybackBackend(EditorSession &session);
 
     unsigned int tickIntervalMilliseconds() const override;
-    PlaybackClockAction executeCommand(PlaybackCommand command) override;
+    PlaybackClockAction executeCommand(LegacyPlaybackCommand command) override;
     PlaybackClockAction seek(const PreviewSeekRequest &request) override;
     PlaybackClockAction synchronize() override;
     PlaybackClockAction advanceOneFrame() override;

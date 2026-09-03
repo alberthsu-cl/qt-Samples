@@ -12,7 +12,7 @@ class QtTransportPanel;
 class QtTransportHost final
 {
 public:
-    using PlaybackCommandHandler = std::function<void(PlaybackCommand command)>;
+    using PlaybackCommandHandler = std::function<void(LegacyPlaybackCommand command)>;
     using PlaybackPositionHandler = std::function<void(int frame)>;
     using PlaybackRateHandler = std::function<void(int ratePercent)>;
 

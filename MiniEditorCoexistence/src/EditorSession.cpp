@@ -703,12 +703,12 @@ bool EditorSession::redo()
     return true;
 }
 
-void EditorSession::handlePlaybackCommand(PlaybackCommand command)
+void EditorSession::handlePlaybackCommand(LegacyPlaybackCommand command)
 {
     PlaybackState &playback = activePlaybackState();
 
     switch (command) {
-    case PlaybackCommand::TogglePlayPause:
+    case LegacyPlaybackCommand::TogglePlayPause:
         if (playback.isPlaying) {
             playback.isPlaying = false;
             playback.isPaused = true;
@@ -717,17 +717,17 @@ void EditorSession::handlePlaybackCommand(PlaybackCommand command)
             playback.isPaused = false;
         }
         break;
-    case PlaybackCommand::Stop:
+    case LegacyPlaybackCommand::Stop:
         playback.isPlaying = false;
         playback.isPaused = false;
         playback.currentFrame = kFirstFrame;
         break;
-    case PlaybackCommand::StepBackward:
+    case LegacyPlaybackCommand::StepBackward:
         playback.isPlaying = false;
         playback.isPaused = true;
         playback.currentFrame = std::max(kFirstFrame, playback.currentFrame - 1);
         break;
-    case PlaybackCommand::StepForward:
+    case LegacyPlaybackCommand::StepForward:
         playback.isPlaying = false;
         playback.isPaused = true;
         playback.currentFrame = std::min(playback.durationFrames - 1,

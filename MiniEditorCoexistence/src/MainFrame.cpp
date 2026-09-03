@@ -33,16 +33,16 @@ CRect toClientRect(const WorkspaceRect &rect)
     return CRect(rect.left, rect.top, rect.left + rect.width, rect.top + rect.height);
 }
 
-EditorIntent commandForPlayback(PlaybackCommand command)
+EditorIntent commandForPlayback(LegacyPlaybackCommand command)
 {
     switch (command) {
-    case PlaybackCommand::TogglePlayPause:
+    case LegacyPlaybackCommand::TogglePlayPause:
         return EditorIntent::TogglePlayback;
-    case PlaybackCommand::Stop:
+    case LegacyPlaybackCommand::Stop:
         return EditorIntent::StopPlayback;
-    case PlaybackCommand::StepBackward:
+    case LegacyPlaybackCommand::StepBackward:
         return EditorIntent::StepBackward;
-    case PlaybackCommand::StepForward:
+    case LegacyPlaybackCommand::StepForward:
         return EditorIntent::StepForward;
     }
 
@@ -239,7 +239,7 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     propertiesHost_.setClipSettingsEditedHandler([this](const ClipSettings &settings) {
         editorSession_.updateSelectedClipSettings(settings);
     });
-    transportHost_.setPlaybackCommandHandler([this](PlaybackCommand command) {
+    transportHost_.setPlaybackCommandHandler([this](LegacyPlaybackCommand command) {
         executeEditorCommand(commandForPlayback(command));
     });
     transportHost_.setPlaybackPositionHandler(

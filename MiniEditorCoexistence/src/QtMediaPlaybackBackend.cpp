@@ -228,20 +228,20 @@ unsigned int QtMediaPlaybackBackend::tickIntervalMilliseconds() const
 }
 
 PlaybackClockAction QtMediaPlaybackBackend::executeCommand(
-    PlaybackCommand command)
+    LegacyPlaybackCommand command)
 {
     if (session_.isTimelineFocused()) {
         const PlaybackState stateBeforeCommand = session_.timelinePlaybackState();
         session_.handlePlaybackCommand(command);
         const bool isStartingPlayback =
-            command == PlaybackCommand::TogglePlayPause
+            command == LegacyPlaybackCommand::TogglePlayPause
             && !stateBeforeCommand.isPlaying;
 
-        if (command == PlaybackCommand::Stop) {
+        if (command == LegacyPlaybackCommand::Stop) {
             stopRealPlayback();
             stopTimelineAudioPlayback();
         } else if (stateBeforeCommand.isPlaying
-                   && command == PlaybackCommand::TogglePlayPause) {
+                   && command == LegacyPlaybackCommand::TogglePlayPause) {
             player_.pause();
             timelineAudioPlayer_.pause();
         }
@@ -272,7 +272,7 @@ PlaybackClockAction QtMediaPlaybackBackend::executeCommand(
     session_.handlePlaybackCommand(command);
 
     switch (command) {
-    case PlaybackCommand::TogglePlayPause:
+    case LegacyPlaybackCommand::TogglePlayPause:
         if (stateBeforeCommand.isPlaying) {
             player_.pause();
         } else {
@@ -282,13 +282,13 @@ PlaybackClockAction QtMediaPlaybackBackend::executeCommand(
             player_.play();
         }
         break;
-    case PlaybackCommand::Stop:
+    case LegacyPlaybackCommand::Stop:
         cancelSilentFirstFrameDecode();
         player_.stop();
         player_.setPosition(0);
         break;
-    case PlaybackCommand::StepBackward:
-    case PlaybackCommand::StepForward:
+    case LegacyPlaybackCommand::StepBackward:
+    case LegacyPlaybackCommand::StepForward:
         player_.pause();
         player_.setPosition(positionMillisecondsForFrame(
             session_.playbackState().currentFrame));

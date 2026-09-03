@@ -61,16 +61,16 @@ EditorCommandResult EditorCommandController::execute(EditorIntent command)
     case EditorIntent::SplitClip:
         return { timelineController_.splitAtHead(), true };
     case EditorIntent::TogglePlayback:
-        playbackBackend_.executeCommand(PlaybackCommand::TogglePlayPause);
+        playbackBackend_.executeCommand(LegacyPlaybackCommand::TogglePlayPause);
         return { true, true };
     case EditorIntent::StopPlayback:
-        playbackBackend_.executeCommand(PlaybackCommand::Stop);
+        playbackBackend_.executeCommand(LegacyPlaybackCommand::Stop);
         return { true, true };
     case EditorIntent::StepBackward:
-        playbackBackend_.executeCommand(PlaybackCommand::StepBackward);
+        playbackBackend_.executeCommand(LegacyPlaybackCommand::StepBackward);
         return { true, true };
     case EditorIntent::StepForward:
-        playbackBackend_.executeCommand(PlaybackCommand::StepForward);
+        playbackBackend_.executeCommand(LegacyPlaybackCommand::StepForward);
         return { true, true };
     }
 

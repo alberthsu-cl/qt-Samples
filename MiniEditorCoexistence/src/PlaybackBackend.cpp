@@ -15,7 +15,7 @@ unsigned int SimulatedPlaybackBackend::tickIntervalMilliseconds() const
 }
 
 PlaybackClockAction SimulatedPlaybackBackend::executeCommand(
-    PlaybackCommand command)
+    LegacyPlaybackCommand command)
 {
     session_.handlePlaybackCommand(command);
     return synchronize();

@@ -173,13 +173,13 @@ QtTransportPanel::QtTransportPanel(QWidget *parent)
     layout->addWidget(timecodeLabel_);
 
     connect(stepBackwardButton_, &QToolButton::clicked, this,
-            [this] { emit playbackCommandRequested(static_cast<int>(PlaybackCommand::StepBackward)); });
+            [this] { emit playbackCommandRequested(static_cast<int>(LegacyPlaybackCommand::StepBackward)); });
     connect(playPauseButton_, &QToolButton::clicked, this,
-            [this] { emit playbackCommandRequested(static_cast<int>(PlaybackCommand::TogglePlayPause)); });
+            [this] { emit playbackCommandRequested(static_cast<int>(LegacyPlaybackCommand::TogglePlayPause)); });
     connect(stepForwardButton_, &QToolButton::clicked, this,
-            [this] { emit playbackCommandRequested(static_cast<int>(PlaybackCommand::StepForward)); });
+            [this] { emit playbackCommandRequested(static_cast<int>(LegacyPlaybackCommand::StepForward)); });
     connect(stopButton_, &QToolButton::clicked, this,
-            [this] { emit playbackCommandRequested(static_cast<int>(PlaybackCommand::Stop)); });
+            [this] { emit playbackCommandRequested(static_cast<int>(LegacyPlaybackCommand::Stop)); });
     connect(positionSlider_, &QSlider::sliderMoved, this,
             &QtTransportPanel::playbackPositionRequested);
     connect(playbackRateButton_, &QToolButton::clicked, this, [this] {

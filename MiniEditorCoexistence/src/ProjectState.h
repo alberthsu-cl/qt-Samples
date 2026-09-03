@@ -75,7 +75,7 @@ struct PreviewState {
     int audioSourceDurationFrames = 0;
 };
 
-enum class PlaybackCommand {
+enum class LegacyPlaybackCommand {
     TogglePlayPause,
     Stop,
     StepBackward,
