@@ -17,11 +17,21 @@ option(MINI_EDITOR_USE_QT
        "Build every UI panel migrated to Qt so far"
        ON)
 
+# Milestone 4 (M4-04/M4-05): a debug-only hotkey that manually exercises the
+# new PlaybackEngine/QtPlaybackMediaWorker/notification-bridge pipeline
+# against a standalone preview window, for validating those two issues by
+# hand. Off by default -- it changes nothing about the application's real
+# (still legacy-backed) playback behavior either way. See
+# docs/architecture/milestones/milestone-04-media-integration.md.
+option(MINI_EDITOR_ENABLE_ENGINE_SMOKE_TEST
+       "Compile the Milestone 4 manual playback-engine smoke-test hotkey (Qt builds only)"
+       OFF)
+
 if(MINI_EDITOR_USE_QT)
     if(BUILD_TESTING)
-        find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia Test)
+        find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia MultimediaWidgets Test)
     else()
-        find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
+        find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia MultimediaWidgets)
     endif()
 endif()
 
@@ -127,6 +137,8 @@ add_executable(MiniEditorCoexistence WIN32
     src/WorkspaceLayout.cpp
     src/MfcWorkspaceSplitter.h
     src/MfcWorkspaceSplitter.cpp
+    src/MfcPlaybackNotificationBridge.h
+    src/MfcPlaybackNotificationBridge.cpp
     src/MainFrame.h
     src/MainFrame.cpp
     src/MiniEditorCoexistenceApp.cpp
@@ -356,6 +368,8 @@ if(MINI_EDITOR_USE_QT)
         src/QtPreviewHost.cpp
         src/QtMediaPlaybackBackend.h
         src/QtMediaPlaybackBackend.cpp
+        src/QtPlaybackMediaWorker.h
+        src/QtPlaybackMediaWorker.cpp
         src/QtTimelineToolbar.h
         src/QtTimelineToolbar.cpp
         src/QtTimelineToolbarHost.h
@@ -371,6 +385,7 @@ if(MINI_EDITOR_USE_QT)
     target_link_libraries(MiniEditorCoexistence PRIVATE
         Qt6::Widgets
         Qt6::Multimedia
+        Qt6::MultimediaWidgets
     )
     set_target_properties(MiniEditorCoexistence PROPERTIES
         AUTOMOC ON
@@ -379,6 +394,16 @@ if(MINI_EDITOR_USE_QT)
     target_compile_definitions(MiniEditorCoexistence PRIVATE
         MINI_EDITOR_USE_QT=1
     )
+
+    if(MINI_EDITOR_ENABLE_ENGINE_SMOKE_TEST)
+        target_sources(MiniEditorCoexistence PRIVATE
+            src/EngineSmokeTestSession.h
+            src/EngineSmokeTestSession.cpp
+        )
+        target_compile_definitions(MiniEditorCoexistence PRIVATE
+            MINI_EDITOR_ENABLE_ENGINE_SMOKE_TEST=1
+        )
+    endif()
 
     add_custom_command(TARGET MiniEditorCoexistence POST_BUILD
         COMMAND "$<TARGET_FILE_DIR:Qt6::Core>/windeployqt.exe"

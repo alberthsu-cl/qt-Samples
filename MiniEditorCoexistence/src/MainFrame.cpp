@@ -6,6 +6,10 @@
 #include "TimelinePresentationStateResolver.h"
 #include "resource.h"
 
+#if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_SMOKE_TEST
+#include <QString>
+#endif
+
 #include <algorithm>
 #include <array>
 #include <cwchar>
@@ -477,6 +481,18 @@ void MainFrame::OnUpdateFileSave(CCmdUI *commandUi)
 
 BOOL MainFrame::PreTranslateMessage(MSG *message)
 {
+#if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_SMOKE_TEST
+    // Milestone 4 manual validation hotkey (M4-04/M4-05), reachable only in
+    // a build compiled with MINI_EDITOR_ENABLE_ENGINE_SMOKE_TEST. Deliberately
+    // not a menu command/accelerator resource entry: it exists to be
+    // exercised by hand, not discovered by a user of the sample.
+    if (message->message == WM_KEYDOWN && message->wParam == VK_F11
+        && (::GetKeyState(VK_CONTROL) & 0x8000) && (::GetKeyState(VK_SHIFT) & 0x8000)) {
+        toggleEngineSmokeTest();
+        return TRUE;
+    }
+#endif
+
     // This frame is created with CFrameWnd::Create rather than LoadFrame, so
     // it does not automatically load the accelerator table from the resource.
     // Translate it explicitly before normal MFC message processing.
@@ -489,6 +505,37 @@ BOOL MainFrame::PreTranslateMessage(MSG *message)
 
     return CFrameWnd::PreTranslateMessage(message);
 }
+
+LRESULT MainFrame::OnPlaybackEngineNotification(WPARAM, LPARAM)
+{
+#if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_SMOKE_TEST
+    if (engineSmokeTestSession_)
+        engineSmokeTestSession_->onNotification();
+#endif
+    return 0;
+}
+
+#if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_SMOKE_TEST
+void MainFrame::toggleEngineSmokeTest()
+{
+    if (!engineSmokeTestSession_) {
+        engineSmokeTestSession_ = std::make_unique<EngineSmokeTestSession>(
+            GetSafeHwnd(), WM_PLAYBACK_ENGINE_NOTIFICATION);
+
+        CFileDialog dialog(TRUE, nullptr, nullptr, OFN_FILEMUSTEXIST,
+                           L"Media Files|*.mp4;*.mov;*.mkv;*.avi;*.wav;*.mp3||", this);
+        if (dialog.DoModal() != IDOK) {
+            engineSmokeTestSession_.reset();
+            return;
+        }
+
+        engineSmokeTestSession_->openAndPlay(
+            QString::fromWCharArray(dialog.GetPathName().GetString()));
+    } else {
+        engineSmokeTestSession_.reset();
+    }
+}
+#endif
 
 void MainFrame::layoutChildren(int clientWidth, int clientHeight)
 {
@@ -880,6 +927,7 @@ bool MainFrame::confirmSaveBeforeDestructiveAction()
 }
 
 BEGIN_MESSAGE_MAP(MainFrame, CFrameWnd)
+    ON_MESSAGE(WM_PLAYBACK_ENGINE_NOTIFICATION, &MainFrame::OnPlaybackEngineNotification)
     ON_WM_CREATE()
     ON_WM_ERASEBKGND()
     ON_WM_SIZE()

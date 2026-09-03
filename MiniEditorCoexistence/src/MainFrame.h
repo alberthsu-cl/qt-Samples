@@ -13,6 +13,9 @@
 #include "QtAudioWaveformCache.h"
 #include "QtMediaPlaybackBackend.h"
 #include "QtThumbnailCache.h"
+#if MINI_EDITOR_ENABLE_ENGINE_SMOKE_TEST
+#include "EngineSmokeTestSession.h"
+#endif
 #include "QtMediaLibraryHost.h"
 #include "QtPreviewHost.h"
 #include "QtPropertiesHost.h"
@@ -36,6 +39,12 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <memory>
+
+// ADR-007's MFC notification bridge (M4-05): "the MFC host posts one Windows
+// message to MainFrame when the UI notification queue becomes non-empty."
+// No such message existed before Milestone 4 -- this is the first one.
+constexpr UINT WM_PLAYBACK_ENGINE_NOTIFICATION = WM_APP + 1;
 
 class MainFrame final : public CFrameWnd
 {
@@ -46,6 +55,7 @@ public:
     ~MainFrame() override;
 
 protected:
+    afx_msg LRESULT OnPlaybackEngineNotification(WPARAM wParam, LPARAM lParam);
     afx_msg int OnCreate(LPCREATESTRUCT createStructure);
     afx_msg BOOL OnEraseBkgnd(CDC *deviceContext);
     afx_msg void OnSize(UINT type, int width, int height);
@@ -138,4 +148,11 @@ private:
     WorkspaceLayout workspaceLayout_;
     std::filesystem::path projectFilePath_;
     bool isWorkspaceReady_ = false;
+#if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_SMOKE_TEST
+    // Milestone 4 manual validation only (M4-04/M4-05) -- unreachable except
+    // through the debug hotkey in PreTranslateMessage. Never touches
+    // playbackBackend_ or any production playback state.
+    std::unique_ptr<EngineSmokeTestSession> engineSmokeTestSession_;
+    void toggleEngineSmokeTest();
+#endif
 };
