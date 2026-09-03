@@ -25,6 +25,17 @@ if(MINI_EDITOR_USE_QT)
     endif()
 endif()
 
+# The new playback engine starts as a framework-neutral C++17 library. Keep
+# its public headers isolated in playback_core so the migration cannot
+# accidentally introduce Qt, MFC, Win32, codec, or graphics dependencies.
+add_library(MiniEditorPlaybackCore STATIC
+    src/playback_core/PlaybackCoreBoundary.h
+    src/playback_core/PlaybackCoreBoundary.cpp
+)
+target_include_directories(MiniEditorPlaybackCore PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/playback_core"
+)
+
 add_executable(MiniEditorCoexistence WIN32
     src/DemoProject.h
     src/ProjectState.h
@@ -189,6 +200,15 @@ source_group("Services" FILES
 )
 
 if(BUILD_TESTING)
+    add_executable(MiniEditorPlaybackCoreTests
+        tests/MiniEditorPlaybackCoreTests.cpp
+    )
+    target_link_libraries(MiniEditorPlaybackCoreTests PRIVATE
+        MiniEditorPlaybackCore
+    )
+    add_test(NAME MiniEditorPlaybackCoreTests
+             COMMAND $<TARGET_FILE:MiniEditorPlaybackCoreTests>)
+
     add_executable(MiniEditorCoreTests
         tests/MiniEditorCoreTests.cpp
         src/FrameTimecode.h
@@ -258,11 +278,14 @@ if(BUILD_TESTING)
     # app builds stay fast and do not run tests as an implicit post-build step.
     add_custom_target(check
         COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure -C $<CONFIG>
-        DEPENDS MiniEditorCoexistence MiniEditorCoreTests
+        DEPENDS MiniEditorCoexistence MiniEditorPlaybackCoreTests MiniEditorCoreTests
         USES_TERMINAL
     )
 
-    source_group("Tests" FILES tests/MiniEditorCoreTests.cpp)
+    source_group("Tests" FILES
+        tests/MiniEditorPlaybackCoreTests.cpp
+        tests/MiniEditorCoreTests.cpp
+    )
 endif()
 
 target_compile_definitions(MiniEditorCoexistence PRIVATE
