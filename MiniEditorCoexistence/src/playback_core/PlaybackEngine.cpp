@@ -4,9 +4,11 @@
 
 namespace mini_editor::playback_core {
 
-PlaybackEngine::PlaybackEngine(PlaybackSource initialSource, const IPlaybackClock &clock)
+PlaybackEngine::PlaybackEngine(PlaybackSource initialSource, const IPlaybackClock &clock,
+                               IPlaybackEventSink *eventSink)
     : session_(std::move(initialSource), clock)
     , latestStatus_(session_.status())
+    , eventSink_(eventSink)
     , thread_(&PlaybackEngine::run, this)
 {
 }
@@ -23,8 +25,12 @@ std::optional<PlaybackCommandRejected> PlaybackEngine::submit(PlaybackCommand co
         std::lock_guard<std::mutex> lock(queueMutex_);
         if (queueClosed_) {
             const PlaybackCommandRejected rejected{commandId, PlaybackRejectReason::QueueClosed};
-            std::lock_guard<std::mutex> rejectionsLock(rejectionsMutex_);
-            rejections_.push_back(rejected);
+            {
+                std::lock_guard<std::mutex> rejectionsLock(rejectionsMutex_);
+                rejections_.push_back(rejected);
+            }
+            if (eventSink_)
+                eventSink_->publish(PlaybackEvent{rejected});
             return rejected;
         }
 
@@ -71,13 +77,24 @@ void PlaybackEngine::run()
         const std::optional<PlaybackCommandRejected> rejection =
             session_.applyCommand(item.command, item.id);
 
+        std::optional<PlaybackStatus> publishedStatus;
         {
             std::lock_guard<std::mutex> lock(statusMutex_);
             latestStatus_ = session_.status();
+            publishedStatus = latestStatus_;
         }
         if (rejection) {
             std::lock_guard<std::mutex> lock(rejectionsMutex_);
             rejections_.push_back(*rejection);
+        }
+
+        // Published outside every lock above: a real sink must not block or
+        // call back into the engine, but this class does not depend on that
+        // -- it just avoids holding its own locks longer than necessary.
+        if (eventSink_) {
+            eventSink_->publish(PlaybackEvent{*publishedStatus});
+            if (rejection)
+                eventSink_->publish(PlaybackEvent{*rejection});
         }
 
         if (isShutdown)

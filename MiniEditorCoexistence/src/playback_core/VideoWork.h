@@ -4,6 +4,7 @@
 #include "PreviewPresentation.h"
 
 #include <functional>
+#include <memory>
 
 namespace mini_editor::playback_core {
 
@@ -37,6 +38,13 @@ bool operator!=(const SequenceWorkIdentity &left, const SequenceWorkIdentity &ri
 // scheduling/coalescing policy can be tested deterministically.
 struct VideoFrameBuffer final {
     int placeholderPixelChecksum = 0;
+
+    // An opaque handle to the real, framework-specific frame resource (a
+    // QVideoFrame, for the Qt adapter). The core never dereferences this --
+    // only the adapter that produced it, or a later presentation step, casts
+    // it back. Compared by pointer identity like any other field here; a
+    // fake/test frame simply leaves it null.
+    std::shared_ptr<void> platformHandle;
 };
 
 bool operator==(const VideoFrameBuffer &left, const VideoFrameBuffer &right);

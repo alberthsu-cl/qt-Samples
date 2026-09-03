@@ -7,10 +7,14 @@
 #include "PreviewPresentation.h"
 #include "PlaybackEngine.h"
 #include "VideoWorkScheduler.h"
+#include "SteadyPlaybackClock.h"
+#include "PlaybackEventSink.h"
 
 #include <thread>
 #include <vector>
 
+#include <algorithm>
+#include <chrono>
 #include <iostream>
 #include <stdexcept>
 #include <type_traits>
@@ -1063,6 +1067,78 @@ bool verifyVideoWorkSchedulerBoundedLatestWins()
                    "must no longer be recognized as current.");
 }
 
+bool verifySteadyPlaybackClock()
+{
+    using namespace mini_editor::playback_core;
+    using namespace std::chrono_literals;
+
+    SteadyPlaybackClock clock;
+    const MasterClockTime first = clock.now();
+    std::this_thread::sleep_for(10ms);
+    const MasterClockTime second = clock.now();
+
+    return require(second > first, "SteadyPlaybackClock::now() must be monotonically increasing.")
+        && require((second - first) >= ClockDuration::fromMicroseconds(1'000),
+                   "A 10ms sleep must advance the clock by a plausible, non-negligible amount.");
+}
+
+bool verifyUiNotificationQueueAndEngineIntegration()
+{
+    using namespace mini_editor::playback_core;
+
+    UiNotificationQueue queue;
+    if (!require(queue.empty(), "A freshly constructed queue must be empty.")) {
+        return false;
+    }
+    queue.publish(PlaybackEvent{PlaybackCommandRejected{PlaybackCommandId::create(),
+                                                        PlaybackRejectReason::QueueClosed}});
+    if (!require(!queue.empty(), "publish() must make the queue non-empty.")) {
+        return false;
+    }
+    const std::vector<PlaybackEvent> drained = queue.drain();
+    if (!require(drained.size() == 1 && queue.empty(),
+                 "drain() must return everything published and leave the queue empty.")) {
+        return false;
+    }
+
+    // Integration: a PlaybackEngine wired to a sink must push every status/
+    // rejection it produces, without the caller needing to poll.
+    const SequenceId sequenceId = SequenceId::create();
+    FakePlaybackClock fakeClock(MasterClockTime::fromMicroseconds(0));
+    UiNotificationQueue engineEvents;
+    PlaybackEngine engine(PlaybackSource{SequencePreview{sequenceId}}, fakeClock, &engineEvents);
+
+    auto snapshot = makeSnapshot(sequenceId, FrameRate(30, 1), FrameCount::fromFrames(300));
+    engine.submit(InstallSnapshot{snapshot}, PlaybackCommandId::create());
+    engine.submit(Play{}, PlaybackCommandId::create());
+    // A command PlaybackSession will reject once applied: OpenSource on a
+    // sequence-mode session (SourceKindMismatch), to prove a pushed rejection
+    // arrives alongside the pushed statuses, not only via drainRejections().
+    engine.submit(OpenSource{MediaAssetId(1), SourceTimestamp::fromMicroseconds(0),
+                             SourceCompletionPolicy::HoldLastFrame},
+                 PlaybackCommandId::create());
+    engine.shutdownAndJoin();
+
+    const std::vector<PlaybackEvent> pushed = engineEvents.drain();
+    // InstallSnapshot, Play, OpenSource (rejected -- pushes a status AND a
+    // rejection), Shutdown: at least 5 events (4 statuses + 1 rejection).
+    if (!require(pushed.size() >= 5,
+                 "Every applied command must push a status, and a rejected command must also "
+                 "push its PlaybackCommandRejected.")) {
+        return false;
+    }
+
+    const bool sawRejection = std::any_of(pushed.begin(), pushed.end(), [](const PlaybackEvent &event) {
+        return std::holds_alternative<PlaybackCommandRejected>(event)
+            && std::get<PlaybackCommandRejected>(event).reason == PlaybackRejectReason::SourceKindMismatch;
+    });
+    const bool lastIsStatus = std::holds_alternative<PlaybackStatus>(pushed.back())
+        && std::get<PlaybackStatus>(pushed.back()).phase == PlaybackPhase::Playing;
+    return require(sawRejection, "The pushed events must include the OpenSource rejection.")
+        && require(lastIsStatus,
+                   "The final pushed event must be Shutdown's status (phase unchanged from Playing).");
+}
+
 } // namespace
 
 int main()
@@ -1120,7 +1196,9 @@ int main()
         || !verifyPreviewPresentationCoordinator()
         || !verifyPlaybackEngineOrderingAndShutdown()
         || !verifyPlaybackEngineCrossThreadSubmission()
-        || !verifyVideoWorkSchedulerBoundedLatestWins()) {
+        || !verifyVideoWorkSchedulerBoundedLatestWins()
+        || !verifySteadyPlaybackClock()
+        || !verifyUiNotificationQueueAndEngineIntegration()) {
         return 1;
     }
 

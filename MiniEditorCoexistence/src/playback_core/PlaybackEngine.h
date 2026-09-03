@@ -1,5 +1,6 @@
 #pragma once
 
+#include "PlaybackEventSink.h"
 #include "PlaybackSession.h"
 
 #include <condition_variable>
@@ -13,15 +14,22 @@ namespace mini_editor::playback_core {
 
 // ADR-005: one engine thread owns PlaybackSession's mutable state; all
 // commands are serialized through one queue, and the queue never executes a
-// caller's own callback inline on the producer thread. This milestone (M4-02)
-// only introduces the thread and queue -- PlaybackSession's own rules are
-// unchanged from Milestone 3. There is still no decoder/audio/compositor
-// worker (M4-03/M4-04) and no UI notification bridge (M4-05); rejections and
-// status are exposed here only as plain thread-safe accessors a test (or a
-// future adapter) polls.
+// caller's own callback inline on the producer thread. PlaybackSession's own
+// rules are unchanged from Milestone 3. There is still no decoder/audio/
+// compositor worker driving the queue (that is Milestone 4's own adapter's
+// job to call submit()); rejections and status are exposed as plain
+// thread-safe accessors a test (or adapter) can poll, and, since M4-05, are
+// also pushed to an optional IPlaybackEventSink so a real UI does not have
+// to poll continuously.
 class PlaybackEngine final {
 public:
-    PlaybackEngine(PlaybackSource initialSource, const IPlaybackClock &clock);
+    // eventSink, if non-null, receives every status/rejection this engine
+    // produces (ADR-007's UI notification port). It must outlive this
+    // PlaybackEngine; publish() is called from the engine thread, so a real
+    // sink must be safe to call from any thread without blocking (a plain
+    // UiNotificationQueue already satisfies this).
+    PlaybackEngine(PlaybackSource initialSource, const IPlaybackClock &clock,
+                  IPlaybackEventSink *eventSink = nullptr);
     ~PlaybackEngine();
 
     PlaybackEngine(const PlaybackEngine &) = delete;
@@ -70,6 +78,8 @@ private:
 
     std::mutex rejectionsMutex_;
     std::vector<PlaybackCommandRejected> rejections_;
+
+    IPlaybackEventSink *eventSink_ = nullptr;
 
     std::thread thread_;
 };

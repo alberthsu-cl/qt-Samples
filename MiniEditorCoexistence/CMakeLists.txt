@@ -52,6 +52,10 @@ add_library(MiniEditorPlaybackCore STATIC
     src/playback_core/VideoWork.cpp
     src/playback_core/VideoWorkScheduler.h
     src/playback_core/VideoWorkScheduler.cpp
+    src/playback_core/SteadyPlaybackClock.h
+    src/playback_core/SteadyPlaybackClock.cpp
+    src/playback_core/PlaybackEventSink.h
+    src/playback_core/PlaybackEventSink.cpp
 )
 target_include_directories(MiniEditorPlaybackCore PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/playback_core"

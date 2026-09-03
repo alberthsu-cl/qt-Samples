@@ -24,7 +24,8 @@ bool operator!=(const SequenceWorkIdentity &left, const SequenceWorkIdentity &ri
 
 bool operator==(const VideoFrameBuffer &left, const VideoFrameBuffer &right)
 {
-    return left.placeholderPixelChecksum == right.placeholderPixelChecksum;
+    return left.placeholderPixelChecksum == right.placeholderPixelChecksum
+        && left.platformHandle == right.platformHandle;
 }
 bool operator!=(const VideoFrameBuffer &left, const VideoFrameBuffer &right)
 {
