@@ -33,6 +33,17 @@ cite them:
 | [ADR-005](adr-005-review-2-resolutions.md) | 2 | Resolution verification | resolutions | Accepted |
 | [ADR-006](adr-006-review-1-sequence-identity.md) | 1 | Explicit sequence identity and project-ready model | original | Accept with revisions |
 | [ADR-006](adr-006-review-2-resolutions.md) | 2 | Resolution verification | resolutions | Accepted |
+| [ADR-007](adr-007-review-1-framework-boundary.md) | 1 | Framework-neutral core and Qt/MFC UI adapters | original | Accept with revisions |
+| [ADR-007](adr-007-review-2-resolutions.md) | 2 | Resolution verification | resolutions | Accepted with revisions |
+| [ADR-007](adr-007-review-3-acceptance.md) | 3 | Final acceptance gate | final | Accepted |
+
+## Reading order for ADR-007
+
+Three rounds closed the final roadmap ADR. Review 1 established the shared
+`EditorIntent` path so cross-framework command parity is testable despite the
+exclusive build flag. Review 2 exposed the legacy `PlaybackCommand` name
+collision; review 3 verified the `LegacyPlaybackCommand` migration path across
+all current references. ADR-007 is now Accepted.
 
 ## Reading order for ADR-006
 
