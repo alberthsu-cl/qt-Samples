@@ -32,18 +32,15 @@ cite them:
 | [ADR-005 review 1](adr-005-review-1-thread-ownership.md) | Engine, decoder, and UI thread ownership | 1 | original | Accept with revisions |
 | [ADR-005 review 2](adr-005-review-2-resolutions.md) | Resolution verification | 2 | resolutions | Accepted |
 | [ADR-006 review 1](adr-006-review-1-sequence-identity.md) | Explicit sequence identity and project-ready model | 1 | original | Accept with revisions |
+| [ADR-006 review 2](adr-006-review-2-resolutions.md) | Resolution verification | 2 | resolutions | Accepted |
 
 ## Reading order for ADR-006
 
-ADR-006 has one open review round. Its three blocking findings are: `B1`,
-the `Ready`/`Empty` readiness definitions overlap for an active sequence
-with zero clips, a state milestone 1 reaches immediately; `B2`, the document
-never states its milestone-1 scope, dropping a constraint the target
-document's own Decision 1 already states explicitly (one synthesized
-sequence, unchanged project format); and `B3`, the `ProjectRuntime` struct
-has no field for the error `Failed` readiness promises. All three are
-one-sentence-or-one-field fixes with no new design decision. ADR-006 remains
-Proposed.
+Both rounds closed cleanly. Review 1 raised three blocking findings:
+`Ready`/`Empty` overlap, omitted milestone-1 scope, and a missing
+`ProjectError` field. Review 2 confirmed all blocking and non-blocking
+findings resolved, including the corrected ADR-003 citation for
+`PresentationSessionId` recreation. ADR-006 is now Accepted.
 
 ## Reading order for ADR-005
 

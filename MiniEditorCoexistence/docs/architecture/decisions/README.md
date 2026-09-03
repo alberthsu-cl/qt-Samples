@@ -18,8 +18,8 @@ An ADR moves through these states:
 | [ADR-003](0003-immutable-playback-snapshots-and-generation-gated-presentation.md) | Immutable playback snapshots and generation-gated presentation | Accepted |
 | [ADR-004](0004-audio-monotonic-master-clock-policy.md) | Audio/monotonic master-clock policy | Accepted |
 | [ADR-005](0005-engine-decoder-and-ui-thread-ownership.md) | Engine, decoder, audio callback, and UI thread ownership | Accepted |
-| [ADR-006](0006-explicit-sequence-identity-and-project-ready-model.md) | Explicit sequence identity and sequence-ready project model | Proposed |
+| [ADR-006](0006-explicit-sequence-identity-and-project-ready-model.md) | Explicit sequence identity and sequence-ready project model | Accepted |
 
-Future decisions will cover framework boundaries. Sequence identity is proposed
-in ADR-006; thread ownership, master-clock policy, immutable snapshots, and
-presentation generation are accepted in ADR-003 through ADR-005.
+Future decisions will cover framework boundaries. Sequence identity, thread
+ownership, master-clock policy, immutable snapshots, and presentation
+generation are accepted in ADR-003 through ADR-006.

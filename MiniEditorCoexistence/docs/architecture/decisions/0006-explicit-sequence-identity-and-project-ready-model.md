@@ -1,6 +1,6 @@
 # ADR-006: Explicit Sequence Identity and Project-Ready Model
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-09-02
 
@@ -80,7 +80,8 @@ enum class ProjectReadiness {
 - `Loading` means project data is still being assembled; no snapshot is
   published from partial state.
 - `Ready` means an active sequence exists and contains at least one timeline
-  clip from which playback can resolve content.
+  clip, regardless of whether every referenced media asset is currently
+  available; unavailable media follows ADR-003's placeholder policy.
 - `Empty` means the project loaded successfully but has no active sequence, or
   its active sequence has zero timeline clips. It is valid state, not an error.
 - `Failed` means project loading or validation failed and carries a
