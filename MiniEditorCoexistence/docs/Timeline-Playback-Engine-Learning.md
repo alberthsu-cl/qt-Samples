@@ -131,3 +131,23 @@ All relevant identities must still match.
 
 *Sources:*
 - `docs/architecture/current-playback-architecture.md`
+
+---
+
+## Slide 8 — Five implementation milestones turn contracts into code
+
+| Milestone | Goal | ADR coverage |
+| --- | --- | --- |
+| 1. Core foundation | Create the framework-neutral C++ core/test targets and retire the conflicting legacy command name. | ADR-001, ADR-005, ADR-007 |
+| 2. Project + snapshots | Add project-runtime/sequence identity and immutable snapshot construction. | ADR-003, ADR-006 |
+| 3. Playback authority | Implement `PlaybackSession`, fake-clock scheduling, commands, and stale-result rules. | ADR-002, ADR-004 |
+| 4. Media integration | Add decoder/audio/compositor ports and the MFC/Qt notification bridge behind a feature flag. | ADR-003, ADR-004, ADR-005, ADR-007 |
+| 5. Rollout + migration | Route timeline preview through the new core, compare behavior, make it the default, and retire legacy timeline advancement. | ADR-007 |
+
+Each milestone is implemented as a dependency-aware group of small GitHub
+issues. An agent can take a ready issue automatically; human review is needed
+only for approved decision gates, unexpected regressions, or scope changes.
+
+*Sources:*
+- `docs/architecture/decisions/`
+- `docs/architecture/target-playback-architecture.md`
