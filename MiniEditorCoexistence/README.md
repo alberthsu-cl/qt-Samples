@@ -11,7 +11,7 @@ The playback-engine refactoring is documented as a learning project:
 - [Current playback architecture](docs/architecture/current-playback-architecture.md)
 - [Target playback architecture](docs/architecture/target-playback-architecture.md)
 - [Architecture decision records](docs/architecture/decisions/README.md)
-- [Living presentation](docs/Timeline-Playback-Engine-Learning.pptx)
+- [Living presentation](docs/Timeline-Playback-Engine-Learning.md) ([.pptx download](docs/Timeline-Playback-Engine-Learning.pptx))
 
 The presentation stays intentionally short. It is updated only when an
 architecture decision is accepted or an implementation milestone changes what
