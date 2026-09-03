@@ -38,6 +38,10 @@ add_library(MiniEditorPlaybackCore STATIC
     src/playback_core/SequencePlaybackSnapshot.h
     src/playback_core/PlaybackClock.h
     src/playback_core/PlaybackClock.cpp
+    src/playback_core/PlaybackCommand.h
+    src/playback_core/PlaybackCommand.cpp
+    src/playback_core/PlaybackSession.h
+    src/playback_core/PlaybackSession.cpp
 )
 target_include_directories(MiniEditorPlaybackCore PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/playback_core"

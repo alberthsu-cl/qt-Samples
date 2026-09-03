@@ -2,6 +2,7 @@
 #include "MediaTime.h"
 #include "ProjectRuntime.h"
 #include "PlaybackClock.h"
+#include "PlaybackSession.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -236,6 +237,284 @@ bool verifyAnchorResolution(mini_editor::playback_core::FrameRate rate)
                    "Resolving from an unchanged clock reading must be idempotent.");
 }
 
+mini_editor::playback_core::SequencePlaybackSnapshotPtr makeSnapshot(
+    mini_editor::playback_core::SequenceId id,
+    mini_editor::playback_core::FrameRate rate,
+    mini_editor::playback_core::FrameCount duration)
+{
+    using namespace mini_editor::playback_core;
+
+    SequencePlaybackSnapshot snapshot{
+        id, SequenceRevision::initial(), rate, duration, {}, {}, {}
+    };
+    return std::make_shared<const SequencePlaybackSnapshot>(std::move(snapshot));
+}
+
+bool verifySequencePlaybackLifecycle()
+{
+    using namespace mini_editor::playback_core;
+
+    const SequenceId sequenceId = SequenceId::create();
+    FakePlaybackClock clock(MasterClockTime::fromMicroseconds(0));
+    PlaybackSession session(PlaybackSource{SequencePreview{sequenceId}}, clock);
+
+    auto snapshot = makeSnapshot(sequenceId, FrameRate(30, 1), FrameCount::fromFrames(300));
+    if (!require(!session.applyCommand(InstallSnapshot{snapshot}, PlaybackCommandId::create()),
+                 "InstallSnapshot must be accepted from Stopped.")
+        || !require(session.status().phase == PlaybackPhase::Stopped,
+                    "InstallSnapshot from Stopped must stay Stopped.")) {
+        return false;
+    }
+
+    if (!require(!session.applyCommand(Play{}, PlaybackCommandId::create()),
+                 "Play must be accepted from Stopped.")
+        || !require(session.status().phase == PlaybackPhase::Playing,
+                    "Play from Stopped must enter Playing.")) {
+        return false;
+    }
+
+    clock.set(MasterClockTime::fromMicroseconds(1'000'000));
+    if (!require(std::get<SequencePreviewStatus>(session.status().context).timelineFrame
+                     == TimelineFrame::fromFrameNumber(30),
+                 "Playing must advance the timeline frame from the clock, not a cache.")) {
+        return false;
+    }
+
+    if (!require(!session.applyCommand(Pause{}, PlaybackCommandId::create()),
+                 "Pause must be accepted from Playing.")) {
+        return false;
+    }
+    const TimelineFrame pausedFrame =
+        std::get<SequencePreviewStatus>(session.status().context).timelineFrame;
+    clock.set(MasterClockTime::fromMicroseconds(5'000'000));
+    if (!require(std::get<SequencePreviewStatus>(session.status().context).timelineFrame == pausedFrame,
+                 "Paused position must not advance with the clock.")
+        || !require(session.status().phase == PlaybackPhase::Paused,
+                    "Pause from Playing must enter Paused.")) {
+        return false;
+    }
+
+    if (!require(!session.applyCommand(Pause{}, PlaybackCommandId::create()),
+                 "Pause from Paused must be an accepted no-op.")) {
+        return false;
+    }
+
+    const PlaybackGeneration generationBeforeSeek = session.status().generation;
+    if (!require(!session.applyCommand(Seek{SequenceTime::fromMicroseconds(2'000'000)},
+                                       PlaybackCommandId::create()),
+                 "Seek must be accepted from Paused.")
+        || !require(session.status().phase == PlaybackPhase::Paused,
+                    "Seek from Paused must remain Paused.")
+        || !require(session.status().generation != generationBeforeSeek,
+                    "Seek must advance the generation.")
+        || !require(std::get<SequencePreviewStatus>(session.status().context).timelineFrame
+                        == TimelineFrame::fromFrameNumber(60),
+                    "Seek must move to the requested position.")) {
+        return false;
+    }
+
+    if (!require(!session.applyCommand(Play{}, PlaybackCommandId::create()),
+                 "Play must be accepted from Paused.")) {
+        return false;
+    }
+    if (!require(!session.applyCommand(Seek{SequenceTime::fromMicroseconds(3'000'000)},
+                                       PlaybackCommandId::create()),
+                 "Seek must be accepted from Playing.")
+        || !require(session.status().phase == PlaybackPhase::Playing,
+                    "Seek from Playing must return to Playing.")) {
+        return false;
+    }
+
+    if (!require(!session.applyCommand(Seek{SequenceTime::fromMicroseconds(1'000'000'000)},
+                                       PlaybackCommandId::create()),
+                 "An out-of-range seek must still be accepted (clamped).")
+        || !require(std::get<SequencePreviewStatus>(session.status().context).timelineFrame
+                        == TimelineFrame::fromFrameNumber(300),
+                    "Seek past the snapshot end must clamp to its last frame.")) {
+        return false;
+    }
+
+    const PlaybackGeneration generationBeforeStop = session.status().generation;
+    if (!require(!session.applyCommand(Stop{}, PlaybackCommandId::create()),
+                 "Stop must be accepted from Playing.")
+        || !require(session.status().phase == PlaybackPhase::Stopped, "Stop must enter Stopped.")
+        || !require(std::get<SequencePreviewStatus>(session.status().context).timelineFrame
+                        == TimelineFrame::zero(),
+                    "Stop must return to the sequence start.")
+        || !require(session.status().generation != generationBeforeStop,
+                    "Stop must advance the generation.")) {
+        return false;
+    }
+
+    const PlaybackGeneration generationAtStop = session.status().generation;
+    return require(!session.applyCommand(Stop{}, PlaybackCommandId::create()),
+                   "Stop from Stopped must be accepted.")
+        && require(session.status().generation == generationAtStop,
+                   "Stop from Stopped must not advance the generation again.");
+}
+
+bool verifyFailureAndShutdownPolicy()
+{
+    using namespace mini_editor::playback_core;
+
+    const SequenceId sequenceId = SequenceId::create();
+    FakePlaybackClock clock(MasterClockTime::fromMicroseconds(0));
+    PlaybackSession session(PlaybackSource{SequencePreview{sequenceId}}, clock);
+
+    const PlaybackSessionId liveSessionId = session.status().sessionId;
+    const PlaybackGeneration liveGeneration = session.status().generation;
+
+    session.reportFailure(liveSessionId, liveGeneration.next(), PlaybackError{"stale"});
+    if (!require(session.status().phase != PlaybackPhase::Failed,
+                 "A stale-generation failure report must not enter Failed.")
+        || !require(!session.status().error, "error must stay unset while phase is not Failed.")) {
+        return false;
+    }
+
+    session.reportFailure(liveSessionId, liveGeneration, PlaybackError{"decode error"});
+    if (!require(session.status().phase == PlaybackPhase::Failed,
+                 "A current failure report must enter Failed.")
+        || !require(session.status().error && session.status().error->message == "decode error",
+                    "error must be set to exactly the reported PlaybackError.")) {
+        return false;
+    }
+
+    const auto rejectPlay = session.applyCommand(Play{}, PlaybackCommandId::create());
+    const auto rejectPause = session.applyCommand(Pause{}, PlaybackCommandId::create());
+    const auto rejectSeek =
+        session.applyCommand(Seek{SequenceTime::zero()}, PlaybackCommandId::create());
+    const auto rejectRate = session.applyCommand(SetRate{200}, PlaybackCommandId::create());
+    if (!require(rejectPlay && rejectPlay->reason == PlaybackRejectReason::InvalidForCurrentPhase,
+                 "Play from Failed must be rejected.")
+        || !require(rejectPause && rejectPause->reason == PlaybackRejectReason::InvalidForCurrentPhase,
+                    "Pause from Failed must be rejected.")
+        || !require(rejectSeek && rejectSeek->reason == PlaybackRejectReason::InvalidForCurrentPhase,
+                    "Seek from Failed must be rejected.")
+        || !require(rejectRate && rejectRate->reason == PlaybackRejectReason::InvalidForCurrentPhase,
+                    "SetRate from Failed must be rejected.")) {
+        return false;
+    }
+
+    if (!require(!session.applyCommand(Stop{}, PlaybackCommandId::create()),
+                 "Stop from Failed must be accepted.")
+        || !require(session.status().phase == PlaybackPhase::Stopped,
+                    "Stop from Failed must enter Stopped.")
+        || !require(!session.status().error, "Stop from Failed must clear the error.")) {
+        return false;
+    }
+
+    session.reportFailure(liveSessionId, session.status().generation, PlaybackError{"second failure"});
+    auto snapshot = makeSnapshot(sequenceId, FrameRate(30, 1), FrameCount::fromFrames(300));
+    if (!require(!session.applyCommand(InstallSnapshot{snapshot}, PlaybackCommandId::create()),
+                 "InstallSnapshot from Failed must be accepted.")
+        || !require(session.status().phase == PlaybackPhase::Stopped,
+                    "InstallSnapshot from Failed must enter Stopped.")
+        || !require(!session.status().error, "InstallSnapshot from Failed must clear the error.")) {
+        return false;
+    }
+
+    const PlaybackPhase phaseBeforeShutdown = session.status().phase;
+    const PlaybackCommandId shutdownId = PlaybackCommandId::create();
+    if (!require(!session.applyCommand(Shutdown{}, shutdownId), "Shutdown must be accepted.")
+        || !require(session.status().phase == phaseBeforeShutdown,
+                    "Shutdown's acknowledgment must not change the playback phase.")
+        || !require(session.status().lastAppliedCommandId
+                        && *session.status().lastAppliedCommandId == shutdownId,
+                    "Shutdown must be acknowledged as the last applied command.")) {
+        return false;
+    }
+
+    const auto rejectAfterShutdown = session.applyCommand(Play{}, PlaybackCommandId::create());
+    return require(rejectAfterShutdown
+                       && rejectAfterShutdown->reason == PlaybackRejectReason::QueueClosed,
+                   "Every command after Shutdown must be rejected as QueueClosed.");
+}
+
+bool verifySourceAssetPreviewLifecycleAndKindMismatch()
+{
+    using namespace mini_editor::playback_core;
+
+    FakePlaybackClock clock(MasterClockTime::fromMicroseconds(0));
+    PlaybackSession session(PlaybackSource{SourceAssetPreview{MediaAssetId(7)}}, clock);
+
+    const auto mismatchedSeek =
+        session.applyCommand(Seek{SequenceTime::zero()}, PlaybackCommandId::create());
+    if (!require(mismatchedSeek
+                     && mismatchedSeek->reason == PlaybackRejectReason::SourceKindMismatch,
+                 "A SequenceTime seek target on a source-asset session must be rejected as a kind mismatch.")) {
+        return false;
+    }
+
+    auto snapshot = makeSnapshot(SequenceId::create(), FrameRate(30, 1), FrameCount::fromFrames(10));
+    const auto mismatchedInstall =
+        session.applyCommand(InstallSnapshot{snapshot}, PlaybackCommandId::create());
+    if (!require(mismatchedInstall
+                     && mismatchedInstall->reason == PlaybackRejectReason::SourceKindMismatch,
+                 "InstallSnapshot on a source-asset session must be rejected as a kind mismatch.")) {
+        return false;
+    }
+
+    if (!require(!session.applyCommand(
+                     OpenSource{MediaAssetId(9), SourceTimestamp::fromMicroseconds(4'000'000),
+                                SourceCompletionPolicy::HoldLastFrame},
+                     PlaybackCommandId::create()),
+                 "OpenSource must be accepted for a source-asset session.")) {
+        return false;
+    }
+    const SourcePreviewStatus sourceContext =
+        std::get<SourcePreviewStatus>(session.status().context);
+    if (!require(sourceContext.sourceId == MediaAssetId(9),
+                 "PlaybackContext must reflect the newly opened source identity.")
+        || !require(sourceContext.sourceTime == sourceTimeZero(),
+                    "OpenSource must seek to source-time zero.")) {
+        return false;
+    }
+
+    const auto stillMismatched =
+        session.applyCommand(Seek{SequenceTime::zero()}, PlaybackCommandId::create());
+    if (!require(stillMismatched
+                     && stillMismatched->reason == PlaybackRejectReason::SourceKindMismatch,
+                 "Kind mismatch must persist across OpenSource, not only at construction.")) {
+        return false;
+    }
+
+    if (!require(!session.applyCommand(Seek{SourceTimestamp::fromMicroseconds(-500)},
+                                       PlaybackCommandId::create()),
+                 "A negative seek target must still be accepted (clamped).")
+        || !require(std::get<SourcePreviewStatus>(session.status().context).sourceTime
+                        == sourceTimeZero(),
+                    "A seek below the source origin must clamp to sourceTimeZero().")) {
+        return false;
+    }
+    if (!require(!session.applyCommand(Seek{SourceTimestamp::fromMicroseconds(9'000'000)},
+                                       PlaybackCommandId::create()),
+                 "A too-large seek target must still be accepted (clamped).")
+        || !require(std::get<SourcePreviewStatus>(session.status().context).sourceTime
+                        == SourceTimestamp::fromMicroseconds(4'000'000),
+                    "A seek past sourceEndTime must clamp to it.")) {
+        return false;
+    }
+
+    return require(!session.status().error, "error must remain unset while phase is not Failed.");
+}
+
+bool verifySourceProgressPermille()
+{
+    using namespace mini_editor::playback_core;
+
+    return require(sourceProgressPermille(SourceTimestamp::fromMicroseconds(0), sourceTimeZero()) == 0,
+                   "Progress must be zero when end equals the source origin.")
+        && require(sourceProgressPermille(SourceTimestamp::fromMicroseconds(-1'000'000),
+                                          SourceTimestamp::fromMicroseconds(4'000'000)) == 0,
+                   "Progress must clamp below zero.")
+        && require(sourceProgressPermille(SourceTimestamp::fromMicroseconds(9'000'000),
+                                          SourceTimestamp::fromMicroseconds(4'000'000)) == 1000,
+                   "Progress must clamp above 1000.")
+        && require(sourceProgressPermille(SourceTimestamp::fromMicroseconds(1'000'000),
+                                          SourceTimestamp::fromMicroseconds(4'000'000)) == 250,
+                   "Progress must scale linearly between zero and the end.");
+}
+
 } // namespace
 
 int main()
@@ -284,7 +563,11 @@ int main()
         || !verifyAnchorResolution(FrameRate(24, 1))
         || !verifyAnchorResolution(FrameRate(25, 1))
         || !verifyAnchorResolution(FrameRate(30, 1))
-        || !verifyAnchorResolution(FrameRate(30'000, 1'001))) {
+        || !verifyAnchorResolution(FrameRate(30'000, 1'001))
+        || !verifySequencePlaybackLifecycle()
+        || !verifyFailureAndShutdownPolicy()
+        || !verifySourceAssetPreviewLifecycleAndKindMismatch()
+        || !verifySourceProgressPermille()) {
         return 1;
     }
 
