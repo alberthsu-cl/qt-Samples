@@ -777,8 +777,34 @@ bool verifyPreviewPresentationCoordinator()
     session.reportFailure(session.status().sessionId, session.status().generation,
                           PlaybackError{"decode error"});
     coordinator.notifyPlaybackStatus(session.status(), false);
-    return require(coordinator.currentRequest() == beforeFailure,
-                   "A Failed status must retain the last accepted request rather than issuing a new one.");
+    if (!require(coordinator.currentRequest() == beforeFailure,
+                 "A Failed status must retain the last accepted request rather than issuing a new one.")) {
+        return false;
+    }
+
+    // Source replacement (OpenSource) on a source-asset session must also mint a new request id.
+    FakePlaybackClock sourceClock(MasterClockTime::fromMicroseconds(0));
+    PlaybackSession sourceSession(PlaybackSource{SourceAssetPreview{MediaAssetId(1)}}, sourceClock);
+    PreviewPresentationCoordinator sourceCoordinator;
+    sourceCoordinator.notifyPlaybackStatus(sourceSession.status(), true);
+    const PresentationRequestId idBeforeOpenSource = sourceCoordinator.currentRequest()->requestId;
+    sourceSession.applyCommand(
+        OpenSource{MediaAssetId(2), SourceTimestamp::fromMicroseconds(4'000'000),
+                   SourceCompletionPolicy::HoldLastFrame},
+        PlaybackCommandId::create());
+    sourceCoordinator.notifyPlaybackStatus(sourceSession.status(), true);
+    if (!require(sourceCoordinator.currentRequest()->requestId != idBeforeOpenSource,
+                 "OpenSource (source replacement) must mint a new request id.")
+        || !require(std::get<SourcePresentationTarget>(sourceCoordinator.currentRequest()->target)
+                        .mediaAssetId == MediaAssetId(2),
+                    "The request target must reflect the newly opened source identity.")) {
+        return false;
+    }
+
+    // shutdown() removes the current request, same as clear().
+    sourceCoordinator.shutdown();
+    return require(!sourceCoordinator.currentRequest().has_value(),
+                   "shutdown() must remove the current request.");
 }
 
 } // namespace
