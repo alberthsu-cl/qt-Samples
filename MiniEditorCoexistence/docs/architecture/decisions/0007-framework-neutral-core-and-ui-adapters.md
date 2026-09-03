@@ -56,12 +56,15 @@ using PlaybackEvent = std::variant<
 ```
 
 Every command/result carries the applicable identity from ADR-002/ADR-003.
-Adapters never modify an event to make it current; they pass the immutable
-value to the core-side consumer that validates identity.
+Adapters first reduce framework-specific gestures to the shared
+framework-neutral `EditorIntent`; shared translation maps that intent to the
+appropriate `PlaybackCommand`. Adapters never modify an event to make it
+current; they pass the immutable value to the core-side consumer that validates
+identity.
 
-The core exposes a thread-safe UI notification queue or event-sink port. It
-does not call UI code inline and does not require a Qt or MFC event loop to
-advance playback.
+The core exposes a thread-safe UI notification queue through the
+`IPlaybackEventSink` port. It does not call UI code inline and does not require
+a Qt or MFC event loop to advance playback.
 
 ## MFC adapter
 
@@ -77,8 +80,10 @@ or call `QCoreApplication::processEvents()`.
 ## Qt adapter
 
 The Qt adapter translates Qt signals, actions, and widgets into the same
-framework-neutral commands. Qt-facing results are delivered to the Qt GUI thread
-through queued signals or a GUI-thread drain of the shared notification queue.
+framework-neutral commands. In the current MFC-hosted coexistence shell,
+embedded Qt widgets are updated by the MFC notification-queue drain. In a
+future Qt-native shell, Qt-facing results use queued signals to the Qt GUI
+thread.
 `QObject` thread affinity, queued value delivery, and `deleteLater()` follow
 ADR-005; no Qt object is owned by the core.
 
@@ -109,7 +114,8 @@ the new core while legacy source preview remains on the existing backend, as
 ADR-002 permits. At no point may a flag create two authorities for one preview
 session.
 
-Migration sequence:
+This migration sequence is the adapter-level view that integrates, rather than
+replaces, the finer migration strategies in ADR-002 through ADR-005:
 
 1. Introduce core value types and fake ports with no visual behavior change.
 2. Route a feature-flagged timeline preview through the core and notification
@@ -127,8 +133,10 @@ ADR-007 is implemented when:
    platform window headers.
 2. Core tests run with fake clock, decode, audio, compositor, and event-sink
    ports.
-3. MFC and Qt adapters issue byte-for-byte equivalent command values for the
-   same user intent.
+3. MFC and Qt adapters reduce the same user intent to the shared
+   `EditorIntent`; framework-neutral tests verify the resulting
+   `PlaybackCommand` mapping without requiring both full adapters in one
+   feature-flagged binary.
 4. Both adapters consume the same immutable `PlaybackStatus` and frame
    publication contracts without becoming transport authorities.
 5. The engine progresses correctly when no MFC timer runs and without any call
@@ -137,8 +145,9 @@ ADR-007 is implemented when:
    engine, clock, or playback-state machine.
 7. A presentation adapter preserves frame identity and does not advance
    transport when it paints or acknowledges a frame.
-8. Qt and MFC panel replacement tests preserve existing timeline playback,
-   pause, seek, end-of-timeline, and stale-result behavior.
+8. `MiniEditorCoreTests` and the Qt widget test suite preserve existing
+   timeline playback, pause, seek, end-of-timeline, and stale-result behavior
+   across MFC and Qt panel replacement configurations.
 
 ## Consequences
 
