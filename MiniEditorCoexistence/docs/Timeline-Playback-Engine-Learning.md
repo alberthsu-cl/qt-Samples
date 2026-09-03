@@ -6,10 +6,9 @@ MFC + Qt coexistence study
 
 ADR-001 through ADR-007 accepted — implementation next
 
-*Converted from the companion slide deck,
-[`Timeline-Playback-Engine-Learning.pptx`](Timeline-Playback-Engine-Learning.pptx).
-Each section below is numbered to match its source slide. Source citations
-are carried over from each slide's speaker notes.*
+*This Markdown file is the version-controlled living journal. Its sections
+retain slide-style numbering for concise discussion, and each section keeps its
+relevant project sources.*
 
 ---
 
