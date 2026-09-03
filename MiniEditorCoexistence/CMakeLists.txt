@@ -31,6 +31,8 @@ endif()
 add_library(MiniEditorPlaybackCore STATIC
     src/playback_core/PlaybackCoreBoundary.h
     src/playback_core/PlaybackCoreBoundary.cpp
+    src/playback_core/MediaTime.h
+    src/playback_core/MediaTime.cpp
 )
 target_include_directories(MiniEditorPlaybackCore PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/playback_core"
