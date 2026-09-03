@@ -5,6 +5,10 @@
 #include "PlaybackSession.h"
 #include "PlaybackStatusGate.h"
 #include "PreviewPresentation.h"
+#include "PlaybackEngine.h"
+
+#include <thread>
+#include <vector>
 
 #include <iostream>
 #include <stdexcept>
@@ -807,6 +811,92 @@ bool verifyPreviewPresentationCoordinator()
                    "shutdown() must remove the current request.");
 }
 
+bool verifyPlaybackEngineOrderingAndShutdown()
+{
+    using namespace mini_editor::playback_core;
+
+    const SequenceId sequenceId = SequenceId::create();
+    FakePlaybackClock clock(MasterClockTime::fromMicroseconds(0));
+    PlaybackEngine engine(PlaybackSource{SequencePreview{sequenceId}}, clock);
+
+    auto snapshot = makeSnapshot(sequenceId, FrameRate(30, 1), FrameCount::fromFrames(300));
+    if (!require(!engine.submit(InstallSnapshot{snapshot}, PlaybackCommandId::create()),
+                 "submit() must accept InstallSnapshot before shutdown.")
+        || !require(!engine.submit(Seek{SequenceTime::fromMicroseconds(1'000'000)},
+                                   PlaybackCommandId::create()),
+                    "submit() must accept Seek before shutdown.")
+        || !require(!engine.submit(Play{}, PlaybackCommandId::create()),
+                    "submit() must accept Play before shutdown.")
+        || !require(!engine.submit(OpenSource{MediaAssetId(1), SourceTimestamp::fromMicroseconds(0),
+                                              SourceCompletionPolicy::HoldLastFrame},
+                                   PlaybackCommandId::create()),
+                    "submit() must accept OpenSource into the queue even though PlaybackSession "
+                    "will reject it as a kind mismatch once applied.")) {
+        return false;
+    }
+
+    engine.shutdownAndJoin();
+
+    const PlaybackStatus finalStatus = engine.status();
+    if (!require(finalStatus.phase == PlaybackPhase::Playing,
+                 "Every command queued before shutdown must be applied, in order, before it: "
+                 "InstallSnapshot -> Seek -> Play -> (rejected OpenSource) -> Shutdown must leave "
+                 "phase Playing, since Shutdown does not change phase.")
+        || !require(std::get<SequencePreviewStatus>(finalStatus.context).sequenceDuration
+                        == FrameCount::fromFrames(300),
+                    "The installed snapshot's duration must be visible in the final status.")) {
+        return false;
+    }
+
+    const std::vector<PlaybackCommandRejected> rejections = engine.drainRejections();
+    if (!require(rejections.size() == 1
+                     && rejections.front().reason == PlaybackRejectReason::SourceKindMismatch,
+                 "The queued OpenSource must be rejected on the engine thread as a kind mismatch, "
+                 "observable afterward via drainRejections().")) {
+        return false;
+    }
+
+    const auto rejectAfterShutdown = engine.submit(Pause{}, PlaybackCommandId::create());
+    return require(rejectAfterShutdown
+                       && rejectAfterShutdown->reason == PlaybackRejectReason::QueueClosed,
+                   "A command submitted after shutdownAndJoin() must be rejected immediately as "
+                   "QueueClosed, without needing the (already-exited) engine thread.");
+}
+
+bool verifyPlaybackEngineCrossThreadSubmission()
+{
+    using namespace mini_editor::playback_core;
+
+    FakePlaybackClock clock(MasterClockTime::fromMicroseconds(0));
+    PlaybackEngine engine(PlaybackSource{SourceAssetPreview{MediaAssetId(1)}}, clock);
+
+    constexpr int kCommandsPerThread = 50;
+    auto submitRange = [&engine, kCommandsPerThread](int startRate) {
+        for (int i = 0; i < kCommandsPerThread; ++i)
+            engine.submit(SetRate{startRate + i}, PlaybackCommandId::create());
+    };
+
+    std::thread threadA(submitRange, 1);
+    std::thread threadB(submitRange, 1000);
+    threadA.join();
+    threadB.join();
+
+    engine.shutdownAndJoin();
+
+    const int finalRate = engine.status().ratePercent;
+    const bool inThreadARange = finalRate >= 1 && finalRate < 1 + kCommandsPerThread;
+    const bool inThreadBRange = finalRate >= 1000 && finalRate < 1000 + kCommandsPerThread;
+    if (!require(inThreadARange || inThreadBRange,
+                 "The final rate must be exactly one of the values submitted by either thread, "
+                 "never a torn or corrupted value.")) {
+        return false;
+    }
+
+    return require(engine.drainRejections().empty(),
+                   "100 valid SetRate commands submitted concurrently from two threads must all "
+                   "be accepted -- no rejections.");
+}
+
 } // namespace
 
 int main()
@@ -861,7 +951,9 @@ int main()
         || !verifySourceAssetPreviewLifecycleAndKindMismatch()
         || !verifySourceProgressPermille()
         || !verifyStaleResultRejectionAndStatusGate()
-        || !verifyPreviewPresentationCoordinator()) {
+        || !verifyPreviewPresentationCoordinator()
+        || !verifyPlaybackEngineOrderingAndShutdown()
+        || !verifyPlaybackEngineCrossThreadSubmission()) {
         return 1;
     }
 
