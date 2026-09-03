@@ -51,6 +51,16 @@ public:
     void reportFailure(PlaybackSessionId sessionId, PlaybackGeneration generation,
                        PlaybackError error);
 
+    // ADR-002: "a QMediaPlayer::positionChanged callback may report a
+    // candidate SourceTimestamp; after identity validation, the session may
+    // adopt it as the authoritative source position." Only meaningful for a
+    // SourceAssetPreview session; a stale sessionId/generation, or a report
+    // arriving for a SequencePreview session, is discarded like any other
+    // observation. Adopting the same position twice is idempotent -- it
+    // does not advance statusSeq if the position does not actually change.
+    void reportSourcePosition(PlaybackSessionId sessionId, PlaybackGeneration generation,
+                              SourceTimestamp position);
+
 private:
     bool isSequenceMode() const;
     PlaybackContext buildContext() const;

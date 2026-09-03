@@ -108,9 +108,25 @@ void PlaybackSession::reportFailure(PlaybackSessionId sessionId, PlaybackGenerat
 {
     if (!isCurrent(sessionId, generation))
         return;
+    if (phase_ == PlaybackPhase::Failed)
+        return; // already Failed for this identity: idempotent, no new transition
 
     phase_ = PlaybackPhase::Failed;
     error_ = std::move(error);
+    statusSeq_ = statusSeq_.next();
+}
+
+void PlaybackSession::reportSourcePosition(PlaybackSessionId sessionId, PlaybackGeneration generation,
+                                           SourceTimestamp position)
+{
+    if (!isCurrent(sessionId, generation) || isSequenceMode())
+        return;
+
+    const SourceTimestamp clamped = clampSourceTime(position);
+    if (clamped == sourceTime_)
+        return;
+
+    sourceTime_ = clamped;
     statusSeq_ = statusSeq_.next();
 }
 

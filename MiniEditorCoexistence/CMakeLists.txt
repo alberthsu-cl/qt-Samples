@@ -42,6 +42,8 @@ add_library(MiniEditorPlaybackCore STATIC
     src/playback_core/PlaybackCommand.cpp
     src/playback_core/PlaybackSession.h
     src/playback_core/PlaybackSession.cpp
+    src/playback_core/PlaybackStatusGate.h
+    src/playback_core/PlaybackStatusGate.cpp
 )
 target_include_directories(MiniEditorPlaybackCore PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/playback_core"

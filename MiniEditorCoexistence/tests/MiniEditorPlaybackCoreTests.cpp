@@ -3,6 +3,7 @@
 #include "ProjectRuntime.h"
 #include "PlaybackClock.h"
 #include "PlaybackSession.h"
+#include "PlaybackStatusGate.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -515,6 +516,144 @@ bool verifySourceProgressPermille()
                    "Progress must scale linearly between zero and the end.");
 }
 
+bool verifyStaleResultRejectionAndStatusGate()
+{
+    using namespace mini_editor::playback_core;
+
+    // --- Every ADR-002-listed generation-advancing trigger, on a
+    // sequence-preview session. ---
+    const SequenceId sequenceId = SequenceId::create();
+    FakePlaybackClock clock(MasterClockTime::fromMicroseconds(0));
+    PlaybackSession session(PlaybackSource{SequencePreview{sequenceId}}, clock);
+    const PlaybackSessionId sessionId = session.status().sessionId;
+
+    auto snapshot = makeSnapshot(sequenceId, FrameRate(30, 1), FrameCount::fromFrames(300));
+    PlaybackGeneration before = session.status().generation;
+    session.applyCommand(InstallSnapshot{snapshot}, PlaybackCommandId::create());
+    if (!require(!session.isCurrent(sessionId, before),
+                 "InstallSnapshot must advance the generation (old generation becomes stale).")) {
+        return false;
+    }
+
+    before = session.status().generation;
+    session.applyCommand(Seek{SequenceTime::fromMicroseconds(1'000'000)}, PlaybackCommandId::create());
+    if (!require(!session.isCurrent(sessionId, before),
+                 "A seek must advance the generation.")) {
+        return false;
+    }
+
+    // "A newer seek supersedes older work": a second seek must again make the
+    // generation from the FIRST seek stale, not just the pre-seek generation.
+    before = session.status().generation;
+    session.applyCommand(Seek{SequenceTime::fromMicroseconds(2'000'000)}, PlaybackCommandId::create());
+    if (!require(!session.isCurrent(sessionId, before),
+                 "A repeated scrubbing seek must again advance the generation.")) {
+        return false;
+    }
+
+    before = session.status().generation;
+    session.applyCommand(Stop{}, PlaybackCommandId::create());
+    if (!require(!session.isCurrent(sessionId, before),
+                 "Stop must advance the generation and discard pending work.")) {
+        return false;
+    }
+
+    before = session.status().generation;
+    session.applyCommand(Shutdown{}, PlaybackCommandId::create());
+    if (!require(!session.isCurrent(sessionId, before),
+                 "Shutdown must advance the generation and discard pending work.")) {
+        return false;
+    }
+
+    // --- Source replacement (OpenSource) on a source-asset session. ---
+    FakePlaybackClock sourceClock(MasterClockTime::fromMicroseconds(0));
+    PlaybackSession sourceSession(PlaybackSource{SourceAssetPreview{MediaAssetId(1)}}, sourceClock);
+    const PlaybackSessionId sourceSessionId = sourceSession.status().sessionId;
+    const PlaybackGeneration beforeOpen = sourceSession.status().generation;
+    sourceSession.applyCommand(
+        OpenSource{MediaAssetId(2), SourceTimestamp::fromMicroseconds(4'000'000),
+                   SourceCompletionPolicy::HoldLastFrame},
+        PlaybackCommandId::create());
+    if (!require(!sourceSession.isCurrent(sourceSessionId, beforeOpen),
+                 "OpenSource (source replacement) must advance the generation.")) {
+        return false;
+    }
+
+    // --- A stale reportSourcePosition() must not change state; a current one
+    // must, and adopting the same position twice must be idempotent. ---
+    const PlaybackGeneration staleGeneration = beforeOpen;
+    const PlaybackGeneration currentGeneration = sourceSession.status().generation;
+    const SourceTimestamp positionBefore =
+        std::get<SourcePreviewStatus>(sourceSession.status().context).sourceTime;
+
+    sourceSession.reportSourcePosition(sourceSessionId, staleGeneration,
+                                       SourceTimestamp::fromMicroseconds(1'000'000));
+    if (!require(std::get<SourcePreviewStatus>(sourceSession.status().context).sourceTime
+                     == positionBefore,
+                 "A stale-generation source-position report must be discarded.")) {
+        return false;
+    }
+
+    const StatusSequenceNumber seqBeforeAdopt = sourceSession.status().statusSeq;
+    sourceSession.reportSourcePosition(sourceSessionId, currentGeneration,
+                                       SourceTimestamp::fromMicroseconds(1'000'000));
+    if (!require(std::get<SourcePreviewStatus>(sourceSession.status().context).sourceTime
+                     == SourceTimestamp::fromMicroseconds(1'000'000),
+                 "A current source-position report must be adopted.")
+        || !require(sourceSession.status().statusSeq != seqBeforeAdopt,
+                    "Adopting a new source position must publish a new status.")) {
+        return false;
+    }
+
+    const StatusSequenceNumber seqAfterAdopt = sourceSession.status().statusSeq;
+    sourceSession.reportSourcePosition(sourceSessionId, currentGeneration,
+                                       SourceTimestamp::fromMicroseconds(1'000'000));
+    if (!require(sourceSession.status().statusSeq == seqAfterAdopt,
+                 "Reporting the same position again must be idempotent (no new status).")) {
+        return false;
+    }
+
+    // --- Duplicate reportFailure() must likewise be idempotent. ---
+    sourceSession.reportFailure(sourceSessionId, currentGeneration, PlaybackError{"first"});
+    const StatusSequenceNumber seqAfterFirstFailure = sourceSession.status().statusSeq;
+    sourceSession.reportFailure(sourceSessionId, currentGeneration, PlaybackError{"second"});
+    if (!require(sourceSession.status().statusSeq == seqAfterFirstFailure,
+                 "A second failure report for an already-Failed identity must be idempotent.")
+        || !require(sourceSession.status().error->message == "first",
+                    "An idempotent duplicate failure must not overwrite the original error.")) {
+        return false;
+    }
+
+    // --- PlaybackStatusGate: monotonic within a session, resets for a new one. ---
+    PlaybackStatusGate gate;
+    FakePlaybackClock gateClock(MasterClockTime::fromMicroseconds(0));
+    PlaybackSession gateSession(PlaybackSource{SequencePreview{SequenceId::create()}}, gateClock);
+
+    if (!require(gate.acceptIfNewer(gateSession.status()),
+                 "The first status for a session must be accepted.")) {
+        return false;
+    }
+
+    const PlaybackStatus firstStatus = gateSession.status();
+    gateSession.applyCommand(Play{}, PlaybackCommandId::create());
+    const PlaybackStatus secondStatus = gateSession.status();
+    if (!require(gate.acceptIfNewer(secondStatus),
+                 "A status with a newer statusSeq must be accepted.")
+        || !require(!gate.acceptIfNewer(firstStatus),
+                    "An out-of-order (older) statusSeq must be discarded.")
+        || !require(!gate.acceptIfNewer(secondStatus),
+                    "A repeated (non-newer) statusSeq must be discarded.")) {
+        return false;
+    }
+
+    // A different session resets the comparison even if its own statusSeq
+    // numbering restarts from the same values as the old session's.
+    FakePlaybackClock otherClock(MasterClockTime::fromMicroseconds(0));
+    PlaybackSession otherSession(PlaybackSource{SequencePreview{SequenceId::create()}}, otherClock);
+    return require(gate.acceptIfNewer(otherSession.status()),
+                   "A status from a new session must be accepted even though statusSeq restarts.");
+}
+
 } // namespace
 
 int main()
@@ -567,7 +706,8 @@ int main()
         || !verifySequencePlaybackLifecycle()
         || !verifyFailureAndShutdownPolicy()
         || !verifySourceAssetPreviewLifecycleAndKindMismatch()
-        || !verifySourceProgressPermille()) {
+        || !verifySourceProgressPermille()
+        || !verifyStaleResultRejectionAndStatusGate()) {
         return 1;
     }
 
