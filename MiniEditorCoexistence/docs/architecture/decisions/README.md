@@ -19,7 +19,8 @@ An ADR moves through these states:
 | [ADR-004](0004-audio-monotonic-master-clock-policy.md) | Audio/monotonic master-clock policy | Accepted |
 | [ADR-005](0005-engine-decoder-and-ui-thread-ownership.md) | Engine, decoder, audio callback, and UI thread ownership | Accepted |
 | [ADR-006](0006-explicit-sequence-identity-and-project-ready-model.md) | Explicit sequence identity and sequence-ready project model | Accepted |
+| [ADR-007](0007-framework-neutral-core-and-ui-adapters.md) | Framework-neutral core and Qt/MFC UI adapters | Proposed |
 
-Future decisions will cover framework boundaries. Sequence identity, thread
-ownership, master-clock policy, immutable snapshots, and presentation
-generation are accepted in ADR-003 through ADR-006.
+The planned ADR set is now complete. Framework boundaries are proposed in
+ADR-007; sequence identity, thread ownership, master-clock policy, immutable
+snapshots, and presentation generation are accepted in ADR-003 through ADR-006.
