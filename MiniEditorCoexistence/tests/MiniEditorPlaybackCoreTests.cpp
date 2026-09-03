@@ -4,6 +4,7 @@
 #include "PlaybackClock.h"
 #include "PlaybackSession.h"
 #include "PlaybackStatusGate.h"
+#include "PreviewPresentation.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -654,6 +655,132 @@ bool verifyStaleResultRejectionAndStatusGate()
                    "A status from a new session must be accepted even though statusSeq restarts.");
 }
 
+bool verifyPreviewPresentationCoordinator()
+{
+    using namespace mini_editor::playback_core;
+
+    const SequenceId sequenceId = SequenceId::create();
+    FakePlaybackClock clock(MasterClockTime::fromMicroseconds(0));
+    PlaybackSession session(PlaybackSource{SequencePreview{sequenceId}}, clock);
+    auto snapshot = makeSnapshot(sequenceId, FrameRate(30, 1), FrameCount::fromFrames(300));
+    session.applyCommand(InstallSnapshot{snapshot}, PlaybackCommandId::create());
+
+    PreviewPresentationCoordinator coordinator;
+
+    coordinator.notifyPlaybackStatus(session.status(), /*transportJustRepositioned=*/true);
+    const auto initialRequest = coordinator.currentRequest();
+    if (!require(initialRequest.has_value(), "An initial Stopped status must issue a request.")
+        || !require(std::holds_alternative<TransportPresentationIdentity>(initialRequest->authority),
+                    "The default Stopped request must use transport authority.")) {
+        return false;
+    }
+
+    const PresentationRequestId idBeforeSelection = initialRequest->requestId;
+    coordinator.notifyEditingSelection(
+        EditingPresentationIdentity{sequenceId, SequenceRevision::initial()},
+        PresentationTarget{SequencePresentationTarget{sequenceId, SequenceRevision::initial(),
+                                                       TimelineFrame::fromFrameNumber(42)}});
+    const auto selectionRequest = coordinator.currentRequest();
+    if (!require(selectionRequest && selectionRequest->requestId != idBeforeSelection,
+                 "Clip selection must issue a new request id.")
+        || !require(std::holds_alternative<EditingPresentationIdentity>(selectionRequest->authority),
+                    "Clip selection must use editing authority.")) {
+        return false;
+    }
+
+    coordinator.notifyPlaybackStatus(session.status(), /*transportJustRepositioned=*/false);
+    if (!require(coordinator.currentRequest()->requestId == selectionRequest->requestId,
+                 "An unrelated status refresh must not clear an active editing override.")) {
+        return false;
+    }
+
+    session.applyCommand(Seek{SequenceTime::fromMicroseconds(1'000'000)}, PlaybackCommandId::create());
+    coordinator.notifyPlaybackStatus(session.status(), /*transportJustRepositioned=*/true);
+    const auto afterSeek = coordinator.currentRequest();
+    if (!require(afterSeek && std::holds_alternative<TransportPresentationIdentity>(afterSeek->authority),
+                 "A repositioning command must clear the editing override and restore transport authority.")
+        || !require(afterSeek->requestId != selectionRequest->requestId,
+                    "Clearing the override must issue a new request id.")) {
+        return false;
+    }
+
+    const PresentationRequestId idAfterFirstSeek = afterSeek->requestId;
+    session.applyCommand(Seek{SequenceTime::fromMicroseconds(2'000'000)}, PlaybackCommandId::create());
+    coordinator.notifyPlaybackStatus(session.status(), /*transportJustRepositioned=*/true);
+    if (!require(coordinator.currentRequest()->requestId != idAfterFirstSeek,
+                 "Repeated scrubbing must mint a distinct request id each time.")) {
+        return false;
+    }
+
+    const PresentationRequestId idBeforePlay = coordinator.currentRequest()->requestId;
+    session.applyCommand(Play{}, PlaybackCommandId::create());
+    coordinator.notifyPlaybackStatus(session.status(), /*transportJustRepositioned=*/true);
+    if (!require(coordinator.currentRequest()->requestId != idBeforePlay,
+                 "Transport resumption must mint a new request id even at an unchanged position.")
+        || !require(coordinator.currentRequest()->authority
+                        == PresentationAuthority{TransportPresentationIdentity{
+                               session.status().sessionId, session.status().generation}},
+                    "A Playing status must use transport authority naming the live session/generation.")) {
+        return false;
+    }
+
+    const PresentationRequestId idWhilePlaying = coordinator.currentRequest()->requestId;
+    coordinator.notifyEditingSelection(
+        EditingPresentationIdentity{sequenceId, SequenceRevision::initial()},
+        PresentationTarget{SequencePresentationTarget{sequenceId, SequenceRevision::initial(),
+                                                       TimelineFrame::fromFrameNumber(99)}});
+    if (!require(coordinator.currentRequest()->requestId == idWhilePlaying,
+                 "An editing selection must be ignored while transport is active.")) {
+        return false;
+    }
+
+    const PresentationRequestId idBeforeInstall = coordinator.currentRequest()->requestId;
+    auto secondSnapshot = makeSnapshot(sequenceId, FrameRate(30, 1), FrameCount::fromFrames(600));
+    session.applyCommand(InstallSnapshot{secondSnapshot}, PlaybackCommandId::create());
+    coordinator.notifyPlaybackStatus(session.status(), /*transportJustRepositioned=*/true);
+    if (!require(coordinator.currentRequest()->requestId != idBeforeInstall,
+                 "Snapshot replacement must mint a new request id.")) {
+        return false;
+    }
+
+    const PresentationSessionId currentSessionId = coordinator.currentRequest()->presentationSessionId;
+    const PresentationRequestId currentRequestId = coordinator.currentRequest()->requestId;
+    const PresentationAuthority currentAuthority = coordinator.currentRequest()->authority;
+    if (!require(coordinator.isCurrentRequest(currentSessionId, currentRequestId, currentAuthority),
+                 "The coordinator's own current request must be recognized as current.")) {
+        return false;
+    }
+
+    PreviewPresentationCoordinator otherCoordinator;
+    otherCoordinator.notifyPlaybackStatus(session.status(), true);
+    const PresentationRequestId collidingRequestId = otherCoordinator.currentRequest()->requestId;
+    if (!require(!coordinator.isCurrentRequest(
+                     otherCoordinator.currentRequest()->presentationSessionId,
+                     collidingRequestId, currentAuthority),
+                 "A different presentation session must never be recognized as current, "
+                 "even with a colliding request id.")) {
+        return false;
+    }
+
+    coordinator.clear();
+    if (!require(!coordinator.currentRequest().has_value(), "clear() must remove the current request.")) {
+        return false;
+    }
+
+    coordinator.notifyPlaybackStatus(session.status(), true);
+    if (!require(coordinator.currentRequest().has_value(),
+                 "A status after clear() must issue a fresh request.")) {
+        return false;
+    }
+
+    const auto beforeFailure = coordinator.currentRequest();
+    session.reportFailure(session.status().sessionId, session.status().generation,
+                          PlaybackError{"decode error"});
+    coordinator.notifyPlaybackStatus(session.status(), false);
+    return require(coordinator.currentRequest() == beforeFailure,
+                   "A Failed status must retain the last accepted request rather than issuing a new one.");
+}
+
 } // namespace
 
 int main()
@@ -707,7 +834,8 @@ int main()
         || !verifyFailureAndShutdownPolicy()
         || !verifySourceAssetPreviewLifecycleAndKindMismatch()
         || !verifySourceProgressPermille()
-        || !verifyStaleResultRejectionAndStatusGate()) {
+        || !verifyStaleResultRejectionAndStatusGate()
+        || !verifyPreviewPresentationCoordinator()) {
         return 1;
     }
 

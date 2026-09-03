@@ -32,12 +32,14 @@ PlaybackContext PlaybackSession::buildContext() const
 
     const FrameRate frameRate = snapshot_ ? snapshot_->frameRate : sequenceFrameRateBeforeSnapshot_;
     const FrameCount duration = snapshot_ ? snapshot_->duration : FrameCount::zero();
+    const SequenceRevision revision = snapshot_ ? snapshot_->revision : SequenceRevision::initial();
     const SequenceTime position = (phase_ == PlaybackPhase::Playing)
         ? resolveSequenceTime(anchor_, clock_)
         : anchor_.sequenceTime;
 
     return PlaybackContext{SequencePreviewStatus{
         std::get<SequencePreview>(source_).sequenceId,
+        revision,
         frameAtSequenceTime(position, frameRate),
         duration,
         frameRate

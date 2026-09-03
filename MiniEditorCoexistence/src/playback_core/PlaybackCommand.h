@@ -159,6 +159,10 @@ struct SourcePreviewStatus final {
 
 struct SequencePreviewStatus final {
     SequenceId sequenceId;
+    // ADR-003's SequencePresentationTarget needs to name which installed
+    // snapshot a timeline frame refers to; ADR-002's original status shape
+    // did not carry it. Added here (Milestone 4) rather than left implicit.
+    SequenceRevision revision;
     TimelineFrame timelineFrame;
     FrameCount sequenceDuration;
     FrameRate frameRate;
