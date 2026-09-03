@@ -13,14 +13,11 @@ headers. Runtime playback migration begins in Milestone 3.
 M1-01  Framework-neutral PlaybackCore target + contract test
   |
   +-- M1-02  Rename the current UI-era PlaybackCommand
-  |             to LegacyPlaybackCommand
-  |
-  +-- M1-03  Add the engine command values and the shared
-                EditorIntent-to-command mapping contract
+                to LegacyPlaybackCommand
 ```
 
-`M1-02` and `M1-03` may be worked on after `M1-01`; they touch different
-responsibilities but are merged in that order to keep every commit buildable.
+`M1-02` follows `M1-01` so every commit remains buildable while the new engine
+command name is reserved.
 
 ## M1-01 — Framework-neutral target
 
@@ -48,27 +45,21 @@ Rename the existing four-member UI transport enum from `PlaybackCommand` to
 - no source outside the new core exposes the old ambiguous name;
 - existing core and Qt widget tests pass.
 
-## M1-03 — Establish the engine command boundary
+## Deferred engine-command boundary
 
-Add the framework-neutral eight-alternative engine `PlaybackCommand` value
-type from ADR-007 and one pure translation function for playback-related
-`EditorIntent` values. The mapping must resolve Toggle from a supplied
-published playback phase; lifecycle commands remain outside UI intent.
-
-**Done when:**
-
-- tests cover Toggle-to-Play and Toggle-to-Pause plus Stop, step, seek, and
-  rate intent cases available in this milestone;
-- invalid/non-playback intents cannot silently become playback commands;
-- no UI framework type appears in the translator's API.
+The eight-alternative engine `PlaybackCommand` and its shared
+`EditorIntent`-to-command mapping begin in Milestone 3. `Seek` needs the
+strong time and project/runtime identity values established by Milestone 2;
+Toggle also needs an immutable published playback phase to resolve to `Play`
+or `Pause`. A payloadless variant today would compile, but would not express
+the accepted contract honestly.
 
 ## Human decision gates
 
 No decision is needed for M1-01 or M1-02: both directly apply accepted
-ADR-007. Before M1-03 merges, a reviewer checks only that the proposed command
-value shape still matches ADR-002 and ADR-007. A new product requirement,
-additional transport action, or change to the approved command variants pauses
-the automation and requires a human decision.
+ADR-007. A new product requirement, additional transport action, or change to
+the approved command variants pauses the automation and requires a human
+decision.
 
 ## Agent handoff rule
 
