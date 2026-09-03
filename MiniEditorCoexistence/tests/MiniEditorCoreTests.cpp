@@ -1989,6 +1989,33 @@ void sourcePlaybackDoesNotMoveTheTimelinePlayhead()
             "Returning to timeline focus must restore its independent transport state.");
 }
 
+void projectRuntimeTracksExplicitSequenceIdentity()
+{
+    using namespace mini_editor::playback_core;
+
+    EditorSession session(1);
+    const ProjectRuntime &initialRuntime = session.projectRuntime();
+    require(initialRuntime.readiness() == ProjectReadiness::Empty,
+            "A new editor session must have an explicit empty sequence runtime.");
+    require(initialRuntime.activeSequenceId().has_value()
+                && initialRuntime.sequences().size() == 1
+                && initialRuntime.sequences().front().frameRate == FrameRate(30, 1),
+            "The legacy editor must synthesize one active 30 fps sequence.");
+
+    const ProjectId initialProjectId = initialRuntime.projectId();
+    const SequenceId initialSequenceId = *initialRuntime.activeSequenceId();
+    const int clipId = session.addTimelineClip(1, TimelineTrackType::Video, 0, 30);
+    require(clipId != 0 && session.projectRuntime().readiness() == ProjectReadiness::Ready,
+            "Adding a timeline clip must make the active sequence ready.");
+    require(*session.projectRuntime().activeSequenceId() == initialSequenceId,
+            "A timeline edit must preserve the active sequence identity.");
+
+    session.replaceProject(EditorProject::createDefault(1));
+    require(session.projectRuntime().projectId() != initialProjectId
+                && *session.projectRuntime().activeSequenceId() != initialSequenceId,
+            "Project replacement must create fresh runtime and sequence identities.");
+}
+
 } // namespace
 
 int main()
@@ -2022,6 +2049,7 @@ int main()
         clipPropertiesResolverBuildsOneCompleteViewSnapshot();
         timelinePresentationResolverBuildsOneCompleteViewSnapshot();
         sourcePlaybackDoesNotMoveTheTimelinePlayhead();
+        projectRuntimeTracksExplicitSequenceIdentity();
         projectDocumentServiceMaintainsProjectAndMediaConsistency();
         internalTimelineClipboardSupportsCopyCutPasteAndDuplicate();
         focusedTimelineClipOwnsIndependentPlacementSettings();

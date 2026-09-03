@@ -6,6 +6,7 @@
 #include "ProjectState.h"
 #include "TimelineClipEdit.h"
 #include "TimelineModel.h"
+#include "playback_core/ProjectRuntime.h"
 
 #include <cstddef>
 #include <functional>
@@ -31,6 +32,7 @@ public:
     const PlaybackState &timelinePlaybackState() const;
     const TimelineViewState &timelineViewState() const;
     const TimelineAudioMixState &timelineAudioMixState() const;
+    const mini_editor::playback_core::ProjectRuntime &projectRuntime() const;
     EditorProject projectSnapshot() const;
     const TimelineModel &timelineModel() const;
     int selectedTimelineClipId() const;
@@ -93,6 +95,7 @@ private:
     EditorCommandContext commandContext();
     void recordTimelineCommand(std::vector<TimelineClip> before,
                                TimelineInteractionState interactionBefore);
+    void synchronizeProjectRuntime();
     int addTimelineClipInternal(int mediaAssetId, TimelineTrackType trackType,
                                 int startFrame, int durationFrames,
                                 std::optional<int> sourceAssetIndex);
@@ -114,6 +117,7 @@ private:
     PlaybackState timelinePlaybackState_;
     TimelineViewState timelineViewState_;
     TimelineAudioMixState timelineAudioMixState_;
+    mini_editor::playback_core::ProjectRuntime projectRuntime_;
     bool projectDirty_ = false;
     EditorHistory history_;
     struct TimelineClipboard {

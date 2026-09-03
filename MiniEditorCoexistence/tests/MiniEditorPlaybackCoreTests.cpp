@@ -1,5 +1,6 @@
 #include "PlaybackCoreBoundary.h"
 #include "MediaTime.h"
+#include "ProjectRuntime.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -120,6 +121,46 @@ bool verifyRateConversions()
                    "Signed sub-microsecond rate results must truncate toward zero.");
 }
 
+bool verifyProjectRuntimeIdentityAndReadiness()
+{
+    using namespace mini_editor::playback_core;
+
+    ProjectRuntime emptyProject = ProjectRuntime::fromLegacyFlatProject(0);
+    ProjectRuntime reloadedProject = ProjectRuntime::fromLegacyFlatProject(0);
+    const SequenceId emptySequenceId = emptyProject.sequences().front().id;
+
+    if (!require(emptyProject.readiness() == ProjectReadiness::Empty,
+                 "An empty legacy timeline must be an explicit empty project.")
+        || !require(emptyProject.sequences().size() == 1
+                        && emptyProject.sequences().front().frameRate == FrameRate(30, 1),
+                    "A flat legacy project must synthesize one 30 fps sequence.")
+        || !require(emptyProject.activeSequenceId()
+                        && *emptyProject.activeSequenceId() == emptySequenceId,
+                    "The synthesized legacy sequence must be explicitly active.")
+        || !require(emptyProject.projectId() != reloadedProject.projectId()
+                        && emptySequenceId != reloadedProject.sequences().front().id,
+                    "Reloading identical content must create fresh runtime identities.")) {
+        return false;
+    }
+
+    emptyProject.setLegacySequenceClipCount(2);
+    if (!require(emptyProject.readiness() == ProjectReadiness::Ready,
+                 "A sequence with timeline clips must become ready.")
+        || !require(emptyProject.sequences().front().id == emptySequenceId,
+                    "Editing clip count must preserve the active sequence identity.")) {
+        return false;
+    }
+
+    const ProjectRuntime loadingProject = ProjectRuntime::loading();
+    const ProjectRuntime failedProject = ProjectRuntime::failed("Missing project file");
+    return require(loadingProject.readiness() == ProjectReadiness::Loading
+                       && !loadingProject.error(),
+                   "Loading must be distinct from empty and failed states.")
+        && require(failedProject.readiness() == ProjectReadiness::Failed
+                       && failedProject.error(),
+                   "A failed runtime must carry a framework-neutral error.");
+}
+
 } // namespace
 
 int main()
@@ -163,7 +204,8 @@ int main()
         || !verifyTwentyFourHourRange(FrameRate(30, 1))
         || !verifyTwentyFourHourRange(FrameRate(30'000, 1'001))
         || !verifySourceMapping()
-        || !verifyRateConversions()) {
+        || !verifyRateConversions()
+        || !verifyProjectRuntimeIdentityAndReadiness()) {
         return 1;
     }
 

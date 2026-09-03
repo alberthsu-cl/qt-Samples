@@ -33,6 +33,8 @@ add_library(MiniEditorPlaybackCore STATIC
     src/playback_core/PlaybackCoreBoundary.cpp
     src/playback_core/MediaTime.h
     src/playback_core/MediaTime.cpp
+    src/playback_core/ProjectRuntime.h
+    src/playback_core/ProjectRuntime.cpp
 )
 target_include_directories(MiniEditorPlaybackCore PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/playback_core"
@@ -113,6 +115,7 @@ target_include_directories(MiniEditorCoexistence PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
     "${CMAKE_CURRENT_SOURCE_DIR}/resources"
 )
+target_link_libraries(MiniEditorCoexistence PRIVATE MiniEditorPlaybackCore)
 
 # Visual Studio filters are virtual folders only: the files stay in src/.
 # Keep the model layer easy to find while studying the UI migration boundary.
@@ -273,6 +276,7 @@ if(BUILD_TESTING)
     target_include_directories(MiniEditorCoreTests PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
     )
+    target_link_libraries(MiniEditorCoreTests PRIVATE MiniEditorPlaybackCore)
 
     add_test(NAME MiniEditorCoreTests COMMAND $<TARGET_FILE:MiniEditorCoreTests>)
 

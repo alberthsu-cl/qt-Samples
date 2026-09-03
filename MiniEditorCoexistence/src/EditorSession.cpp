@@ -91,6 +91,7 @@ void shiftFollowingClips(std::vector<TimelineClip> &clips,
 EditorSession::EditorSession(std::size_t assetCount)
     : clipSettings_(std::max<std::size_t>(assetCount, 1))
     , timelineClipStates_(clipSettings_.size())
+    , projectRuntime_(mini_editor::playback_core::ProjectRuntime::fromLegacyFlatProject(0))
 {
 }
 
@@ -157,6 +158,11 @@ const TimelineAudioMixState &EditorSession::timelineAudioMixState() const
     return timelineAudioMixState_;
 }
 
+const mini_editor::playback_core::ProjectRuntime &EditorSession::projectRuntime() const
+{
+    return projectRuntime_;
+}
+
 EditorProject EditorSession::projectSnapshot() const
 {
     return { {}, clipSettings_, timelineClipStates_, timelineModel_.clips(),
@@ -199,10 +205,16 @@ void EditorSession::recordTimelineCommand(
     std::vector<TimelineClip> before,
     TimelineInteractionState interactionBefore)
 {
+    synchronizeProjectRuntime();
     history_.record(std::make_unique<TimelineSnapshotCommand>(
         std::move(before), timelineModel_.clips(), interactionBefore,
         timelineInteractionState()));
     projectDirty_ = true;
+}
+
+void EditorSession::synchronizeProjectRuntime()
+{
+    projectRuntime_.setLegacySequenceClipCount(timelineModel_.clips().size());
 }
 
 int EditorSession::addTimelineClip(int mediaAssetId, TimelineTrackType trackType,
@@ -650,6 +662,8 @@ void EditorSession::replaceProject(const EditorProject &project)
     }
     timelineModel_ = std::move(restoredTimeline);
     timelineAudioMixState_ = project.timelineAudioMix;
+    projectRuntime_ = mini_editor::playback_core::ProjectRuntime::fromLegacyFlatProject(
+        timelineModel_.clips().size());
     selectedAssetIndex_ = -1;
     selectedTimelineClipId_ = 0;
     isTimelineFocused_ = false;
@@ -687,6 +701,7 @@ bool EditorSession::undo()
         return false;
 
     projectDirty_ = true;
+    synchronizeProjectRuntime();
     notifyStateChanged(changes);
     return true;
 }
@@ -699,6 +714,7 @@ bool EditorSession::redo()
         return false;
 
     projectDirty_ = true;
+    synchronizeProjectRuntime();
     notifyStateChanged(changes);
     return true;
 }
