@@ -49,9 +49,18 @@ EngineSmokeTestSession::EngineSmokeTestSession(HWND notifyTarget, UINT notifyMes
     previewWindow_->resize(640, 360);
 
     QObject::connect(&worker_, &QtPlaybackMediaWorker::mediaErrorOccurred, this,
-                     [](const QString &message) {
+                     [this](const QString &message) {
                          logLine(L"QMediaPlayer error: %s",
                                  reinterpret_cast<const wchar_t *>(message.utf16()));
+
+                         // The worker never touches PlaybackSession/PlaybackEngine directly --
+                         // it only emits this signal. Reporting the failure through the engine's
+                         // serialized queue, tagged with whatever session/generation is current
+                         // right now, is this handler's job (M4-07). A stale identity by the time
+                         // this is processed is discarded by PlaybackSession itself.
+                         const PlaybackStatus current = engine_->status();
+                         engine_->reportFailure(current.sessionId, current.generation,
+                                                PlaybackError{message.toStdString()});
                      });
 
     logLine(L"Session constructed. sessionId=%llu",
@@ -92,6 +101,9 @@ void EngineSmokeTestSession::handleEvents(std::vector<PlaybackEvent> events)
                     phaseName(status->phase),
                     static_cast<unsigned long long>(status->generation.value()),
                     static_cast<unsigned long long>(status->statusSeq.value()));
+            if (status->error) {
+                logLine(L"  error: %hs", status->error->message.c_str());
+            }
 
             if (status->phase != lastAppliedPhase_) {
                 lastAppliedPhase_ = status->phase;

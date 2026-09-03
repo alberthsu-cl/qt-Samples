@@ -8,6 +8,7 @@
 #include <mutex>
 #include <optional>
 #include <thread>
+#include <variant>
 #include <vector>
 
 namespace mini_editor::playback_core {
@@ -45,6 +46,21 @@ public:
     std::optional<PlaybackCommandRejected> submit(PlaybackCommand command,
                                                   PlaybackCommandId commandId);
 
+    // ADR-002: a validated failure observation, entered into the SAME
+    // serialized queue submit() uses -- callable from any thread (a real
+    // decoder/worker reports failures from its own thread), never applied
+    // inline on the calling thread, and always processed on the engine
+    // thread in submission order alongside ordinary commands. A stale
+    // sessionId/generation is discarded by PlaybackSession::reportFailure()
+    // itself, exactly like any other observation; this method only gets it
+    // there safely. Dropped without effect if the queue is already closed
+    // (nothing left to process it). The resulting status (Failed + error,
+    // or unchanged if stale) is published the same way an applied command's
+    // status is -- via status()/drainRejections() and, if attached, the
+    // event sink.
+    void reportFailure(PlaybackSessionId sessionId, PlaybackGeneration generation,
+                       PlaybackError error);
+
     // A thread-safe snapshot of the latest status published after the most
     // recently applied command.
     PlaybackStatus status() const;
@@ -64,13 +80,25 @@ private:
         PlaybackCommandId id;
     };
 
+    struct QueuedFailure {
+        PlaybackSessionId sessionId;
+        PlaybackGeneration generation;
+        PlaybackError error;
+    };
+
+    using QueueItem = std::variant<QueuedCommand, QueuedFailure>;
+
     void run();
+    // Refreshes latestStatus_ from session_ and pushes it (and, if present,
+    // rejection) to eventSink_. Called on the engine thread after every
+    // processed queue item.
+    void publishStatus(std::optional<PlaybackCommandRejected> rejection);
 
     PlaybackSession session_; // mutated only on the engine thread (thread_).
 
     mutable std::mutex queueMutex_;
     std::condition_variable queueCv_;
-    std::deque<QueuedCommand> queue_;
+    std::deque<QueueItem> queue_;
     bool queueClosed_ = false;
 
     mutable std::mutex statusMutex_;

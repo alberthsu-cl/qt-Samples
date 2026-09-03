@@ -49,10 +49,16 @@ M4-01  PreviewPresentationCoordinator and presentation identities (ADR-003)
               |     |
               +-----+-- M4-05  MFC/Qt UI notification bridge (ADR-005/ADR-007)
                           |
-                          +-- M4-06  Feature-flagged routing (ADR-007)
+                          +-- M4-07  Media-failure observation path (ADR-002/ADR-005)
+                                |
+                                +-- M4-06  Feature-flagged routing (ADR-007)
 ```
 
-M4-04 and M4-05 both depend on M4-03 but not on each other; M4-06 needs both.
+M4-04 and M4-05 both depend on M4-03 but not on each other. M4-07 was added after
+M4-04/M4-05 landed (a gap found in review: `QtPlaybackMediaWorker::mediaErrorOccurred`
+was only logged, never routed into `PlaybackSession`'s Failed phase). M4-06 needs
+M4-04, M4-05, M4-07, **and** the user's own manual smoke-test validation of
+M4-04/M4-05 to all be complete before it starts.
 
 ## M4-01 — PreviewPresentationCoordinator and presentation identities
 
@@ -263,7 +269,53 @@ class every build configuration shares.*
 Architecture: ADR-005 (criteria 8, 9, 10), ADR-007 (MFC adapter and Qt
 adapter sections).
 
+## M4-07 — Media-failure observation path
+
+Added after M4-04/M4-05 landed: `QtPlaybackMediaWorker::mediaErrorOccurred`
+was only logged by the manual smoke test, never routed into
+`PlaybackSession`'s Failed phase. ADR-002 requires a validated failure to
+enter Failed and publish its error through the normal status/event path.
+
+**Scope**
+
+- `PlaybackEngine::reportFailure(PlaybackSessionId, PlaybackGeneration,
+  PlaybackError)` — a new entry point that enqueues the observation into the
+  *same* serialized queue `submit()` uses, callable from any thread, applied
+  only on the engine thread, in submission order alongside ordinary
+  commands. Not a direct call into `PlaybackSession` from outside the engine
+  thread.
+- The resulting status (Failed + error, or unchanged if the observation was
+  stale) is published exactly like an applied command's status:
+  `status()`/`drainRejections()`, and, if an `IPlaybackEventSink` is
+  attached, pushed there too — no new channel.
+- `EngineSmokeTestSession`'s `mediaErrorOccurred` handler now calls
+  `engine_->reportFailure(...)` with the session/generation identity read
+  from `engine_->status()` at report time, instead of only logging.
+  `QtPlaybackMediaWorker` itself gained no new dependency on
+  `PlaybackSession`/`PlaybackEngine` — it still only ever emits a plain Qt
+  signal.
+
+**Done when**
+
+- a deterministic fake-port test proves a *current* failure observation
+  (submitted through `PlaybackEngine::reportFailure()`, not by calling
+  `PlaybackSession::reportFailure()` directly) transitions to Failed and is
+  visible after the queue drains, and that its status is pushed to an
+  attached event sink;
+- the same test proves a *stale* (superseded-generation) failure observation
+  is discarded without a phase change, and that a command submitted after it
+  still applies in submission order;
+- both Debug build trees (`vs2022-x64`, `vs2022-mfc-x64`) build and pass all
+  tests.
+
+Architecture: ADR-002 (failure/Failed-phase criteria), ADR-005 (a worker
+never mutates `PlaybackSession` directly; the consumer validates identity).
+
 ## M4-06 — Feature-flagged routing
+
+**Gate: do not start until M4-07 is complete and the user has finished their
+own manual smoke-test validation of M4-04/M4-05.** Both are explicit
+prerequisites, not just dependency-graph housekeeping.
 
 Wires everything above together behind a flag that defaults off.
 

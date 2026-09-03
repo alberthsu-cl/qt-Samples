@@ -1139,6 +1139,68 @@ bool verifyUiNotificationQueueAndEngineIntegration()
                    "The final pushed event must be Shutdown's status (phase unchanged from Playing).");
 }
 
+bool verifyPlaybackEngineFailureObservation()
+{
+    using namespace mini_editor::playback_core;
+
+    // --- A current failure observation, submitted through PlaybackEngine's
+    // queue (not by calling PlaybackSession::reportFailure() directly),
+    // must transition to Failed and be pushed to an attached event sink. ---
+    FakePlaybackClock clockA(MasterClockTime::fromMicroseconds(0));
+    UiNotificationQueue eventsA;
+    PlaybackEngine engineA(PlaybackSource{SequencePreview{SequenceId::create()}}, clockA, &eventsA);
+    const PlaybackSessionId sessionIdA = engineA.status().sessionId;
+    const PlaybackGeneration generationA = engineA.status().generation;
+
+    engineA.reportFailure(sessionIdA, generationA, PlaybackError{"decode error"});
+    engineA.shutdownAndJoin();
+
+    const PlaybackStatus statusA = engineA.status();
+    if (!require(statusA.phase == PlaybackPhase::Failed,
+                 "A current failure observation submitted through PlaybackEngine's queue must "
+                 "transition the session to Failed.")
+        || !require(statusA.error && statusA.error->message == "decode error",
+                    "The Failed status must carry exactly the reported error.")) {
+        return false;
+    }
+
+    const std::vector<PlaybackEvent> pushedA = eventsA.drain();
+    const bool sawFailedStatus = std::any_of(pushedA.begin(), pushedA.end(),
+        [](const PlaybackEvent &event) {
+            return std::holds_alternative<PlaybackStatus>(event)
+                && std::get<PlaybackStatus>(event).phase == PlaybackPhase::Failed;
+        });
+    if (!require(sawFailedStatus,
+                 "A current failure observation's resulting Failed status must be pushed to the "
+                 "attached event sink, the same as any other applied command's status.")) {
+        return false;
+    }
+
+    // --- A stale (superseded) failure observation must be discarded, and a
+    // command submitted after it must still apply normally -- proving the
+    // queue processes both in submission order rather than the stale
+    // observation disrupting anything around it. ---
+    const SequenceId sequenceIdB = SequenceId::create();
+    FakePlaybackClock clockB(MasterClockTime::fromMicroseconds(0));
+    PlaybackEngine engineB(PlaybackSource{SequencePreview{sequenceIdB}}, clockB);
+    const PlaybackSessionId sessionIdB = engineB.status().sessionId;
+    const PlaybackGeneration staleGeneration = engineB.status().generation;
+
+    auto snapshot = makeSnapshot(sequenceIdB, FrameRate(30, 1), FrameCount::fromFrames(300));
+    engineB.submit(InstallSnapshot{snapshot}, PlaybackCommandId::create()); // advances the generation
+    engineB.reportFailure(sessionIdB, staleGeneration, PlaybackError{"now stale"});
+    engineB.submit(SetRate{150}, PlaybackCommandId::create());
+    engineB.shutdownAndJoin();
+
+    const PlaybackStatus statusB = engineB.status();
+    return require(statusB.phase != PlaybackPhase::Failed,
+                   "A stale-generation failure observation must not transition the session to "
+                   "Failed.")
+        && require(statusB.ratePercent == 150,
+                   "A command submitted after a stale failure observation must still be applied "
+                   "in submission order.");
+}
+
 } // namespace
 
 int main()
@@ -1198,7 +1260,8 @@ int main()
         || !verifyPlaybackEngineCrossThreadSubmission()
         || !verifyVideoWorkSchedulerBoundedLatestWins()
         || !verifySteadyPlaybackClock()
-        || !verifyUiNotificationQueueAndEngineIntegration()) {
+        || !verifyUiNotificationQueueAndEngineIntegration()
+        || !verifyPlaybackEngineFailureObservation()) {
         return 1;
     }
 

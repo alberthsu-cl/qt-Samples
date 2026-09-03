@@ -37,10 +37,23 @@ std::optional<PlaybackCommandRejected> PlaybackEngine::submit(PlaybackCommand co
         if (std::holds_alternative<Shutdown>(command))
             queueClosed_ = true;
 
-        queue_.push_back(QueuedCommand{std::move(command), commandId});
+        queue_.push_back(QueueItem{QueuedCommand{std::move(command), commandId}});
     }
     queueCv_.notify_one();
     return std::nullopt;
+}
+
+void PlaybackEngine::reportFailure(PlaybackSessionId sessionId, PlaybackGeneration generation,
+                                   PlaybackError error)
+{
+    {
+        std::lock_guard<std::mutex> lock(queueMutex_);
+        if (queueClosed_)
+            return; // Nothing left to process it -- the engine thread has exited or is exiting.
+
+        queue_.push_back(QueueItem{QueuedFailure{sessionId, generation, std::move(error)}});
+    }
+    queueCv_.notify_one();
 }
 
 PlaybackStatus PlaybackEngine::status() const
@@ -64,41 +77,56 @@ void PlaybackEngine::shutdownAndJoin()
         thread_.join();
 }
 
+void PlaybackEngine::publishStatus(std::optional<PlaybackCommandRejected> rejection)
+{
+    std::optional<PlaybackStatus> publishedStatus;
+    {
+        std::lock_guard<std::mutex> lock(statusMutex_);
+        latestStatus_ = session_.status();
+        publishedStatus = latestStatus_;
+    }
+    if (rejection) {
+        std::lock_guard<std::mutex> lock(rejectionsMutex_);
+        rejections_.push_back(*rejection);
+    }
+
+    // Published outside every lock above: a real sink must not block or
+    // call back into the engine, but this class does not depend on that --
+    // it just avoids holding its own locks longer than necessary.
+    if (eventSink_) {
+        eventSink_->publish(PlaybackEvent{*publishedStatus});
+        if (rejection)
+            eventSink_->publish(PlaybackEvent{*rejection});
+    }
+}
+
 void PlaybackEngine::run()
 {
     for (;;) {
         std::unique_lock<std::mutex> lock(queueMutex_);
         queueCv_.wait(lock, [this] { return !queue_.empty(); });
-        QueuedCommand item = std::move(queue_.front());
+        QueueItem item = std::move(queue_.front());
         queue_.pop_front();
         lock.unlock();
 
-        const bool isShutdown = std::holds_alternative<Shutdown>(item.command);
-        const std::optional<PlaybackCommandRejected> rejection =
-            session_.applyCommand(item.command, item.id);
+        if (auto *command = std::get_if<QueuedCommand>(&item)) {
+            const bool isShutdown = std::holds_alternative<Shutdown>(command->command);
+            const std::optional<PlaybackCommandRejected> rejection =
+                session_.applyCommand(command->command, command->id);
 
-        std::optional<PlaybackStatus> publishedStatus;
-        {
-            std::lock_guard<std::mutex> lock(statusMutex_);
-            latestStatus_ = session_.status();
-            publishedStatus = latestStatus_;
-        }
-        if (rejection) {
-            std::lock_guard<std::mutex> lock(rejectionsMutex_);
-            rejections_.push_back(*rejection);
-        }
+            publishStatus(rejection);
 
-        // Published outside every lock above: a real sink must not block or
-        // call back into the engine, but this class does not depend on that
-        // -- it just avoids holding its own locks longer than necessary.
-        if (eventSink_) {
-            eventSink_->publish(PlaybackEvent{*publishedStatus});
-            if (rejection)
-                eventSink_->publish(PlaybackEvent{*rejection});
+            if (isShutdown)
+                break; // ADR-005 step 6: the engine thread exits after publishing the final status.
+        } else {
+            // A media-failure (or other future) observation: applied via
+            // PlaybackSession's own identity check (a stale sessionId/
+            // generation is a no-op), never a command, so it can never be
+            // "rejected" -- only its resulting status is published.
+            const auto &failure = std::get<QueuedFailure>(item);
+            session_.reportFailure(failure.sessionId, failure.generation, failure.error);
+            publishStatus(std::nullopt);
         }
-
-        if (isShutdown)
-            break; // ADR-005 step 6: the engine thread exits after publishing the final status.
     }
 }
 
