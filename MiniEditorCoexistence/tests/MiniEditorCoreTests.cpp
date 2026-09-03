@@ -22,6 +22,7 @@
 #include "PreviewStateResolver.h"
 #include "PreviewSeekRequest.h"
 #include "ProjectDocumentService.h"
+#include "SequencePlaybackSnapshotBuilder.h"
 #include "WorkspaceLayout.h"
 
 #include <algorithm>
@@ -32,6 +33,7 @@
 #include <optional>
 #include <stdexcept>
 #include <vector>
+#include <variant>
 
 namespace {
 
@@ -2004,16 +2006,55 @@ void projectRuntimeTracksExplicitSequenceIdentity()
 
     const ProjectId initialProjectId = initialRuntime.projectId();
     const SequenceId initialSequenceId = *initialRuntime.activeSequenceId();
+    const SequenceRevision initialRevision = initialRuntime.sequences().front().revision;
     const int clipId = session.addTimelineClip(1, TimelineTrackType::Video, 0, 30);
     require(clipId != 0 && session.projectRuntime().readiness() == ProjectReadiness::Ready,
             "Adding a timeline clip must make the active sequence ready.");
     require(*session.projectRuntime().activeSequenceId() == initialSequenceId,
             "A timeline edit must preserve the active sequence identity.");
+    require(initialRevision < session.projectRuntime().sequences().front().revision,
+            "A playback-affecting timeline edit must advance sequence revision.");
 
     session.replaceProject(EditorProject::createDefault(1));
     require(session.projectRuntime().projectId() != initialProjectId
                 && *session.projectRuntime().activeSequenceId() != initialSequenceId,
             "Project replacement must create fresh runtime and sequence identities.");
+}
+
+void sequenceSnapshotIsImmutableAndSelfContained()
+{
+    using namespace mini_editor::playback_core;
+
+    EditorProject project = EditorProject::createDefault(1);
+    project.mediaAssets.push_back({ 41, "missing-video.mp4", L"Missing video",
+                                    MediaKind::Video, 120, 0x123456 });
+    project.timelineItems.push_back({ 7, 41, TimelineTrackType::Video,
+                                      { 10, 30, 30 }, {} });
+    const ProjectRuntime runtime = ProjectRuntime::fromLegacyFlatProject(1);
+
+    const SnapshotBuildResult result = SequencePlaybackSnapshotBuilder::build(project, runtime);
+    const auto snapshotPointer = std::get_if<SequencePlaybackSnapshotPtr>(&result);
+    require(snapshotPointer != nullptr && *snapshotPointer,
+            "A valid completed editor state must produce one snapshot.");
+    const SequencePlaybackSnapshot &snapshot = **snapshotPointer;
+    require(snapshot.sequenceId == *runtime.activeSequenceId()
+                && snapshot.videoClips.size() == 1 && snapshot.audioClips.empty()
+                && snapshot.duration == FrameCount::fromFrames(40),
+            "Snapshot identity, normalized tracks, and duration must be explicit.");
+    require(snapshot.media.size() == 1
+                && snapshot.media.front().availability == MediaAvailability::Unavailable
+                && snapshot.videoClips.front().sourceIn
+                && snapshot.videoClips.front().sourceIn->microsecondsForAdapter() == 1'000'000,
+            "Missing files must remain explicit descriptors and legacy source time must convert once.");
+
+    project.timelineItems.front().state.startFrame = 99;
+    require(snapshot.videoClips.front().startFrame == TimelineFrame::fromFrameNumber(10),
+            "A published snapshot must not retain mutable editor-container references.");
+
+    project.timelineItems.front().mediaAssetId = 999;
+    const SnapshotBuildResult invalidResult = SequencePlaybackSnapshotBuilder::build(project, runtime);
+    require(std::holds_alternative<SnapshotBuildError>(invalidResult),
+            "A missing descriptor reference must reject the entire snapshot.");
 }
 
 } // namespace
@@ -2050,6 +2091,7 @@ int main()
         timelinePresentationResolverBuildsOneCompleteViewSnapshot();
         sourcePlaybackDoesNotMoveTheTimelinePlayhead();
         projectRuntimeTracksExplicitSequenceIdentity();
+        sequenceSnapshotIsImmutableAndSelfContained();
         projectDocumentServiceMaintainsProjectAndMediaConsistency();
         internalTimelineClipboardSupportsCopyCutPasteAndDuplicate();
         focusedTimelineClipOwnsIndependentPlacementSettings();

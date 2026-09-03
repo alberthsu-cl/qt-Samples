@@ -94,6 +94,7 @@ public:
     // Legacy Mini Editor has one sequence. Updating its clip count preserves
     // that sequence identity while changing only its readiness state.
     void setLegacySequenceClipCount(std::size_t timelineClipCount);
+    void advanceActiveSequenceRevision();
 
 private:
     ProjectRuntime(ProjectId projectId, std::vector<TimelineSequence> sequences,

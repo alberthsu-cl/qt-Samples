@@ -215,6 +215,7 @@ void EditorSession::recordTimelineCommand(
 void EditorSession::synchronizeProjectRuntime()
 {
     projectRuntime_.setLegacySequenceClipCount(timelineModel_.clips().size());
+    projectRuntime_.advanceActiveSequenceRevision();
 }
 
 int EditorSession::addTimelineClip(int mediaAssetId, TimelineTrackType trackType,

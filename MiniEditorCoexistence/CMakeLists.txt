@@ -35,6 +35,7 @@ add_library(MiniEditorPlaybackCore STATIC
     src/playback_core/MediaTime.cpp
     src/playback_core/ProjectRuntime.h
     src/playback_core/ProjectRuntime.cpp
+    src/playback_core/SequencePlaybackSnapshot.h
 )
 target_include_directories(MiniEditorPlaybackCore PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/playback_core"
@@ -47,6 +48,8 @@ add_executable(MiniEditorCoexistence WIN32
     src/MediaKind.h
     src/EditorProject.h
     src/EditorProject.cpp
+    src/SequencePlaybackSnapshotBuilder.h
+    src/SequencePlaybackSnapshotBuilder.cpp
     src/EditorChange.h
     src/EditorHistory.h
     src/EditorHistory.cpp
@@ -219,6 +222,8 @@ if(BUILD_TESTING)
         src/FrameTimecode.h
         src/EditorProject.h
         src/EditorProject.cpp
+        src/SequencePlaybackSnapshotBuilder.h
+        src/SequencePlaybackSnapshotBuilder.cpp
         src/EditorChange.h
         src/EditorHistory.h
         src/EditorHistory.cpp

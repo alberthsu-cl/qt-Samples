@@ -113,6 +113,14 @@ void ProjectRuntime::setLegacySequenceClipCount(std::size_t timelineClipCount)
     updateReadinessFromActiveSequence();
 }
 
+void ProjectRuntime::advanceActiveSequenceRevision()
+{
+    if (!activeSequenceId_ || sequences_.size() != 1)
+        return;
+
+    sequences_.front().revision = sequences_.front().revision.next();
+}
+
 void ProjectRuntime::updateReadinessFromActiveSequence()
 {
     if (readiness_ == ProjectReadiness::Failed)
