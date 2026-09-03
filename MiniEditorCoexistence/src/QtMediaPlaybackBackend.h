@@ -6,11 +6,14 @@
 
 #include <QAudioOutput>
 #include <QMediaPlayer>
+#include <QObject>
 
+#include <atomic>
 #include <functional>
 
 class EditorSession;
 class MediaLibrary;
+class QVideoFrame;
 class QVideoSink;
 
 // Qt Multimedia playback for a selected source video/audio and the active
@@ -57,6 +60,12 @@ private:
     void beginSilentFrameDecode(int targetSourceFrame);
     void finishSilentFirstFrameDecode();
     void cancelSilentFirstFrameDecode();
+    // Runs on the GUI thread (queued there from QVideoSink::videoFrameChanged,
+    // which Qt's FFmpeg-backed multimedia pipeline can emit from its own
+    // decoder thread). frameGeneration is videoOutputGeneration_'s value at
+    // the moment the frame was actually emitted, captured on whichever
+    // thread that was -- see setVideoOutput()'s connection for why.
+    void handleVideoFrameChanged(const QVideoFrame &frame, int frameGeneration);
     bool shouldMuteVideoTrackAudio() const;
     void applyPlaybackRate();
     void stopRealPlayback();
@@ -85,6 +94,22 @@ private:
     bool loadedSourceMediaReady_ = false;
     bool pauseAfterFirstVideoFrame_ = false;
     int silentDecodeTargetFrame_ = 0;
+    // Incremented every time a new silent-decode-then-pause wait begins
+    // (beginSilentFrameDecode()) -- a new source selection or a preroll
+    // seek. A frame captured for an earlier generation must not be allowed
+    // to act on whatever is loaded now (requirement: an old source frame
+    // must not pause a newly selected source/clip). std::atomic because
+    // QVideoSink::videoFrameChanged's own emitting thread reads it, while
+    // only the GUI thread ever writes it.
+    std::atomic<int> videoOutputGeneration_{0};
+    // A GUI-thread-affine connection context purely for thread-affinity
+    // purposes: QtMediaPlaybackBackend is not itself a QObject, and
+    // QVideoSink::videoFrameChanged can be emitted from a Qt Multimedia
+    // FFmpeg backend's own decoder thread, not the GUI thread that owns
+    // player_. Connecting through this object makes Qt deliver the queued
+    // callback on the GUI thread, where it is safe to call QMediaPlayer
+    // methods (see setVideoOutput()).
+    QObject videoFrameCallbackContext_;
     int pendingSourceSeekFrame_ = 0;
     int pendingTimelineSeekFrame_ = 0;
     bool hasPendingTimelineSeek_ = false;

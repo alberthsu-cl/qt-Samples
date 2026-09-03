@@ -5,11 +5,13 @@
 
 #include <QCoreApplication>
 #include <QEventLoop>
+#include <QMetaObject>
 #include <QUrl>
 #include <QVideoFrame>
 #include <QVideoSink>
 
 #include <algorithm>
+#include <atomic>
 #include <filesystem>
 #include <utility>
 
@@ -167,44 +169,75 @@ void QtMediaPlaybackBackend::setVideoOutput(QVideoSink *videoSink)
     // A player paused at position zero may never decode a frame. For source
     // selection, begin decoding briefly and pause as soon as frame zero reaches
     // the preview sink, so the user sees a still preview before pressing Play.
+    //
+    // Qt Multimedia's FFmpeg backend can emit videoFrameChanged from its own
+    // decoder thread, not the GUI thread that owns player_ -- calling a
+    // QMediaPlayer method (e.g. pause(), from finishSilentFirstFrameDecode())
+    // synchronously in that case trips QFFmpeg's own thread-affinity assert.
+    // This lambda therefore does nothing but a lock-free read of
+    // videoOutputGeneration_ (capturing which decode-wait this frame belongs
+    // to, still on whichever thread emitted the signal) and hands the rest
+    // off to handleVideoFrameChanged() via a queued call to a GUI-thread-
+    // affine context object, so every QMediaPlayer-touching decision below
+    // runs safely on the GUI thread.
     QObject::connect(videoSink, &QVideoSink::videoFrameChanged,
                      [this](const QVideoFrame &frame) {
-        const std::optional<PreviewSeekRequest> pendingSeek =
-            seekRequests_.current();
-        if (!pauseAfterFirstVideoFrame_ && !pendingSeek)
-            return;
-
-        // A seek can leave one decoded frame from the old position queued in
-        // the sink. Wait until the requested source time arrives before
-        // pausing the silent decode.
-        const int targetSourceFrame = pendingSeek
-            ? pendingSeek->playbackPlan.sourceFrame
-            : silentDecodeTargetFrame_;
-        const qint64 frameStartMicroseconds = frame.startTime();
-        if (frameStartMicroseconds >= 0) {
-            const int framesPerSecond = std::max(
-                1, session_.playbackState().framesPerSecond);
-            const int decodedSourceFrame = static_cast<int>(
-                frameStartMicroseconds * framesPerSecond / 1000000);
-            constexpr int kSeekToleranceFrames = 2;
-            if (std::abs(decodedSourceFrame - targetSourceFrame)
-                > kSeekToleranceFrames) {
-                return;
-            }
-        }
-
-        if (pendingSeek) {
-            const PreviewSeekResult result{
-                pendingSeek->requestId, targetSourceFrame
-            };
-            if (!seekRequests_.accepts(result))
-                return;
-            seekRequests_.complete(result.requestId);
-        }
-
-        if (pauseAfterFirstVideoFrame_)
-            finishSilentFirstFrameDecode();
+        const int frameGeneration =
+            videoOutputGeneration_.load(std::memory_order_acquire);
+        QMetaObject::invokeMethod(&videoFrameCallbackContext_,
+            [this, frame, frameGeneration] {
+                handleVideoFrameChanged(frame, frameGeneration);
+            }, Qt::QueuedConnection);
     });
+}
+
+void QtMediaPlaybackBackend::handleVideoFrameChanged(const QVideoFrame &frame,
+                                                      int frameGeneration)
+{
+    // Discard a frame that was already stale by the time it was emitted: a
+    // newer beginSilentFrameDecode() (a new source selection, a new preroll
+    // seek) has started a different wait since. Without this, a queued
+    // frame from the previously loaded source could satisfy the newly
+    // selected source/clip's position check by coincidence and pause it
+    // prematurely.
+    if (frameGeneration != videoOutputGeneration_.load(std::memory_order_acquire))
+        return;
+
+    const std::optional<PreviewSeekRequest> pendingSeek =
+        seekRequests_.current();
+    if (!pauseAfterFirstVideoFrame_ && !pendingSeek)
+        return;
+
+    // A seek can leave one decoded frame from the old position queued in
+    // the sink. Wait until the requested source time arrives before
+    // pausing the silent decode.
+    const int targetSourceFrame = pendingSeek
+        ? pendingSeek->playbackPlan.sourceFrame
+        : silentDecodeTargetFrame_;
+    const qint64 frameStartMicroseconds = frame.startTime();
+    if (frameStartMicroseconds >= 0) {
+        const int framesPerSecond = std::max(
+            1, session_.playbackState().framesPerSecond);
+        const int decodedSourceFrame = static_cast<int>(
+            frameStartMicroseconds * framesPerSecond / 1000000);
+        constexpr int kSeekToleranceFrames = 2;
+        if (std::abs(decodedSourceFrame - targetSourceFrame)
+            > kSeekToleranceFrames) {
+            return;
+        }
+    }
+
+    if (pendingSeek) {
+        const PreviewSeekResult result{
+            pendingSeek->requestId, targetSourceFrame
+        };
+        if (!seekRequests_.accepts(result))
+            return;
+        seekRequests_.complete(result.requestId);
+    }
+
+    if (pauseAfterFirstVideoFrame_)
+        finishSilentFirstFrameDecode();
 }
 
 void QtMediaPlaybackBackend::setVideoVisibilityHandler(
@@ -651,6 +684,10 @@ void QtMediaPlaybackBackend::beginSilentFrameDecode(int targetSourceFrame)
     pauseAfterFirstVideoFrame_ = true;
     silentDecodeTargetFrame_ = std::max(0, targetSourceFrame);
     audioOutput_.setMuted(true);
+    // A new wait begins: any frame already in flight for a previous wait
+    // (still queued to handleVideoFrameChanged(), possibly from a source
+    // that was just replaced) must not be allowed to satisfy this one.
+    videoOutputGeneration_.fetch_add(1, std::memory_order_acq_rel);
 }
 
 void QtMediaPlaybackBackend::finishSilentFirstFrameDecode()
