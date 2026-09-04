@@ -18,7 +18,7 @@ implementation steps. It is the practical bridge between:
 | 2. Project + snapshots | Strong time/identity values plus immutable project-runtime and sequence snapshots. | **Complete** |
 | 3. Playback authority | `PlaybackSession`, injected fake clock, engine commands, and stale-result rules. | **Complete** |
 | 4. Media integration | Decoder, audio, compositor, and MFC/Qt notification adapters behind a feature flag. | **Complete** |
-| 5. Rollout + migration | Route timeline preview through the new core, compare behavior, make it default, and retire legacy timer advancement. | Planned |
+| 5. Rollout + migration | Route timeline preview through the new core, compare behavior, make it default, and retire legacy timer advancement. | Planned — [plan](milestone-05-rollout-and-migration.md) awaiting approval |
 
 ## How to read and use a milestone
 
@@ -52,7 +52,13 @@ manual validations (real playback, and a real corrupt-file failure) passed,
 and the failure path is now covered automatically by an end-to-end Qt test.
 
 Everything still sits behind feature flags that default off — current
-application behavior is unchanged. [Milestone 5](README.md) is where the new
-path becomes the default: route timeline preview through the new core,
-compare behavior against the legacy path, then retire MFC timer advancement
-and the legacy backend.
+application behavior is unchanged.
+
+[Milestone 5 — Rollout and migration](milestone-05-rollout-and-migration.md)
+is **planned, with implementation gated on plan approval**. It is the first
+milestone whose end state changes default behavior, so its nine issues put
+every behavior-changing step *after* an automated comparison gate: M5-07's
+scenario matrix must be green under a zero-frame-tolerance bar, and human
+visual/audio validation must pass, before the default flips in M5-08. Source-
+asset preview stays on the legacy path throughout, and a compile-time legacy
+fallback is retained past the flip.
