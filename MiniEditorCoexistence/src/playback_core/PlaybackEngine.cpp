@@ -56,6 +56,25 @@ void PlaybackEngine::reportFailure(PlaybackSessionId sessionId, PlaybackGenerati
     queueCv_.notify_one();
 }
 
+void PlaybackEngine::observeClock()
+{
+    {
+        std::lock_guard<std::mutex> lock(queueMutex_);
+        if (queueClosed_)
+            return;
+        // Never let observations pile up behind a busy engine: one pending
+        // "look at the clock" says everything a hundred of them would, and a
+        // 15 ms presentation tick can outpace the queue during a slow
+        // command.
+        for (const QueueItem &item : queue_) {
+            if (std::holds_alternative<QueuedClockObservation>(item))
+                return;
+        }
+        queue_.push_back(QueuedClockObservation{});
+    }
+    queueCv_.notify_one();
+}
+
 PlaybackStatus PlaybackEngine::status() const
 {
     std::lock_guard<std::mutex> lock(statusMutex_);
@@ -77,25 +96,31 @@ void PlaybackEngine::shutdownAndJoin()
         thread_.join();
 }
 
-void PlaybackEngine::publishStatus(std::optional<PlaybackCommandRejected> rejection)
+void PlaybackEngine::refreshStatus(bool notifySink)
 {
-    std::optional<PlaybackStatus> publishedStatus;
-    {
+    PlaybackStatus refreshed = [this] {
         std::lock_guard<std::mutex> lock(statusMutex_);
         latestStatus_ = session_.status();
-        publishedStatus = latestStatus_;
-    }
-    if (rejection) {
-        std::lock_guard<std::mutex> lock(rejectionsMutex_);
-        rejections_.push_back(*rejection);
-    }
+        return latestStatus_;
+    }();
 
-    // Published outside every lock above: a real sink must not block or
-    // call back into the engine, but this class does not depend on that --
-    // it just avoids holding its own locks longer than necessary.
-    if (eventSink_) {
-        eventSink_->publish(PlaybackEvent{*publishedStatus});
-        if (rejection)
+    if (notifySink && eventSink_)
+        eventSink_->publish(PlaybackEvent{refreshed});
+}
+
+void PlaybackEngine::publishStatus(std::optional<PlaybackCommandRejected> rejection)
+{
+    // Published outside every lock: a real sink must not block or call back
+    // into the engine, but this class does not depend on that -- it just
+    // avoids holding its own locks longer than necessary.
+    refreshStatus(/*notifySink=*/true);
+
+    if (rejection) {
+        {
+            std::lock_guard<std::mutex> lock(rejectionsMutex_);
+            rejections_.push_back(*rejection);
+        }
+        if (eventSink_)
             eventSink_->publish(PlaybackEvent{*rejection});
     }
 }
@@ -129,14 +154,23 @@ void PlaybackEngine::run()
 
             if (isShutdown)
                 break; // ADR-005 step 6: the engine thread exits after publishing the final status.
-        } else {
-            // A media-failure (or other future) observation: applied via
-            // PlaybackSession's own identity check (a stale sessionId/
-            // generation is a no-op), never a command, so it can never be
-            // "rejected" -- only its resulting status is published.
-            const auto &failure = std::get<QueuedFailure>(item);
-            session_.reportFailure(failure.sessionId, failure.generation, failure.error);
+        } else if (auto *failure = std::get_if<QueuedFailure>(&item)) {
+            // A media-failure observation: applied via PlaybackSession's own
+            // identity check (a stale sessionId/generation is a no-op), never
+            // a command, so it can never be "rejected" -- only its resulting
+            // status is published.
+            session_.reportFailure(failure->sessionId, failure->generation, failure->error);
             publishStatus(std::nullopt);
+        } else {
+            const PlaybackPhase phaseBefore = session_.status().phase;
+            session_.observeClock();
+            // Always refresh the cached status -- a moving playhead is the
+            // whole reason this observation exists -- but only wake the UI
+            // when something it must react to actually happened. Publishing
+            // an event per tick would be a PostMessage every 15 ms for a
+            // value the tick is about to read anyway.
+            const bool completed = session_.status().phase != phaseBefore;
+            refreshStatus(completed);
         }
     }
 }

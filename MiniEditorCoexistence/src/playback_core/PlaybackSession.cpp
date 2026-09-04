@@ -80,6 +80,38 @@ void PlaybackSession::resetToContextStart()
         sourceTime_ = sourceTimeZero();
 }
 
+bool PlaybackSession::hasReachedSequenceEnd() const
+{
+    if (!isSequenceMode() || phase_ != PlaybackPhase::Playing || !snapshot_)
+        return false;
+
+    // The end is the first sequence time not covered by the last frame. A
+    // sequence with no content has no end to reach; Play on an empty
+    // timeline stays Playing at frame zero, exactly as the legacy path does.
+    if (snapshot_->duration <= FrameCount::zero())
+        return false;
+
+    const TimelineFrame endFrame = TimelineFrame::zero() + snapshot_->duration;
+    return resolveSequenceTime(anchor_, clock_)
+        >= sequenceTimeAtFrameStart(endFrame, snapshot_->frameRate);
+}
+
+void PlaybackSession::observeClock()
+{
+    if (!hasReachedSequenceEnd())
+        return;
+
+    // ADR-002: natural completion increments the generation and invalidates
+    // pending media work, then finishes in Stopped at timeline frame zero.
+    generation_ = generation_.next();
+    resetToContextStart();
+    phase_ = PlaybackPhase::Stopped;
+    statusSeq_ = statusSeq_.next();
+    // lastAppliedCommandId_ is deliberately left alone: no command was
+    // applied, and claiming one was would misreport which request the UI is
+    // seeing the result of.
+}
+
 void PlaybackSession::bumpStatusSeq(PlaybackCommandId commandId)
 {
     statusSeq_ = statusSeq_.next();
@@ -137,6 +169,11 @@ std::optional<PlaybackCommandRejected> PlaybackSession::applyCommand(const Playb
 {
     if (!acceptingCommands_)
         return PlaybackCommandRejected{commandId, PlaybackRejectReason::QueueClosed};
+
+    // A command that arrives after the sequence finished must act on the
+    // completed state, not on a position that ran past the end while nobody
+    // was looking. Play after completion therefore starts from frame zero.
+    observeClock();
 
     return std::visit([this, commandId](const auto &cmd) -> std::optional<PlaybackCommandRejected> {
         using T = std::decay_t<decltype(cmd)>;

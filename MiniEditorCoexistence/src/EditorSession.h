@@ -90,6 +90,14 @@ public:
     // a second.
     void adoptRoutedTimelineTransport(
         const mini_editor::playback_core::TimelineTransportView &view);
+
+    // How many times a legacy playback mutator has changed the *timeline*
+    // transport state. ADR-002 requires the routed path to call none of
+    // them, and M5-07's comparison harness asserts exactly that -- a counter
+    // rather than an assertion, so the harness can state the fact instead of
+    // the build merely not crashing. adoptRoutedTimelineTransport() does not
+    // count: it is the painting cache, not a mutator.
+    std::size_t legacyTimelinePlaybackMutationCount() const;
     // Explicit timeline editing may replace a frozen paused preview without
     // moving the playhead. Call this before publishing the new selection so
     // every observer resolves that selection as the edit target.
@@ -116,6 +124,9 @@ private:
                                 std::optional<int> sourceAssetIndex);
     PlaybackState &activePlaybackState();
     const PlaybackState &activePlaybackState() const;
+    // Called by every legacy playback mutator; counts only when the state it
+    // is about to change is the timeline's.
+    void recordLegacyTimelinePlaybackMutation();
     int insertTimelineClipCopy(const TimelineClip &sourceClip,
                                int sourceAssetIndex, int desiredStartFrame);
     void notifyStateChanged(EditorChange changes);
@@ -130,6 +141,7 @@ private:
     bool isTimelineFocused_ = false;
     PlaybackState sourcePlaybackState_;
     PlaybackState timelinePlaybackState_;
+    std::size_t legacyTimelinePlaybackMutations_ = 0;
     TimelineViewState timelineViewState_;
     TimelineAudioMixState timelineAudioMixState_;
     mini_editor::playback_core::ProjectRuntime projectRuntime_;

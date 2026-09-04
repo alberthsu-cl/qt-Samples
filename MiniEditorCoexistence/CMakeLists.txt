@@ -338,17 +338,36 @@ if(BUILD_TESTING)
 
     add_test(NAME MiniEditorCoreTests COMMAND $<TARGET_FILE:MiniEditorCoreTests>)
 
+    # M5-07: the automated gate for the default flip. Same editor sources as
+    # MiniEditorCoreTests, because it drives the real legacy transport rather
+    # than a stand-in for it, and no Qt -- both transports are
+    # framework-neutral, which is what makes this comparison possible at all.
+    get_target_property(mini_editor_core_test_sources MiniEditorCoreTests SOURCES)
+    list(REMOVE_ITEM mini_editor_core_test_sources tests/MiniEditorCoreTests.cpp)
+    add_executable(MiniEditorPlaybackComparisonTests
+        tests/MiniEditorPlaybackComparisonTests.cpp
+        ${mini_editor_core_test_sources}
+    )
+    target_include_directories(MiniEditorPlaybackComparisonTests PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    )
+    target_link_libraries(MiniEditorPlaybackComparisonTests PRIVATE MiniEditorPlaybackCore)
+    add_test(NAME MiniEditorPlaybackComparisonTests
+             COMMAND $<TARGET_FILE:MiniEditorPlaybackComparisonTests>)
+
     # Build this target explicitly when you want the full local check. Normal
     # app builds stay fast and do not run tests as an implicit post-build step.
     add_custom_target(check
         COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure -C $<CONFIG>
         DEPENDS MiniEditorCoexistence MiniEditorPlaybackCoreTests MiniEditorCoreTests
+                MiniEditorPlaybackComparisonTests
         USES_TERMINAL
     )
 
     source_group("Tests" FILES
         tests/MiniEditorPlaybackCoreTests.cpp
         tests/MiniEditorCoreTests.cpp
+        tests/MiniEditorPlaybackComparisonTests.cpp
     )
 endif()
 

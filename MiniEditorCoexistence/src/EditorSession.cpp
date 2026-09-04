@@ -148,6 +148,17 @@ const PlaybackState &EditorSession::activePlaybackState() const
     return isTimelineFocused_ ? timelinePlaybackState_ : sourcePlaybackState_;
 }
 
+void EditorSession::recordLegacyTimelinePlaybackMutation()
+{
+    if (isTimelineFocused_)
+        ++legacyTimelinePlaybackMutations_;
+}
+
+std::size_t EditorSession::legacyTimelinePlaybackMutationCount() const
+{
+    return legacyTimelinePlaybackMutations_;
+}
+
 const TimelineViewState &EditorSession::timelineViewState() const
 {
     return timelineViewState_;
@@ -727,6 +738,7 @@ bool EditorSession::redo()
 
 void EditorSession::handlePlaybackCommand(LegacyPlaybackCommand command)
 {
+    recordLegacyTimelinePlaybackMutation();
     PlaybackState &playback = activePlaybackState();
 
     switch (command) {
@@ -762,6 +774,7 @@ void EditorSession::handlePlaybackCommand(LegacyPlaybackCommand command)
 
 void EditorSession::advancePlaybackFrame()
 {
+    recordLegacyTimelinePlaybackMutation();
     PlaybackState &playback = activePlaybackState();
     if (!playback.isPlaying)
         return;
@@ -786,6 +799,7 @@ void EditorSession::advancePlaybackFrame()
 
 void EditorSession::seekTimeline(int frame)
 {
+    recordLegacyTimelinePlaybackMutation();
     PlaybackState &playback = activePlaybackState();
     playback.currentFrame = std::clamp(
         frame, kFirstFrame, std::max(0, playback.durationFrames - 1));
@@ -794,6 +808,7 @@ void EditorSession::seekTimeline(int frame)
 
 void EditorSession::setPlaybackDuration(int durationFrames, bool resetToBeginning)
 {
+    recordLegacyTimelinePlaybackMutation();
     PlaybackState &playback = activePlaybackState();
     playback.durationFrames = std::max(1, durationFrames);
     playback.isPlaying = false;
@@ -806,6 +821,7 @@ void EditorSession::setPlaybackDuration(int durationFrames, bool resetToBeginnin
 void EditorSession::updatePlaybackFromBackend(
     int currentFrame, int durationFrames, bool isPlaying, bool isPaused)
 {
+    recordLegacyTimelinePlaybackMutation();
     PlaybackState &playback = activePlaybackState();
     PlaybackState updated = playback;
     updated.durationFrames = std::max(1, durationFrames);
@@ -827,6 +843,7 @@ void EditorSession::updatePlaybackFromBackend(
 
 void EditorSession::updatePlaybackRatePercent(int ratePercent)
 {
+    recordLegacyTimelinePlaybackMutation();
     const int clampedRate = std::clamp(ratePercent, 50, 200);
     if (sourcePlaybackState_.playbackRatePercent == clampedRate
         && timelinePlaybackState_.playbackRatePercent == clampedRate) {
@@ -842,6 +859,7 @@ void EditorSession::updatePlaybackRatePercent(int ratePercent)
 
 void EditorSession::leavePausedTimelinePlaybackForEditing()
 {
+    recordLegacyTimelinePlaybackMutation();
     if (timelinePlaybackState_.isPlaying || !timelinePlaybackState_.isPaused)
         return;
 

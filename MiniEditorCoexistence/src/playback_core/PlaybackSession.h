@@ -70,8 +70,24 @@ public:
     void reportSourcePosition(PlaybackSessionId sessionId, PlaybackGeneration generation,
                               SourceTimestamp position);
 
+    // ADR-002's natural completion -- the one transition no command causes.
+    // "Sequence preview with ReturnToStart finishes in Stopped at timeline
+    // frame zero": that end is reached by the clock, not by anything the user
+    // did, so somebody has to look. This is that look, and it is an
+    // observation like any other: it applies the transition, it does not
+    // decide it.
+    //
+    // Called automatically at the start of every applyCommand(), so a
+    // command arriving after the end never acts on a past-the-end position.
+    // Callers that let the clock run freely (PlaybackEngine, and any test
+    // driving a session directly) must also call it as time passes, or the
+    // position keeps growing past the sequence duration until the next
+    // command lands.
+    void observeClock();
+
 private:
     bool isSequenceMode() const;
+    bool hasReachedSequenceEnd() const;
     PlaybackContext buildContext() const;
     SequenceTime clampToSnapshotDuration(SequenceTime time) const;
     SourceTimestamp clampSourceTime(SourceTimestamp time) const;

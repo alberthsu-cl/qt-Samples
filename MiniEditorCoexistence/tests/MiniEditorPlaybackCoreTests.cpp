@@ -2079,6 +2079,96 @@ bool verifyPreviewDriverSchedulesAudioIndependently()
                    "The snapshot's isVideoTrackMuted must reach the adapter.");
 }
 
+bool verifyNaturalSequenceCompletion()
+{
+    using namespace mini_editor::playback_core;
+
+    // ADR-002: "sequence preview with ReturnToStart finishes in Stopped at
+    // timeline frame zero." Nothing commands that transition -- the clock
+    // reaches the end -- so something has to look, and observeClock() is the
+    // look. Before M5-07 nothing did, and a routed playhead simply ran past
+    // the end of the timeline forever.
+    const SequenceId sequenceId = SequenceId::create();
+    FakePlaybackClock clock(MasterClockTime::fromMicroseconds(0));
+    PlaybackSession session(PlaybackSource{SequencePreview{sequenceId}}, clock);
+    session.applyCommand(
+        InstallSnapshot{makeSnapshot(sequenceId, FrameRate(30, 1), FrameCount::fromFrames(90))},
+        PlaybackCommandId::create());
+    session.applyCommand(Play{}, PlaybackCommandId::create());
+
+    const PlaybackGeneration playingGeneration = session.status().generation;
+
+    // One frame short of the end: still playing, still where the clock says.
+    clock.set(MasterClockTime::fromMicroseconds(2'966'667)); // frame 89 at 30 fps
+    session.observeClock();
+    if (!require(session.status().phase == PlaybackPhase::Playing
+                     && std::get<SequencePreviewStatus>(session.status().context).timelineFrame
+                         == TimelineFrame::fromFrameNumber(89),
+                 "The last frame of the sequence must still be playing."))
+        return false;
+
+    // Past the end.
+    clock.set(MasterClockTime::fromMicroseconds(3'100'000));
+    session.observeClock();
+    const PlaybackStatus completed = session.status();
+    if (!require(completed.phase == PlaybackPhase::Stopped
+                     && std::get<SequencePreviewStatus>(completed.context).timelineFrame
+                         == TimelineFrame::zero(),
+                 "Reaching the end must finish in Stopped at timeline frame zero, not "
+                 "keep counting frames that do not exist."))
+        return false;
+
+    // ADR-002: natural completion increments the generation, which is what
+    // invalidates media work still in flight for a sequence that has ended.
+    if (!require(completed.generation != playingGeneration
+                     && !session.isCurrent(completed.sessionId, playingGeneration),
+                 "Natural completion must advance the generation."))
+        return false;
+
+    // Idempotent: looking again changes nothing.
+    const StatusSequenceNumber afterFirstLook = session.status().statusSeq;
+    session.observeClock();
+    session.observeClock();
+    if (!require(session.status().statusSeq == afterFirstLook,
+                 "Observing the clock after completion must publish nothing new."))
+        return false;
+
+    // "Next Play works", from the start.
+    clock.set(MasterClockTime::fromMicroseconds(4'000'000));
+    session.applyCommand(Play{}, PlaybackCommandId::create());
+    if (!require(session.status().phase == PlaybackPhase::Playing
+                     && std::get<SequencePreviewStatus>(session.status().context).timelineFrame
+                         == TimelineFrame::zero(),
+                 "Playing again after completion must start from frame zero."))
+        return false;
+
+    // A command arriving after the end, with nobody having looked in between,
+    // must still act on the completed state rather than on a position that
+    // ran off the end while unobserved.
+    clock.set(MasterClockTime::fromMicroseconds(9'000'000));
+    session.applyCommand(Pause{}, PlaybackCommandId::create());
+    if (!require(session.status().phase == PlaybackPhase::Stopped
+                     && std::get<SequencePreviewStatus>(session.status().context).timelineFrame
+                         == TimelineFrame::zero(),
+                 "A command applied after an unobserved completion must see the "
+                 "completed state, not a past-the-end position."))
+        return false;
+
+    // An empty sequence has no end to reach; Play on one stays Playing at
+    // frame zero rather than completing instantly.
+    const SequenceId emptyId = SequenceId::create();
+    FakePlaybackClock emptyClock(MasterClockTime::fromMicroseconds(0));
+    PlaybackSession empty(PlaybackSource{SequencePreview{emptyId}}, emptyClock);
+    empty.applyCommand(
+        InstallSnapshot{makeSnapshot(emptyId, FrameRate(30, 1), FrameCount::zero())},
+        PlaybackCommandId::create());
+    empty.applyCommand(Play{}, PlaybackCommandId::create());
+    emptyClock.set(MasterClockTime::fromMicroseconds(5'000'000));
+    empty.observeClock();
+    return require(empty.status().phase == PlaybackPhase::Playing,
+                   "An empty sequence has no end to complete at.");
+}
+
 } // namespace
 
 int main()
@@ -2150,7 +2240,8 @@ int main()
         || !verifyPreviewDriverHoldsWhenItCannotResolve()
         || !verifyTimelineTransportView()
         || !verifyFramePresentedIsDiagnosticsOnly()
-        || !verifyPreviewDriverSchedulesAudioIndependently()) {
+        || !verifyPreviewDriverSchedulesAudioIndependently()
+        || !verifyNaturalSequenceCompletion()) {
         return 1;
     }
 

@@ -61,8 +61,24 @@ public:
     void reportFailure(PlaybackSessionId sessionId, PlaybackGeneration generation,
                        PlaybackError error);
 
+    // Asks the engine thread to look at the clock: applies ADR-002's natural
+    // completion if the sequence has finished, and refreshes the snapshot
+    // status() returns.
+    //
+    // A free-running transport applies no commands, so without this the
+    // cached status stays frozen at whatever the last command produced --
+    // the playhead appears not to move at all, and the end of the sequence
+    // is never noticed. Enters the same serialized queue as commands and
+    // failures, so it is an observation, not a ninth ADR-002 command.
+    //
+    // Callable from any thread and never blocks, which means status() is
+    // still up to one observation behind when it returns. That is the price
+    // of ADR-005's "the GUI thread must not block waiting for the engine",
+    // and at a presentation tick's cadence it is one tick of lag.
+    void observeClock();
+
     // A thread-safe snapshot of the latest status published after the most
-    // recently applied command.
+    // recently applied command or clock observation.
     PlaybackStatus status() const;
 
     // Returns and clears every PlaybackCommandRejected produced (by submit()
@@ -86,13 +102,19 @@ private:
         PlaybackError error;
     };
 
-    using QueueItem = std::variant<QueuedCommand, QueuedFailure>;
+    // An observation with no payload: "look at the clock."
+    struct QueuedClockObservation {};
+
+    using QueueItem = std::variant<QueuedCommand, QueuedFailure, QueuedClockObservation>;
 
     void run();
     // Refreshes latestStatus_ from session_ and pushes it (and, if present,
     // rejection) to eventSink_. Called on the engine thread after every
     // processed queue item.
     void publishStatus(std::optional<PlaybackCommandRejected> rejection);
+    // Recomputes latestStatus_ from session_, waking the sink only when the
+    // caller says the change is one the UI has to react to.
+    void refreshStatus(bool notifySink);
 
     PlaybackSession session_; // mutated only on the engine thread (thread_).
 

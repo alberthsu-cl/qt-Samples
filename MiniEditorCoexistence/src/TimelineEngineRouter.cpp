@@ -245,6 +245,15 @@ void TimelineEngineRouter::handleEvents(std::vector<PlaybackEvent> events)
 
 void TimelineEngineRouter::onPresentationTick()
 {
+    // M5-07 found this the hard way: PlaybackEngine::status() is the status
+    // published after the last *command*, and a free-running transport
+    // applies none -- so without asking the engine to look at its clock, this
+    // tick read a frozen playhead and no clip boundary was ever crossed.
+    // observeClock() does not block, so status() below is up to one tick
+    // behind. At 15 ms that is invisible, and blocking here would violate
+    // ADR-005.
+    engine_->observeClock();
+
     // A plain refresh, not a reposition: the transport is simply where the
     // clock says it is.
     drivePreview(engine_->status(), /*transportJustRepositioned=*/false);
