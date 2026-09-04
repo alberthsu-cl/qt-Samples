@@ -573,9 +573,15 @@ void MainFrame::updateTimelineEngineSnapshot(EditorChange changes)
         return;
     }
 
+    // EditorSession::projectSnapshot() deliberately leaves mediaAssets empty --
+    // it is the serialization-side view, and ProjectDocumentService fills the
+    // library in separately the same way. Without this the builder cannot
+    // resolve any clip's media reference and rejects the whole snapshot.
+    EditorProject project = editorSession_.projectSnapshot();
+    project.mediaAssets = mediaLibrary_.assets();
+
     mini_editor::playback_core::SnapshotBuildResult result =
-        SequencePlaybackSnapshotBuilder::build(editorSession_.projectSnapshot(),
-                                               editorSession_.projectRuntime());
+        SequencePlaybackSnapshotBuilder::build(project, editorSession_.projectRuntime());
     if (auto *snapshot = std::get_if<mini_editor::playback_core::SequencePlaybackSnapshotPtr>(&result)) {
         timelineEngineRouter_->installSnapshot(*snapshot);
     } else {
