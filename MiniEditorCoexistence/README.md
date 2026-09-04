@@ -17,6 +17,34 @@ The journal stays intentionally short. It is updated only when an
 architecture decision is accepted or an implementation milestone changes what
 the system can demonstrate.
 
+## Playback-engine milestones: current status
+
+The playback-engine study has completed **Milestones 1–4**. The architecture
+is intentionally staged: the legacy Qt playback backend remains the default
+while the new engine is verified behind feature flags.
+
+- **M1 — Core foundation:** a framework-neutral `MiniEditorPlaybackCore`
+  target and explicitly named legacy transport commands.
+- **M2 — Project and snapshots:** strong time/identity values plus immutable
+  sequence playback snapshots.
+- **M3 — Playback authority:** `PlaybackSession`, injected clocks,
+  deterministic command/state transitions, and stale-result rejection.
+- **M4 — Media integration:** the first real engine thread, Qt Multimedia
+  worker, MFC `PostMessage`/`ON_MESSAGE` bridge, failure routing through the
+  serialized engine queue, and optional timeline-engine routing.
+
+M4's routing flag, `MINI_EDITOR_ENABLE_ENGINE_ROUTING`, defaults to `OFF`.
+When enabled for validation, it opens a dedicated preview window and currently
+resolves the first V1 video clip only. The normal application preview and
+source-asset route remain unchanged. Milestone 5 will compare the two paths,
+expand routing deliberately, and retire legacy timer advancement only after
+that comparison is accepted.
+
+For the rationale and detailed acceptance evidence, see the
+[architecture decisions](docs/architecture/decisions/README.md),
+[milestone roadmap](docs/architecture/milestones/README.md), and
+[Milestone 4 plan](docs/architecture/milestones/milestone-04-media-integration.md).
+
 ## Phase 0 — Pure MFC baseline
 
 The application contains four focused custom MFC child windows:
