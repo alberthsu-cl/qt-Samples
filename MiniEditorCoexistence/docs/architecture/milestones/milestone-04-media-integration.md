@@ -313,11 +313,22 @@ never mutates `PlaybackSession` directly; the consumer validates identity).
 
 ## M4-06 — Feature-flagged routing
 
-**Gate: do not start until M4-07 is complete and the user has finished their
-own manual smoke-test validation of M4-04/M4-05.** Both are explicit
-prerequisites, not just dependency-graph housekeeping.
+**Status: implemented, pending manual validation.** M4-07 and the user's
+manual smoke-test validation of M4-04/M4-05 both completed first, as
+required by this gate.
 
 Wires everything above together behind a flag that defaults off.
+
+**Chosen scope (see also the design note below):** timeline routing uses its
+own standalone preview window, not the app's real preview panel — the
+milestone's own acceptance criteria (no legacy mutator, no dual authority,
+off = unchanged) do not require live visual parity in the real panel, and
+that work reads more like Milestone 5's "compare behavior" job. This was a
+deliberate choice (asked of the user rather than decided silently) once
+`QtMediaPlaybackBackend`'s shared `player_`/`timelineAudioPlayer_` design —
+one `QMediaPlayer` already serving both source preview and timeline video —
+turned redirecting the real preview panel's video sink into materially
+higher-risk work than the alternative.
 
 **Design note requiring a decision, not just a name:** ADR-007 says "feature
 flags select an adapter or preview surface at the application boundary," but
@@ -353,6 +364,19 @@ criterion below if preferred.
 
 Architecture: ADR-002 (criterion 13, now reachable), ADR-007 (feature-flag
 section).
+
+**Verification:** both build trees pass all tests with the flag at its OFF
+default; a build with the flag on compiles, links, and passes the full
+headless test suite. Not yet verified: actually running the app with routing
+on and confirming the standalone timeline-preview window shows real video
+during timeline playback — needs a human running the build by hand, the same
+as M4-04/M4-05 did.
+
+**Scope note carried over from the router's own implementation:** only the
+first video clip on V1 is opened for preview. Multi-clip timeline resolution
+(switching source as the playhead crosses clip boundaries) needs
+`TimelinePlaybackResolver` adapted to consume a snapshot — ADR-003 migration
+step 3, still unstarted, out of scope here.
 
 ## What remains deliberately deferred
 

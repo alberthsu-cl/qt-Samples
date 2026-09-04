@@ -42,11 +42,13 @@ human decision.
 [Milestone 2 — Project and snapshots](milestone-02-project-and-snapshots.md),
 and [Milestone 3 — Playback authority](milestone-03-playback-authority.md)
 are complete. [Milestone 4 — Media integration](milestone-04-media-integration.md)
-is in progress: it adds the engine thread, decoder/audio/compositor ports,
-and the MFC/Qt UI notification bridge that Milestone 3's identity and
-state-machine values were built for. It is the first milestone to introduce
-real concurrency and touch live Qt/MFC application code, so it stays in
-fake-port core-only territory as long as possible and calls out its two
-higher-risk, real-integration issues explicitly. Everything remains behind a
-feature flag that defaults off — current application behavior is unchanged
-until Milestone 5 deliberately switches it on for comparison.
+has all seven issues (M4-01 through M4-07) implemented, including the
+feature-flagged timeline routing that was this milestone's last piece; it is
+the first milestone to introduce real concurrency and touch live Qt/MFC
+application code, so it called out its higher-risk, real-integration issues
+explicitly throughout rather than treating them as equivalent to the
+fake-port core work. M4-04/M4-05 have completed manual validation; M4-06's
+own manual validation (does the routed timeline preview actually show real
+video) is still pending. Everything remains behind feature flags that
+default off — current application behavior is unchanged until Milestone 5
+deliberately switches one on for comparison.
