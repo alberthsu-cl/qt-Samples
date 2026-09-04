@@ -37,6 +37,21 @@ TimelineEngineRouter::TimelineEngineRouter(HWND notifyTarget, UINT notifyMessage
     previewWindow_->resize(640, 360);
     worker_.attachExternalVideoOutput(previewWindow_->videoSink());
 
+    // M4-08: the worker never touches PlaybackSession/PlaybackEngine directly
+    // -- it only emits this signal. Reporting the failure through the
+    // engine's serialized queue, tagged with whatever session/generation is
+    // current right now, is this handler's job, exactly like
+    // EngineSmokeTestSession's identical connection (src/EngineSmokeTestSession.cpp).
+    // A stale identity by the time this is processed is discarded by
+    // PlaybackSession itself.
+    QObject::connect(&worker_, &QtPlaybackMediaWorker::mediaErrorOccurred, this,
+                     [this](const QString &message) {
+                         logLine(L"QMediaPlayer error: %hs", message.toStdString().c_str());
+                         const PlaybackStatus current = engine_->status();
+                         engine_->reportFailure(current.sessionId, current.generation,
+                                                PlaybackError{message.toStdString()});
+                     });
+
     logLine(L"Router constructed. sessionId=%llu",
             static_cast<unsigned long long>(engine_->status().sessionId.valueForDiagnostics()));
 }

@@ -1193,12 +1193,51 @@ bool verifyPlaybackEngineFailureObservation()
     engineB.shutdownAndJoin();
 
     const PlaybackStatus statusB = engineB.status();
-    return require(statusB.phase != PlaybackPhase::Failed,
-                   "A stale-generation failure observation must not transition the session to "
-                   "Failed.")
-        && require(statusB.ratePercent == 150,
-                   "A command submitted after a stale failure observation must still be applied "
-                   "in submission order.");
+    if (!require(statusB.phase != PlaybackPhase::Failed,
+                 "A stale-generation failure observation must not transition the session to "
+                 "Failed.")
+        || !require(statusB.ratePercent == 150,
+                    "A command submitted after a stale failure observation must still be "
+                    "applied in submission order.")) {
+        return false;
+    }
+
+    // --- M4-08: TimelineEngineRouter and EngineSmokeTestSession both handle
+    // a worker's mediaErrorOccurred with the exact same call shape:
+    //     const PlaybackStatus current = engine_->status();
+    //     engine_->reportFailure(current.sessionId, current.generation, ...);
+    // i.e. one status() read, both identity fields destructured from that
+    // single snapshot -- not read independently. Model that literally, for
+    // both the current and the stale case. ---
+    const SequenceId sequenceIdC = SequenceId::create();
+    FakePlaybackClock clockC(MasterClockTime::fromMicroseconds(0));
+    PlaybackEngine engineC(PlaybackSource{SequencePreview{sequenceIdC}}, clockC);
+
+    const PlaybackStatus capturedBeforeFailureC = engineC.status(); // the "read status()" step
+    engineC.reportFailure(capturedBeforeFailureC.sessionId, capturedBeforeFailureC.generation,
+                          PlaybackError{"worker error, current"});
+    engineC.shutdownAndJoin();
+    if (!require(engineC.status().phase == PlaybackPhase::Failed,
+                 "The worker-error call shape (destructure identity from one status() snapshot) "
+                 "must transition to Failed when that snapshot is still current.")) {
+        return false;
+    }
+
+    const SequenceId sequenceIdD = SequenceId::create();
+    FakePlaybackClock clockD(MasterClockTime::fromMicroseconds(0));
+    PlaybackEngine engineD(PlaybackSource{SequencePreview{sequenceIdD}}, clockD);
+
+    const PlaybackStatus capturedBeforeFailureD = engineD.status(); // captured, then events overtake it
+    auto snapshotD = makeSnapshot(sequenceIdD, FrameRate(30, 1), FrameCount::fromFrames(300));
+    engineD.submit(InstallSnapshot{snapshotD}, PlaybackCommandId::create());
+    engineD.submit(Play{}, PlaybackCommandId::create());
+    engineD.reportFailure(capturedBeforeFailureD.sessionId, capturedBeforeFailureD.generation,
+                          PlaybackError{"worker error, now stale"});
+    engineD.shutdownAndJoin();
+    return require(engineD.status().phase != PlaybackPhase::Failed,
+                   "The worker-error call shape must discard the failure when the status() "
+                   "snapshot it was built from has since gone stale, exactly like a real "
+                   "corrupt-file error arriving after the user has already moved on.");
 }
 
 } // namespace
