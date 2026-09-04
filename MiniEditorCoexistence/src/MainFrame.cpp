@@ -9,6 +9,9 @@
 #if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_SMOKE_TEST
 #include <QString>
 #endif
+#if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_ROUTING
+#include "SequencePlaybackSnapshotBuilder.h"
+#endif
 
 #include <algorithm>
 #include <array>
@@ -269,11 +272,25 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     }
 #endif
 
+#if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_ROUTING
+    // M4-06: timeline preview routes through the new engine from here on.
+    // Source preview and playbackBackend_ are completely unaffected.
+    if (editorSession_.projectRuntime().activeSequenceId()) {
+        timelineEngineRouter_ = std::make_unique<TimelineEngineRouter>(
+            GetSafeHwnd(), WM_TIMELINE_ENGINE_NOTIFICATION,
+            *editorSession_.projectRuntime().activeSequenceId());
+    }
+#endif
+
     // From here onward each framework-neutral session change refreshes every
     // active MFC/Qt view. MainFrame remains the composition and layout owner.
     editorSessionObserverId_ = editorSession_.addObserver(
-        [this](EditorChange changes) { refreshEditorViews(changes); });
+        [this](EditorChange changes) {
+            refreshEditorViews(changes);
+            updateTimelineEngineSnapshot(changes);
+        });
     refreshEditorViews(EditorChange::All);
+    updateTimelineEngineSnapshot(EditorChange::All);
     isWorkspaceReady_ = true;
     return 0;
 }
@@ -404,6 +421,14 @@ void MainFrame::OnUpdateEditSplitClip(CCmdUI *commandUi)
 void MainFrame::OnTimer(UINT_PTR timerId)
 {
     if (timerId == kPlaybackTimerId) {
+        // ADR-002: "The MFC playback timer will no longer advance one
+        // timeline frame" on the routed path -- the new engine's own thread
+        // and clock own timeline transport instead, and EditorSession's
+        // timelinePlaybackState() is not updated for it, so there is
+        // nothing correct for this tick to read or advance.
+        if (isTimelineEngineRoutingActive())
+            return;
+
         // The same timer also pumps Qt events during a stopped, silent
         // one-frame decode. Only real timeline playback is allowed to move
         // selection with the head; otherwise clicking a clip would be undone
@@ -515,6 +540,45 @@ LRESULT MainFrame::OnPlaybackEngineNotification(WPARAM, LPARAM)
     return 0;
 }
 
+LRESULT MainFrame::OnTimelineEngineNotification(WPARAM, LPARAM)
+{
+#if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_ROUTING
+    if (timelineEngineRouter_)
+        timelineEngineRouter_->onNotification();
+#endif
+    return 0;
+}
+
+bool MainFrame::isTimelineEngineRoutingActive() const
+{
+#if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_ROUTING
+    return timelineEngineRouter_ && editorSession_.isTimelineFocused();
+#else
+    return false;
+#endif
+}
+
+void MainFrame::updateTimelineEngineSnapshot(EditorChange changes)
+{
+#if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_ROUTING
+    if (!timelineEngineRouter_)
+        return;
+    if (!includesChange(changes, EditorChange::TimelineClip)
+        && !includesChange(changes, EditorChange::AudioMix)
+        && !includesChange(changes, EditorChange::All)) {
+        return;
+    }
+
+    mini_editor::playback_core::SnapshotBuildResult result =
+        SequencePlaybackSnapshotBuilder::build(editorSession_.projectSnapshot(),
+                                               editorSession_.projectRuntime());
+    if (auto *snapshot = std::get_if<mini_editor::playback_core::SequencePlaybackSnapshotPtr>(&result))
+        timelineEngineRouter_->installSnapshot(*snapshot);
+#else
+    (void)changes;
+#endif
+}
+
 #if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_SMOKE_TEST
 void MainFrame::toggleEngineSmokeTest()
 {
@@ -599,6 +663,23 @@ int MainFrame::contentBottomForClient(int clientHeight)
 
 void MainFrame::executeEditorCommand(EditorIntent command)
 {
+    if (isTimelineEngineRoutingActive()) {
+        switch (command) {
+        case EditorIntent::TogglePlayback:
+        case EditorIntent::StopPlayback:
+        case EditorIntent::StepBackward:
+        case EditorIntent::StepForward:
+#if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_ROUTING
+            timelineEngineRouter_->applyIntent(command);
+#endif
+            return;
+        default:
+            // Undo/redo/clip-editing intents always use the normal path,
+            // timeline-focused or not.
+            break;
+        }
+    }
+
     const EditorCommandResult result = commandController_.execute(command);
     if (result.playbackTimerNeedsSync)
         synchronizePlaybackTimer();
@@ -613,6 +694,14 @@ void MainFrame::seekPreviewToCurrentFrame()
 {
     const PreviewSeekRequest request = PreviewSeekRequestResolver::resolve(
         nextPreviewSeekRequestId_++, editorSession_, mediaLibrary_);
+
+    if (isTimelineEngineRoutingActive() && request.context == MediaPlaybackContext::Timeline) {
+#if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_ROUTING
+        timelineEngineRouter_->seekToTimelineFrame(request.timelineFrame);
+#endif
+        return;
+    }
+
     applyPlaybackClockAction(playbackBackend_.seek(request));
 }
 
@@ -928,6 +1017,7 @@ bool MainFrame::confirmSaveBeforeDestructiveAction()
 
 BEGIN_MESSAGE_MAP(MainFrame, CFrameWnd)
     ON_MESSAGE(WM_PLAYBACK_ENGINE_NOTIFICATION, &MainFrame::OnPlaybackEngineNotification)
+    ON_MESSAGE(WM_TIMELINE_ENGINE_NOTIFICATION, &MainFrame::OnTimelineEngineNotification)
     ON_WM_CREATE()
     ON_WM_ERASEBKGND()
     ON_WM_SIZE()

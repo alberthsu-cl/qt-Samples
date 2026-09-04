@@ -27,6 +27,17 @@ option(MINI_EDITOR_ENABLE_ENGINE_SMOKE_TEST
        "Compile the Milestone 4 manual playback-engine smoke-test hotkey (Qt builds only)"
        OFF)
 
+# Milestone 4 (M4-06): routes timeline (sequence) preview's playback commands
+# through PlaybackEngine/QtPlaybackMediaWorker instead of the legacy
+# IPlaybackBackend path, using a standalone preview window (not the app's
+# real preview panel -- see the milestone doc's scoped decision). Source-
+# asset preview is completely untouched either way. Off by default: with
+# this flag off, application behavior is byte-for-byte unchanged. See
+# docs/architecture/milestones/milestone-04-media-integration.md.
+option(MINI_EDITOR_ENABLE_ENGINE_ROUTING
+       "Route timeline preview through the new playback engine (Qt builds only)"
+       OFF)
+
 if(MINI_EDITOR_USE_QT)
     if(BUILD_TESTING)
         find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia MultimediaWidgets Test)
@@ -402,6 +413,16 @@ if(MINI_EDITOR_USE_QT)
         )
         target_compile_definitions(MiniEditorCoexistence PRIVATE
             MINI_EDITOR_ENABLE_ENGINE_SMOKE_TEST=1
+        )
+    endif()
+
+    if(MINI_EDITOR_ENABLE_ENGINE_ROUTING)
+        target_sources(MiniEditorCoexistence PRIVATE
+            src/TimelineEngineRouter.h
+            src/TimelineEngineRouter.cpp
+        )
+        target_compile_definitions(MiniEditorCoexistence PRIVATE
+            MINI_EDITOR_ENABLE_ENGINE_ROUTING=1
         )
     endif()
 

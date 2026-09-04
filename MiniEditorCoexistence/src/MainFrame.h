@@ -16,6 +16,9 @@
 #if MINI_EDITOR_ENABLE_ENGINE_SMOKE_TEST
 #include "EngineSmokeTestSession.h"
 #endif
+#if MINI_EDITOR_ENABLE_ENGINE_ROUTING
+#include "TimelineEngineRouter.h"
+#endif
 #include "QtMediaLibraryHost.h"
 #include "QtPreviewHost.h"
 #include "QtPropertiesHost.h"
@@ -45,6 +48,10 @@
 // message to MainFrame when the UI notification queue becomes non-empty."
 // No such message existed before Milestone 4 -- this is the first one.
 constexpr UINT WM_PLAYBACK_ENGINE_NOTIFICATION = WM_APP + 1;
+// M4-06's routed timeline engine posts on a distinct message so it never
+// cross-talks with the M4-04/M4-05 smoke test's own bridge/message, even in
+// a build that happens to compile both in at once.
+constexpr UINT WM_TIMELINE_ENGINE_NOTIFICATION = WM_APP + 2;
 
 class MainFrame final : public CFrameWnd
 {
@@ -56,6 +63,7 @@ public:
 
 protected:
     afx_msg LRESULT OnPlaybackEngineNotification(WPARAM wParam, LPARAM lParam);
+    afx_msg LRESULT OnTimelineEngineNotification(WPARAM wParam, LPARAM lParam);
     afx_msg int OnCreate(LPCREATESTRUCT createStructure);
     afx_msg BOOL OnEraseBkgnd(CDC *deviceContext);
     afx_msg void OnSize(UINT type, int width, int height);
@@ -108,6 +116,12 @@ private:
     void updateWindowTitle();
     void importMediaFile();
     void removeMediaAsset(int assetIndex, int assetId);
+    // True only when compiled with MINI_EDITOR_ENABLE_ENGINE_ROUTING and the
+    // timeline is currently focused -- the single condition every M4-06
+    // routing decision below is gated on. Declared unconditionally so call
+    // sites need no #if of their own; trivially false when not compiled in.
+    bool isTimelineEngineRoutingActive() const;
+    void updateTimelineEngineSnapshot(EditorChange changes);
 
     CStatusBar statusBar_;
 #if MINI_EDITOR_USE_QT
@@ -154,5 +168,11 @@ private:
     // playbackBackend_ or any production playback state.
     std::unique_ptr<EngineSmokeTestSession> engineSmokeTestSession_;
     void toggleEngineSmokeTest();
+#endif
+#if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_ROUTING
+    // M4-06: routes timeline preview through the new engine. Constructed in
+    // OnCreate, fed a fresh snapshot on every relevant EditorSession change.
+    // Source preview and playbackBackend_ are never touched by this.
+    std::unique_ptr<TimelineEngineRouter> timelineEngineRouter_;
 #endif
 };
