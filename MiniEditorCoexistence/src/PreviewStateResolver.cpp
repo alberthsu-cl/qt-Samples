@@ -25,7 +25,8 @@ std::optional<ResolvedTimelineMedia> PreviewStateResolver::resolveTimelineVideo(
     // head is elsewhere. Once the user moves the head into the selected clip,
     // however, the head becomes the preview target and must resolve its exact
     // source frame.
-    if (!playback.isPlaying && !playback.isPaused && selectedClip != nullptr
+    if (session.timelinePreviewFocus() == TimelinePreviewFocus::EditingSelection
+        && selectedClip != nullptr
         && selectedClip->trackType == TimelineTrackType::Video
         && !playheadIsInsideSelectedClip) {
         return TimelinePlaybackResolver::resolveClip(
@@ -71,7 +72,8 @@ PreviewState PreviewStateResolver::resolve(const EditorSession &session,
         resolveTimelineVideo(session, mediaLibrary);
     // A stopped focused placement is an edit target. Its fade-in must not hide
     // the item being adjusted; playback/paused frames still evaluate fades.
-    const bool isFocusedEditTarget = !playback.isPlaying && !playback.isPaused
+    const bool isFocusedEditTarget =
+        session.timelinePreviewFocus() == TimelinePreviewFocus::EditingSelection
         && visibleVideo
         && visibleVideo->clipId == session.selectedTimelineClipId();
     const bool applyVideoFade = !isFocusedEditTarget;

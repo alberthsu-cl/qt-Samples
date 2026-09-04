@@ -47,6 +47,23 @@ struct PlaybackState {
     int playbackRatePercent = 100;
 };
 
+// What the timeline preview is currently showing (M5-10).
+//
+// This used to be asked as the phase expression "!isPlaying && !isPaused",
+// duplicated in PreviewStateResolver. That expression was always a proxy for
+// this question, and the proxy broke the moment seeking while stopped began
+// entering Paused -- as ADR-002 requires it to, because "Stopped means the
+// context is positioned at its defined start" and after a ruler click it is
+// not. Naming the question separates it from the phase that used to imply it.
+enum class TimelinePreviewFocus {
+    // The preview follows the playhead.
+    Transport,
+    // The preview shows the clip being edited, even when the playhead is
+    // elsewhere, and does not apply that clip's fade -- a fade-in must not
+    // black out the thing being adjusted.
+    EditingSelection
+};
+
 enum class PreviewMode {
     Source,
     Timeline

@@ -159,6 +159,12 @@ std::size_t EditorSession::legacyTimelinePlaybackMutationCount() const
     return legacyTimelinePlaybackMutations_;
 }
 
+TimelinePreviewFocus EditorSession::timelinePreviewFocus() const
+{
+    return playbackState().isPlaying ? TimelinePreviewFocus::Transport
+                                     : TimelinePreviewFocus::EditingSelection;
+}
+
 const TimelineViewState &EditorSession::timelineViewState() const
 {
     return timelineViewState_;
@@ -803,6 +809,12 @@ void EditorSession::seekTimeline(int frame)
     PlaybackState &playback = activePlaybackState();
     playback.currentFrame = std::clamp(
         frame, kFirstFrame, std::max(0, playback.durationFrames - 1));
+    // M5-10: ADR-002's command table -- "from Stopped, seek and enter
+    // Paused". Stopped means the context is positioned at its defined start,
+    // and after a seek it is not, so reporting Stopped was a lie this path
+    // had been telling. Seeking while playing keeps playing, as before.
+    if (!playback.isPlaying)
+        playback.isPaused = true;
     notifyStateChanged(EditorChange::Playback);
 }
 

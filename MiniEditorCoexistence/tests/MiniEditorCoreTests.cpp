@@ -2073,6 +2073,68 @@ void projectRuntimeTracksExplicitSequenceIdentity()
 // timeline PlaybackState survives only as a painting cache (ADR-002). This
 // pins down what "only a cache" means in code: it stores exactly what was
 // published and leaves every editing concern alone.
+// M5-10. The legacy seek path used to leave the transport Stopped, which
+// ADR-002 says it must not: "Stopped means the context is positioned at its
+// defined start", and after a ruler click it is not. Correcting it would have
+// switched off two editing behaviours that were keyed on the phase expression
+// "!isPlaying && !isPaused" -- so the question that expression was really
+// asking got its own name instead.
+void seekFromStoppedPausesAndKeepsTheEditingPreview()
+{
+    EditorSession session(1);
+    const int clipId = session.addTimelineClip(1, TimelineTrackType::Video, 0, 30);
+    session.selectTimelineClip(clipId);
+    session.setPlaybackDuration(90, true);
+
+    require(!session.timelinePlaybackState().isPlaying
+                && !session.timelinePlaybackState().isPaused,
+            "A fresh timeline transport must start stopped at its defined start.");
+    require(session.timelinePreviewFocus() == TimelinePreviewFocus::EditingSelection,
+            "A parked transport is when editing happens, so the preview shows the "
+            "editing selection.");
+
+    // ADR-002's command table: from Stopped, seek and enter Paused. This is
+    // the change that made the M5-07 matrix green without amending the ADR or
+    // weakening the equivalence bar.
+    session.seekTimeline(40);
+    require(!session.timelinePlaybackState().isPlaying
+                && session.timelinePlaybackState().isPaused
+                && session.timelinePlaybackState().currentFrame == 40,
+            "Seeking while stopped must enter Paused at the requested frame, not "
+            "claim to still be at the sequence start.");
+    require(session.timelinePreviewFocus() == TimelinePreviewFocus::EditingSelection,
+            "A seek must not take the preview away from the editing selection: the "
+            "transport is still not running.");
+
+    // Transport resumption is what clears the override.
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    require(session.timelinePlaybackState().isPlaying,
+            "Toggling from paused must resume playback.");
+    require(session.timelinePreviewFocus() == TimelinePreviewFocus::Transport,
+            "A running transport must take the preview back from the editing "
+            "selection.");
+
+    // Seeking while playing keeps playing, exactly as before.
+    session.seekTimeline(10);
+    require(session.timelinePlaybackState().isPlaying
+                && session.timelinePlaybackState().currentFrame == 10,
+            "Seeking while playing must keep playing.");
+    require(session.timelinePreviewFocus() == TimelinePreviewFocus::Transport,
+            "Seeking while playing must leave the preview following the playhead.");
+
+    // Every other way of being parked counts too, which is the whole point of
+    // naming the state rather than deriving it from one phase pair.
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    require(session.timelinePreviewFocus() == TimelinePreviewFocus::EditingSelection,
+            "Pausing must return the preview to the editing selection.");
+    session.handlePlaybackCommand(LegacyPlaybackCommand::StepForward);
+    require(session.timelinePreviewFocus() == TimelinePreviewFocus::EditingSelection,
+            "Stepping leaves the transport parked, so editing preview still applies.");
+    session.handlePlaybackCommand(LegacyPlaybackCommand::Stop);
+    require(session.timelinePreviewFocus() == TimelinePreviewFocus::EditingSelection,
+            "Stopping returns to the defined start, where editing preview applies.");
+}
+
 void routedTransportOnlyWritesThePaintingCache()
 {
     using namespace mini_editor::playback_core;
@@ -2198,6 +2260,7 @@ int main()
         timelinePresentationResolverBuildsOneCompleteViewSnapshot();
         sourcePlaybackDoesNotMoveTheTimelinePlayhead();
         projectRuntimeTracksExplicitSequenceIdentity();
+        seekFromStoppedPausesAndKeepsTheEditingPreview();
         routedTransportOnlyWritesThePaintingCache();
         sequenceSnapshotIsImmutableAndSelfContained();
         projectDocumentServiceMaintainsProjectAndMediaConsistency();

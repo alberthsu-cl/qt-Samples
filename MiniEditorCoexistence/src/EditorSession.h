@@ -31,6 +31,13 @@ public:
     const PlaybackState &playbackState() const;
     const PlaybackState &sourcePlaybackState() const;
     const PlaybackState &timelinePlaybackState() const;
+
+    // M5-10. EditingSelection whenever the transport is not running: parked
+    // is when editing happens, and every way of being parked -- stopped at
+    // the start, paused mid-playback, stepped, or seeked -- is equally a
+    // moment when the user is adjusting a clip rather than watching one.
+    // Transport resumption is what clears it.
+    TimelinePreviewFocus timelinePreviewFocus() const;
     const TimelineViewState &timelineViewState() const;
     const TimelineAudioMixState &timelineAudioMixState() const;
     const mini_editor::playback_core::ProjectRuntime &projectRuntime() const;
