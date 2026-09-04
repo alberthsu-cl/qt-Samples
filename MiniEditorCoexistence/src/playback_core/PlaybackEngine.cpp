@@ -100,6 +100,17 @@ void PlaybackEngine::publishStatus(std::optional<PlaybackCommandRejected> reject
     }
 }
 
+void reportWorkerFailure(PlaybackEngine &engine, std::string message)
+{
+    // One status() read; both identity fields come from that single snapshot.
+    // If it has gone stale by the time the engine thread applies the report,
+    // PlaybackSession discards it -- which is the intended behavior, not a
+    // race to defend against here.
+    const PlaybackStatus current = engine.status();
+    engine.reportFailure(current.sessionId, current.generation,
+                         PlaybackError{std::move(message)});
+}
+
 void PlaybackEngine::run()
 {
     for (;;) {

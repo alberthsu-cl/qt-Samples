@@ -483,11 +483,14 @@ if(MINI_EDITOR_USE_QT)
             src/QtTimelineCanvas.cpp
             src/QtTimelineToolbar.h
             src/QtTimelineToolbar.cpp
+            src/QtPlaybackMediaWorker.h
+            src/QtPlaybackMediaWorker.cpp
         )
         target_include_directories(MiniEditorQtWidgetTests PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/src"
         )
         target_link_libraries(MiniEditorQtWidgetTests PRIVATE
+            MiniEditorPlaybackCore
             Qt6::Widgets
             Qt6::Multimedia
             Qt6::Test

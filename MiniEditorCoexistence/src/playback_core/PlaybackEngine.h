@@ -112,4 +112,12 @@ private:
     std::thread thread_;
 };
 
+// The step every media-worker error handler performs identically: tag the
+// failure with the engine's *current* session/generation and enter it into
+// the engine's serialized queue. Shared by the Qt adapters (M4-07/M4-08) so
+// the call shape lives in one place with one deterministic test, instead of
+// being duplicated untested in each adapter. Framework-neutral by design --
+// callers convert their own error type to a plain message first.
+void reportWorkerFailure(PlaybackEngine &engine, std::string message);
+
 } // namespace mini_editor::playback_core

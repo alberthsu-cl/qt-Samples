@@ -10,8 +10,11 @@
 #include "QtTimelineToolbar.h"
 #include "QtTransportPanel.h"
 #include "QtThumbnailCache.h"
+#include "QtPlaybackMediaWorker.h"
 #include "TimelineClipEdit.h"
 #include "TimelineGeometry.h"
+#include "playback_core/PlaybackEngine.h"
+#include "playback_core/SteadyPlaybackClock.h"
 
 #include <QComboBox>
 #include <QDataStream>
@@ -58,6 +61,7 @@ private slots:
     void timelineAudioVisibilitySeparatesRefreshAndUserToggle();
     void timelineVideoAudioMuteSeparatesRefreshAndUserToggle();
     void timelinePresentationRefreshUpdatesToolbarAtomically();
+    void workerMediaErrorEntersFailedThroughTheEngineQueue();
 };
 
 void MiniEditorQtWidgetTests::mediaLibraryModelExposesDecodedRealImageThumbnail()
@@ -1045,6 +1049,59 @@ void MiniEditorQtWidgetTests::timelinePresentationRefreshUpdatesToolbarAtomicall
                 QStringLiteral("timelineRippleButton"))->isChecked());
     QVERIFY(toolbar.findChild<QToolButton *>(
                 QStringLiteral("timelineSplitButton"))->isEnabled());
+}
+
+// M4-08: the routed timeline path's media-failure observation, end to end
+// against real Qt Multimedia -- a real QMediaPlayer decode failure, through
+// QtPlaybackMediaWorker's signal, through the shared reportWorkerFailure()
+// step both Qt adapters use, through PlaybackEngine's serialized queue, into
+// PlaybackSession's Failed transition. The worker never touches
+// PlaybackSession directly (ADR-005); this proves the whole chain without a
+// GUI, a saved project, or any sample media.
+void MiniEditorQtWidgetTests::workerMediaErrorEntersFailedThroughTheEngineQueue()
+{
+    using namespace mini_editor::playback_core;
+
+    // A file that exists but cannot be decoded: an upstream availability
+    // check (std::filesystem::exists) would pass, so decode is genuinely
+    // attempted and genuinely fails. Written to a temporary directory --
+    // no sample media is touched.
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString undecodablePath = tempDir.filePath(QStringLiteral("undecodable.mp4"));
+    {
+        QFile undecodable(undecodablePath);
+        QVERIFY(undecodable.open(QIODevice::WriteOnly));
+        undecodable.write(QByteArray(8192, '\x01'));
+    }
+    QVERIFY(QFile::exists(undecodablePath));
+
+    SteadyPlaybackClock clock;
+    PlaybackEngine engine(PlaybackSource{SequencePreview{SequenceId::create()}}, clock);
+    QCOMPARE(engine.status().phase, PlaybackPhase::Stopped);
+
+    QtPlaybackMediaWorker worker;
+    // Exactly the production wiring from TimelineEngineRouter and
+    // EngineSmokeTestSession.
+    connect(&worker, &QtPlaybackMediaWorker::mediaErrorOccurred, this,
+            [&engine](const QString &message) {
+                reportWorkerFailure(engine, message.toStdString());
+            });
+
+    QSignalSpy errorSpy(&worker, &QtPlaybackMediaWorker::mediaErrorOccurred);
+    worker.openSource(undecodablePath);
+    QVERIFY2(errorSpy.wait(20000),
+             "QMediaPlayer did not report an error for an undecodable file");
+
+    // Draining the queue: Shutdown is processed after the already-queued
+    // failure observation, so this also proves the observation went through
+    // the engine's serialized queue rather than mutating the session directly.
+    engine.shutdownAndJoin();
+
+    const PlaybackStatus status = engine.status();
+    QCOMPARE(status.phase, PlaybackPhase::Failed);
+    QVERIFY(status.error.has_value());
+    QVERIFY(!status.error->message.empty());
 }
 
 QTEST_MAIN(MiniEditorQtWidgetTests)

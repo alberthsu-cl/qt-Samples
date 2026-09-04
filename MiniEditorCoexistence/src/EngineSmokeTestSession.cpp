@@ -58,9 +58,7 @@ EngineSmokeTestSession::EngineSmokeTestSession(HWND notifyTarget, UINT notifyMes
                          // serialized queue, tagged with whatever session/generation is current
                          // right now, is this handler's job (M4-07). A stale identity by the time
                          // this is processed is discarded by PlaybackSession itself.
-                         const PlaybackStatus current = engine_->status();
-                         engine_->reportFailure(current.sessionId, current.generation,
-                                                PlaybackError{message.toStdString()});
+                         reportWorkerFailure(*engine_, message.toStdString());
                      });
 
     logLine(L"Session constructed. sessionId=%llu",

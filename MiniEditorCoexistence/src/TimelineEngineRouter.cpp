@@ -47,9 +47,7 @@ TimelineEngineRouter::TimelineEngineRouter(HWND notifyTarget, UINT notifyMessage
     QObject::connect(&worker_, &QtPlaybackMediaWorker::mediaErrorOccurred, this,
                      [this](const QString &message) {
                          logLine(L"QMediaPlayer error: %hs", message.toStdString().c_str());
-                         const PlaybackStatus current = engine_->status();
-                         engine_->reportFailure(current.sessionId, current.generation,
-                                                PlaybackError{message.toStdString()});
+                         reportWorkerFailure(*engine_, message.toStdString());
                      });
 
     logLine(L"Router constructed. sessionId=%llu",
