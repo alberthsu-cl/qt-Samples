@@ -601,6 +601,11 @@ void EditorSession::updateSelectedClipSettings(const ClipSettings &settings)
             return;
         timelineModel_.updateClipSettings(selectedTimelineClipId_, updatedSettings);
         projectDirty_ = true;
+        // Opacity, scale, fades and effects all reach the playback snapshot,
+        // so this is a playback-affecting edit and owes a strictly newer
+        // revision (ADR-006 rule 4). Only the timeline-clip branch does: the
+        // library-defaults branch below changes nothing the engine sees.
+        synchronizeProjectRuntime();
         history_.record(std::make_unique<TimelineClipSettingsCommand>(
             selectionState(), selectedTimelineClipId_, previousSettings,
             updatedSettings));
@@ -863,6 +868,9 @@ void EditorSession::updateTimelineAudioMixState(
 
     timelineAudioMixState_ = state;
     projectDirty_ = true;
+    // isVideoTrackMuted is carried by the snapshot, so muting is a
+    // playback-affecting edit (ADR-006 rule 4).
+    synchronizeProjectRuntime();
     notifyStateChanged(EditorChange::AudioMix);
 }
 

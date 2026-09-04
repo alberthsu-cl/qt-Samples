@@ -123,7 +123,12 @@ enum class PlaybackPhase {
 enum class PlaybackRejectReason {
     QueueClosed,
     InvalidForCurrentPhase,
-    SourceKindMismatch
+    SourceKindMismatch,
+    // ADR-003/ADR-006 rule 5: for a sequence already installed, a snapshot's
+    // revision must be strictly newer. A duplicate or out-of-order install
+    // would otherwise roll playback content backward under a *newer*
+    // generation, which no identity check downstream could catch.
+    StaleSequenceRevision
 };
 
 struct PlaybackError final {

@@ -78,6 +78,22 @@ void TimelineEngineRouter::installSnapshot(SequencePlaybackSnapshotPtr snapshot)
             snapshot->videoClips.size(), snapshot->audioClips.size(), snapshot->media.size(),
             static_cast<long long>(snapshot->duration.frames()));
 
+    // M5-03: the session refuses a revision that is not strictly newer for a
+    // sequence it already has, and submit() cannot tell us so -- it queues the
+    // command and the refusal happens later on the engine thread. Ask the
+    // shared predicate here instead, so a view-only editor change that
+    // rebuilds an identical snapshot does not re-open media below.
+    if (lastInstalledSnapshot_
+        && !snapshotSupersedes(lastInstalledSnapshot_->sequenceId,
+                               lastInstalledSnapshot_->revision, *snapshot)) {
+        logLine(L"Snapshot does not supersede the installed one (same sequence, revision "
+                L"%llu is not newer than %llu); leaving the current preview in place.",
+                static_cast<unsigned long long>(snapshot->revision.value()),
+                static_cast<unsigned long long>(lastInstalledSnapshot_->revision.value()));
+        return;
+    }
+    lastInstalledSnapshot_ = snapshot;
+
     engine_->submit(InstallSnapshot{snapshot}, PlaybackCommandId::create());
 
     // Single-clip preview scope for this milestone -- see the class comment.

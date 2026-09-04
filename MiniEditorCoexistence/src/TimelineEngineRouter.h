@@ -69,6 +69,11 @@ public:
 private:
     void handleEvents(std::vector<mini_editor::playback_core::PlaybackEvent> events);
 
+    // What the engine's session last accepted, so a view-only editor change
+    // that rebuilds an identical snapshot does not re-open media for content
+    // the session will refuse. PlaybackSession remains the authority; this is
+    // the same predicate asked one step earlier.
+    mini_editor::playback_core::SequencePlaybackSnapshotPtr lastInstalledSnapshot_;
     mini_editor::playback_core::FrameRate currentFrameRate_{30, 1};
     mini_editor::playback_core::FrameCount currentDuration_ =
         mini_editor::playback_core::FrameCount::zero();

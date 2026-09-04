@@ -252,12 +252,14 @@ bool verifyAnchorResolution(mini_editor::playback_core::FrameRate rate)
 mini_editor::playback_core::SequencePlaybackSnapshotPtr makeSnapshot(
     mini_editor::playback_core::SequenceId id,
     mini_editor::playback_core::FrameRate rate,
-    mini_editor::playback_core::FrameCount duration)
+    mini_editor::playback_core::FrameCount duration,
+    mini_editor::playback_core::SequenceRevision revision
+        = mini_editor::playback_core::SequenceRevision::initial())
 {
     using namespace mini_editor::playback_core;
 
     SequencePlaybackSnapshot snapshot{
-        id, SequenceRevision::initial(), rate, duration, {}, {}, {}
+        id, revision, rate, duration, {}, {}, {}
     };
     return std::make_shared<const SequencePlaybackSnapshot>(std::move(snapshot));
 }
@@ -745,7 +747,8 @@ bool verifyPreviewPresentationCoordinator()
     }
 
     const PresentationRequestId idBeforeInstall = coordinator.currentRequest()->requestId;
-    auto secondSnapshot = makeSnapshot(sequenceId, FrameRate(30, 1), FrameCount::fromFrames(600));
+    auto secondSnapshot = makeSnapshot(sequenceId, FrameRate(30, 1), FrameCount::fromFrames(600),
+                                       SequenceRevision::initial().next());
     session.applyCommand(InstallSnapshot{secondSnapshot}, PlaybackCommandId::create());
     coordinator.notifyPlaybackStatus(session.status(), /*transportJustRepositioned=*/true);
     if (!require(coordinator.currentRequest()->requestId != idBeforeInstall,
@@ -1433,6 +1436,151 @@ bool verifySnapshotTimelineResolverEdgeCases()
                    "reported to the caller.");
 }
 
+bool verifySnapshotInstallRevisionRules()
+{
+    using namespace mini_editor::playback_core;
+
+    const SequenceId sequenceId = SequenceId::create();
+    FakePlaybackClock clock(MasterClockTime::fromMicroseconds(0));
+    PlaybackSession session(PlaybackSource{SequencePreview{sequenceId}}, clock);
+
+    const SequenceRevision first = SequenceRevision::initial();
+    const SequenceRevision second = first.next();
+    auto install = [&session, sequenceId](SequenceRevision revision, std::int64_t frames) {
+        return session.applyCommand(
+            InstallSnapshot{makeSnapshot(sequenceId, FrameRate(30, 1),
+                                         FrameCount::fromFrames(frames), revision)},
+            PlaybackCommandId::create());
+    };
+
+    if (!require(!install(first, 300),
+                 "The first snapshot for a sequence must be accepted at any revision."))
+        return false;
+
+    // Move off zero so a rolled-back install would be visible as a position
+    // change and not just as different content.
+    session.applyCommand(Seek{sequenceTimeAtFrameStart(TimelineFrame::fromFrameNumber(120),
+                                          FrameRate(30, 1))}, PlaybackCommandId::create());
+    const PlaybackStatus beforeStale = session.status();
+
+    // A duplicate install of the same revision.
+    const std::optional<PlaybackCommandRejected> duplicate = install(first, 30);
+    if (!require(duplicate
+                     && duplicate->reason == PlaybackRejectReason::StaleSequenceRevision,
+                 "Re-installing the same revision must be rejected as stale."))
+        return false;
+
+    const PlaybackStatus afterStale = session.status();
+    if (!require(afterStale.generation == beforeStale.generation
+                     && afterStale.statusSeq == beforeStale.statusSeq
+                     && std::get<SequencePreviewStatus>(afterStale.context).sequenceDuration
+                         == FrameCount::fromFrames(300)
+                     && std::get<SequencePreviewStatus>(afterStale.context).timelineFrame
+                         == TimelineFrame::fromFrameNumber(120),
+                 "A rejected install must change nothing: not the generation, not the "
+                 "status sequence, not the installed content, not the position."))
+        return false;
+
+    // Out-of-order: revision 2 lands, then revision 1 arrives late.
+    if (!require(!install(second, 600), "A strictly newer revision must be accepted."))
+        return false;
+    const std::optional<PlaybackCommandRejected> outOfOrder = install(first, 30);
+    if (!require(outOfOrder
+                     && outOfOrder->reason == PlaybackRejectReason::StaleSequenceRevision,
+                 "An out-of-order install must be rejected rather than roll content back."))
+        return false;
+
+    // An accepted same-sequence install is an edit, not new content, so it
+    // keeps the playhead where the user left it.
+    return require(std::get<SequencePreviewStatus>(session.status().context).timelineFrame
+                       == TimelineFrame::fromFrameNumber(120)
+                   && std::get<SequencePreviewStatus>(session.status().context).sequenceDuration
+                       == FrameCount::fromFrames(600),
+                   "Installing a newer revision of the same sequence must keep the "
+                   "current position and adopt the new content.");
+}
+
+bool verifySessionRetargetAcrossProjectReload()
+{
+    using namespace mini_editor::playback_core;
+
+    // The M4-06 defect this covers: the engine's SequencePreview identity was
+    // fixed at construction, but replaceProject() mints a fresh SequenceId, so
+    // after any project load the session's identity no longer matched the
+    // snapshots being installed into it.
+    const SequenceId beforeReload = SequenceId::create();
+    FakePlaybackClock clock(MasterClockTime::fromMicroseconds(0));
+    PlaybackSession session(PlaybackSource{SequencePreview{beforeReload}}, clock);
+
+    session.applyCommand(
+        InstallSnapshot{makeSnapshot(beforeReload, FrameRate(30, 1),
+                                     FrameCount::fromFrames(300))},
+        PlaybackCommandId::create());
+    session.applyCommand(Seek{sequenceTimeAtFrameStart(TimelineFrame::fromFrameNumber(90),
+                                          FrameRate(30, 1))}, PlaybackCommandId::create());
+    session.applyCommand(Play{}, PlaybackCommandId::create());
+    const PlaybackStatus playing = session.status();
+
+    // A reload never reuses the previous runtime SequenceId (ADR-006 rule 2),
+    // and its first snapshot may carry any revision -- including one that
+    // would be stale if it were compared against the outgoing sequence's.
+    const SequenceId afterReload = SequenceId::create();
+    if (!require(!session.applyCommand(
+                     InstallSnapshot{makeSnapshot(afterReload, FrameRate(25, 1),
+                                                  FrameCount::fromFrames(120))},
+                     PlaybackCommandId::create()),
+                 "The first snapshot of a newly introduced sequence must be accepted "
+                 "even while the previous sequence is playing."))
+        return false;
+
+    const PlaybackStatus reloaded = session.status();
+    const auto &context = std::get<SequencePreviewStatus>(reloaded.context);
+    if (!require(context.sequenceId == afterReload
+                     && context.sequenceId != beforeReload
+                     && context.frameRate == FrameRate(25, 1)
+                     && context.sequenceDuration == FrameCount::fromFrames(120),
+                 "After a reload the session's reported identity must be the installed "
+                 "snapshot's, not the one it was constructed with."))
+        return false;
+
+    if (!require(reloaded.phase == PlaybackPhase::Stopped
+                     && context.timelineFrame == TimelineFrame::zero(),
+                 "A different sequence is different content, so the transport must "
+                 "start over rather than clamp a position measured against the "
+                 "timeline that was just replaced."))
+        return false;
+
+    // ADR-006: a reload preserves PlaybackSessionId when the engine session
+    // continues to run, and advances the generation -- which is what makes
+    // every piece of work still in flight for the old sequence stale.
+    if (!require(reloaded.sessionId == playing.sessionId
+                     && !session.isCurrent(playing.sessionId, playing.generation)
+                     && session.isCurrent(reloaded.sessionId, reloaded.generation),
+                 "A reload must keep the session id, advance the generation, and make "
+                 "the pre-reload identity stale."))
+        return false;
+
+    // Retargeting also clears a failure: the file that could not be decoded
+    // belongs to a project that is no longer open.
+    session.reportFailure(reloaded.sessionId, reloaded.generation,
+                          PlaybackError{"decoder failed on the reloaded project"});
+    if (!require(session.status().phase == PlaybackPhase::Failed,
+                 "The test's own failure setup must reach Failed."))
+        return false;
+
+    const SequenceId afterSecondReload = SequenceId::create();
+    session.applyCommand(
+        InstallSnapshot{makeSnapshot(afterSecondReload, FrameRate(30, 1),
+                                     FrameCount::fromFrames(300))},
+        PlaybackCommandId::create());
+    return require(session.status().phase == PlaybackPhase::Stopped
+                       && !session.status().error
+                       && std::get<SequencePreviewStatus>(session.status().context).sequenceId
+                           == afterSecondReload,
+                   "Loading another project after a failure must clear the error and "
+                   "retarget onto the new sequence.");
+}
+
 } // namespace
 
 int main()
@@ -1496,7 +1644,9 @@ int main()
         || !verifyPlaybackEngineFailureObservation()
         || !verifySnapshotTimelineResolverBoundaries()
         || !verifySnapshotTimelineResolverSourceTime()
-        || !verifySnapshotTimelineResolverEdgeCases()) {
+        || !verifySnapshotTimelineResolverEdgeCases()
+        || !verifySnapshotInstallRevisionRules()
+        || !verifySessionRetargetAcrossProjectReload()) {
         return 1;
     }
 

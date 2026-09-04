@@ -2015,6 +2015,36 @@ void projectRuntimeTracksExplicitSequenceIdentity()
     require(initialRevision < session.projectRuntime().sequences().front().revision,
             "A playback-affecting timeline edit must advance sequence revision.");
 
+    // ADR-006 rule 4 covers every edit the snapshot carries, not only clip
+    // placement. Both of these used to leave the revision untouched, which
+    // made the rebuilt snapshot indistinguishable from the installed one --
+    // invisible until M5-03 started enforcing the strictly-newer rule.
+    auto currentRevision = [&session] {
+        return session.projectRuntime().sequences().front().revision;
+    };
+
+    const SequenceRevision beforeSettings = currentRevision();
+    session.selectTimelineClip(clipId);
+    session.updateSelectedClipSettings({ 55, 125, ClipPosition::TopLeft });
+    require(beforeSettings < currentRevision(),
+            "Clip settings reach the playback snapshot, so editing them must advance "
+            "the sequence revision.");
+
+    const SequenceRevision beforeMute = currentRevision();
+    TimelineAudioMixState mix = session.timelineAudioMixState();
+    mix.isVideoTrackMuted = !mix.isVideoTrackMuted;
+    session.updateTimelineAudioMixState(mix);
+    require(beforeMute < currentRevision(),
+            "isVideoTrackMuted is carried by the snapshot, so muting must advance the "
+            "sequence revision.");
+
+    // The other half of rule 4: a view-only change must not advance it, or
+    // every scroll would look like new playback content.
+    const SequenceRevision beforeViewOnly = currentRevision();
+    session.fitTimeline();
+    require(beforeViewOnly == currentRevision(),
+            "A view-only timeline change must leave the sequence revision alone.");
+
     session.replaceProject(EditorProject::createDefault(1));
     require(session.projectRuntime().projectId() != initialProjectId
                 && *session.projectRuntime().activeSequenceId() != initialSequenceId,

@@ -18,11 +18,20 @@ namespace mini_editor::playback_core {
 // or gap. A future engine thread makes those phases observable between
 // commands without changing this class's transition rules.
 //
-// A session is constructed for exactly one PlaybackSource kind and keeps it
-// for its lifetime in this milestone: OpenSource switches which asset a
+// A session is constructed for exactly one PlaybackSource *kind* and keeps
+// that kind for its lifetime: OpenSource switches which asset a
 // SourceAssetPreview session shows; InstallSnapshot switches which content a
 // SequencePreview session shows. A command whose payload names the other
 // kind is rejected with SourceKindMismatch rather than silently accepted.
+//
+// Which sequence a SequencePreview session shows is not fixed at
+// construction. A project reload mints a new SequenceId (ADR-006 rule 2), so
+// InstallSnapshot retargets the session onto the incoming sequence, keeping
+// the PlaybackSessionId and advancing the generation -- exactly what ADR-006
+// specifies for a reload while the engine session continues to run. For a
+// sequence already installed, a revision that is not strictly newer is
+// rejected instead, so a duplicate or out-of-order install cannot roll
+// playback content backward.
 class PlaybackSession final {
 public:
     PlaybackSession(PlaybackSource initialSource, const IPlaybackClock &clock);

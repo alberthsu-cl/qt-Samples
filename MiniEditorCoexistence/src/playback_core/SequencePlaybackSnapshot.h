@@ -55,6 +55,24 @@ struct SequencePlaybackSnapshot final {
 
 using SequencePlaybackSnapshotPtr = std::shared_ptr<const SequencePlaybackSnapshot>;
 
+// ADR-003/ADR-006 rule 5. An incoming snapshot supersedes what is currently
+// installed when it names a different sequence -- a newly introduced runtime
+// sequence, since a reload never reuses a SequenceId -- or a strictly newer
+// revision of the same one. Pass no installed revision when nothing has been
+// installed yet.
+//
+// PlaybackSession enforces this; adapters use the same predicate to avoid
+// sending an install they know will be refused. One function so the two can
+// never drift apart.
+inline bool snapshotSupersedes(SequenceId installedSequenceId,
+                               std::optional<SequenceRevision> installedRevision,
+                               const SequencePlaybackSnapshot &incoming)
+{
+    return installedSequenceId != incoming.sequenceId
+        || !installedRevision
+        || *installedRevision < incoming.revision;
+}
+
 struct SnapshotBuildError final {
     std::string message;
 };

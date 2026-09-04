@@ -185,11 +185,36 @@ std::optional<PlaybackCommandRejected> PlaybackSession::applyInstallSnapshot(con
     if (!isSequenceMode())
         return PlaybackCommandRejected{commandId, PlaybackRejectReason::SourceKindMismatch};
 
+    // Which sequence this session is showing right now. Before the first
+    // install that is the sequence it was constructed for; afterwards it is
+    // whatever snapshot is installed, and the two are kept equal below.
+    const SequenceId currentSequenceId = snapshot_
+        ? snapshot_->sequenceId : std::get<SequencePreview>(source_).sequenceId;
+    const bool retargetsAnotherSequence = currentSequenceId != command.snapshot->sequenceId;
+
+    if (!snapshotSupersedes(currentSequenceId,
+                            snapshot_ ? std::optional<SequenceRevision>(snapshot_->revision)
+                                      : std::nullopt,
+                            *command.snapshot)) {
+        return PlaybackCommandRejected{commandId, PlaybackRejectReason::StaleSequenceRevision};
+    }
+
     const bool wasFailed = phase_ == PlaybackPhase::Failed;
     generation_ = generation_.next();
     snapshot_ = command.snapshot;
 
-    if (wasFailed) {
+    if (retargetsAnotherSequence) {
+        // A different sequence is different content: a position measured
+        // against the old timeline means nothing on the new one, so the
+        // transport starts over rather than being clamped into it. ADR-006:
+        // the session keeps its PlaybackSessionId across a project reload and
+        // advances only its generation, which is what invalidates every piece
+        // of work still in flight for the sequence being left behind.
+        source_ = PlaybackSource{SequencePreview{command.snapshot->sequenceId}};
+        error_.reset();
+        phase_ = PlaybackPhase::Stopped;
+        anchor_ = PlaybackAnchor{clock_.now(), SequenceTime::zero(), ratePercent_};
+    } else if (wasFailed) {
         error_.reset();
         anchor_ = PlaybackAnchor{clock_.now(), SequenceTime::zero(), ratePercent_};
         phase_ = PlaybackPhase::Stopped;
