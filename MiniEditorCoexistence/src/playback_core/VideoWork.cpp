@@ -64,4 +64,15 @@ bool operator!=(const PresentedSequencePosition &left, const PresentedSequencePo
     return !(left == right);
 }
 
+PresentedPosition presentedPositionFor(const PresentationTarget &target)
+{
+    if (const auto *source = std::get_if<SourcePresentationTarget>(&target)) {
+        return PresentedPosition{
+            PresentedSourcePosition{source->mediaAssetId, source->sourceTimestamp}};
+    }
+    const auto &sequence = std::get<SequencePresentationTarget>(target);
+    return PresentedPosition{PresentedSequencePosition{
+        sequence.sequenceId, sequence.sequenceRevision, sequence.timelineFrame}};
+}
+
 } // namespace mini_editor::playback_core

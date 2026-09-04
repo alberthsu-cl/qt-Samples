@@ -277,9 +277,20 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     // M4-06: timeline preview routes through the new engine from here on.
     // Source preview and playbackBackend_ are completely unaffected.
     if (editorSession_.projectRuntime().activeSequenceId()) {
+        // M5-05, decision B: the engine renders into the preview panel's own
+        // dedicated sink. previewHost_.videoSink() -- the legacy one
+        // playbackBackend_ drives for source preview -- is deliberately not
+        // passed here and is not redirected.
         timelineEngineRouter_ = std::make_unique<TimelineEngineRouter>(
             GetSafeHwnd(), WM_TIMELINE_ENGINE_NOTIFICATION,
-            *editorSession_.projectRuntime().activeSequenceId());
+            *editorSession_.projectRuntime().activeSequenceId(),
+            previewHost_.engineVideoSink());
+        previewHost_.setEngineFrameCommittedHandler([this] {
+            timelineEngineRouter_->onEngineFrameCommitted();
+        });
+        timelineEngineRouter_->setEnginePresentationActiveSink([this](bool active) {
+            previewHost_.setEnginePresentationActive(active);
+        });
         // M5-04: the routed path's only write into EditorSession. It goes to
         // the painting cache ADR-002 allows, never to a playback mutator, and
         // it is never read back into the engine.

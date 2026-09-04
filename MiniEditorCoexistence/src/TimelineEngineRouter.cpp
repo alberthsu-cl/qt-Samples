@@ -27,15 +27,24 @@ void logLine(const wchar_t *format, ...)
 } // namespace
 
 TimelineEngineRouter::TimelineEngineRouter(HWND notifyTarget, UINT notifyMessage,
-                                           SequenceId sequenceId)
+                                           SequenceId sequenceId,
+                                           QVideoSink *engineSurfaceSink)
     : bridge_(notifyTarget, notifyMessage)
     , engine_(std::make_unique<PlaybackEngine>(
           PlaybackSource{SequencePreview{sequenceId}}, clock_, &bridge_))
-    , previewWindow_(std::make_unique<QVideoWidget>())
 {
-    previewWindow_->setWindowTitle(QStringLiteral("Timeline Preview (New Engine)"));
-    previewWindow_->resize(640, 360);
-    worker_.attachExternalVideoOutput(previewWindow_->videoSink());
+    if (engineSurfaceSink != nullptr) {
+        // M5-05: the panel's own engine surface. The legacy sink is not
+        // touched, so source preview keeps rendering exactly as before.
+        worker_.attachExternalVideoOutput(engineSurfaceSink);
+    } else {
+        // No panel surface supplied: keep M4-06's standalone window so the
+        // manual smoke-test configuration still shows something.
+        previewWindow_ = std::make_unique<QVideoWidget>();
+        previewWindow_->setWindowTitle(QStringLiteral("Timeline Preview (New Engine)"));
+        previewWindow_->resize(640, 360);
+        worker_.attachExternalVideoOutput(previewWindow_->videoSink());
+    }
 
     // M5-02, decision A: the coordinator and the scheduler stop being tested
     // machinery nothing calls and become the production routed path.
@@ -163,6 +172,30 @@ void TimelineEngineRouter::setTransportViewSink(TransportViewSink sink)
     transportViewSink_ = std::move(sink);
 }
 
+void TimelineEngineRouter::setEnginePresentationActiveSink(EnginePresentationActiveSink sink)
+{
+    enginePresentationActiveSink_ = std::move(sink);
+}
+
+const PresentationDiagnostics &TimelineEngineRouter::presentationDiagnostics() const
+{
+    return diagnostics_;
+}
+
+void TimelineEngineRouter::onEngineFrameCommitted()
+{
+    // ADR-003 criterion 12: this is presentation diagnostics and nothing
+    // else. There is no path from here to the clock, the session, or the
+    // command queue -- FramePresented carries no means of moving anything.
+    const std::optional<FramePresentationRequest> request = coordinator_.currentRequest();
+    if (!request)
+        return;
+
+    diagnostics_.recordPresented(FramePresented{
+        request->presentationSessionId, request->requestId, request->authority,
+        presentedPositionFor(request->target)});
+}
+
 void TimelineEngineRouter::onNotification()
 {
     handleEvents(bridge_.drain());
@@ -231,6 +264,11 @@ void TimelineEngineRouter::drivePreview(const PlaybackStatus &status,
             transportViewSink_(*view);
     }
 
+    // The panel paints engine frames only while a clip is actually open, so a
+    // gap falls back to the panel's own "no media at this position" rendering
+    // instead of leaving the previous clip's last frame up.
+    setEnginePresentationActive(driver_->openClipId().has_value());
+
     if (outcome.showNothing) {
         // A gap, the tail past the last clip, or missing media. Freeze rather
         // than tear down: the engine's clock keeps running through a gap, and
@@ -266,6 +304,16 @@ void TimelineEngineRouter::drivePreview(const PlaybackStatus &status,
         previewWindow_->show();
 }
 
+void TimelineEngineRouter::setEnginePresentationActive(bool active)
+{
+    if (isEnginePresentationActive_ == active)
+        return;
+
+    isEnginePresentationActive_ = active;
+    if (enginePresentationActiveSink_)
+        enginePresentationActiveSink_(active);
+}
+
 void TimelineEngineRouter::onFrameComposited(CompositedVideoFrame frame)
 {
     // The scheduler calls back on whichever thread the compositor finished
@@ -275,7 +323,7 @@ void TimelineEngineRouter::onFrameComposited(CompositedVideoFrame frame)
     const PresentationRequestId requestId = frame.requestId;
     const PresentationAuthority authority = frame.authority;
     QMetaObject::invokeMethod(this,
-        [this, presentationSessionId, requestId, authority] {
+        [this, presentationSessionId, requestId, authority, accepted = std::move(frame)] {
             // ADR-003: the worker does not decide its own currency. A frame
             // that finished after a newer want superseded it is dropped here.
             if (!coordinator_.isCurrentRequest(presentationSessionId, requestId, authority)) {
@@ -283,9 +331,11 @@ void TimelineEngineRouter::onFrameComposited(CompositedVideoFrame frame)
                         static_cast<unsigned long long>(requestId.value()));
                 return;
             }
-            // The frame itself already reached the viewport through the
-            // worker's attached video sink. Presenting it through this path
-            // instead is M5-05's dedicated presentation surface.
+            // Readiness, not presentation. The pixels reach the panel's engine
+            // sink on their own; the panel acknowledges the commit separately
+            // through onEngineFrameCommitted(), which is what keeps the two
+            // countable apart (ADR-003 criterion 12).
+            diagnostics_.recordComposited(accepted);
             logLine(L"Composited frame accepted for request %llu.",
                     static_cast<unsigned long long>(requestId.value()));
         },

@@ -30,6 +30,9 @@
 #include <QTemporaryFile>
 #include <QTemporaryDir>
 #include <QToolButton>
+#include <QVideoFrame>
+#include <QVideoFrameFormat>
+#include <QVideoSink>
 #include <QtTest>
 
 #include <optional>
@@ -62,6 +65,7 @@ private slots:
     void timelineVideoAudioMuteSeparatesRefreshAndUserToggle();
     void timelinePresentationRefreshUpdatesToolbarAtomically();
     void workerMediaErrorEntersFailedThroughTheEngineQueue();
+    void enginePresentationSurfaceIsSeparateFromTheLegacySink();
 };
 
 void MiniEditorQtWidgetTests::mediaLibraryModelExposesDecodedRealImageThumbnail()
@@ -1105,5 +1109,84 @@ void MiniEditorQtWidgetTests::workerMediaErrorEntersFailedThroughTheEngineQueue(
 }
 
 QTEST_MAIN(MiniEditorQtWidgetTests)
+
+void MiniEditorQtWidgetTests::enginePresentationSurfaceIsSeparateFromTheLegacySink()
+{
+    QtPreviewPanel panel;
+    panel.resize(640, 400);
+
+    // Decision B: a second sink alongside the legacy one, never a
+    // redirection of it. If these were ever the same object, source preview
+    // and routed timeline preview would be writing to one surface and the
+    // "two paths never contend" property would rest on nobody calling the
+    // wrong setter.
+    QVERIFY(panel.videoSink() != nullptr);
+    QVERIFY(panel.engineVideoSink() != nullptr);
+    QVERIFY(panel.videoSink() != panel.engineVideoSink());
+
+    int commits = 0;
+    panel.setEngineFrameCommittedHandler([&commits] { ++commits; });
+
+    // Solid-colour frames, so what reaches the surface is identifiable.
+    auto makeFrame = [](int blue, int green, int red) {
+        QVideoFrame frame(QVideoFrameFormat(QSize(160, 90),
+                                            QVideoFrameFormat::Format_BGRX8888));
+        frame.map(QVideoFrame::WriteOnly);
+        for (int row = 0; row < frame.height(); ++row) {
+            uchar *line = frame.bits(0) + static_cast<qsizetype>(row) * frame.bytesPerLine(0);
+            for (int column = 0; column < frame.width(); ++column) {
+                line[column * 4 + 0] = static_cast<uchar>(blue);
+                line[column * 4 + 1] = static_cast<uchar>(green);
+                line[column * 4 + 2] = static_cast<uchar>(red);
+                line[column * 4 + 3] = 255;
+            }
+        }
+        frame.unmap();
+        return frame;
+    };
+    const QVideoFrame frame = makeFrame(40, 200, 40);
+
+    // Frames arriving while the routed path is not presenting must not appear:
+    // the legacy path still owns the panel at that point.
+    panel.show();
+    panel.engineVideoSink()->setVideoFrame(frame);
+    QCoreApplication::processEvents();
+    const QColor inactivePixel = panel.grab().toImage().pixelColor(320, 200);
+    QVERIFY(!(inactivePixel.green() > 150 && inactivePixel.red() < 100));
+    QCOMPARE(commits, 0);
+
+    // Once the routed path is presenting, the same sink's frames are what the
+    // panel paints.
+    panel.setEnginePresentationActive(true);
+    panel.engineVideoSink()->setVideoFrame(frame);
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+    const QColor activePixel = panel.grab().toImage().pixelColor(320, 200);
+    QVERIFY(activePixel.green() > 150);
+    QVERIFY(activePixel.red() < 100);
+
+    // ADR-003: the acknowledgement follows the commit, once per frame rather
+    // than once per repaint -- a resize must not look like new frames.
+    QCoreApplication::processEvents();
+    QCOMPARE(commits, 1);
+    panel.resize(500, 320);
+    QCoreApplication::processEvents();
+    QCOMPARE(commits, 1);
+
+    // grab() forces the repaint; the extra processEvents() delivers the
+    // acknowledgement, which is queued so a handler that repaints cannot
+    // re-enter paintEvent.
+    panel.engineVideoSink()->setVideoFrame(makeFrame(40, 210, 40));
+    panel.grab();
+    QCoreApplication::processEvents();
+    QCOMPARE(commits, 2);
+
+    // Leaving the routed surface must not leave its last frame behind for the
+    // legacy path to appear to own.
+    panel.setEnginePresentationActive(false);
+    QCoreApplication::processEvents();
+    const QColor clearedPixel = panel.grab().toImage().pixelColor(320, 200);
+    QVERIFY(!(clearedPixel.green() > 150 && clearedPixel.red() < 100));
+}
 
 #include "MiniEditorQtWidgetTests.moc"

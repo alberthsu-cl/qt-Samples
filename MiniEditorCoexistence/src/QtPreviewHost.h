@@ -4,6 +4,7 @@
 
 #include <afxwin.h>
 
+#include <functional>
 #include <memory>
 
 class QtPreviewPanel;
@@ -27,6 +28,12 @@ public:
     void setFallbackImage(const QImage &image);
     QVideoSink *videoSink() const;
     void setDecodedVideoVisible(bool visible);
+
+    // M5-05: the routed engine's own surface inside this same panel. Separate
+    // sink, no redirection of the legacy one (decision B).
+    QVideoSink *engineVideoSink() const;
+    void setEnginePresentationActive(bool active);
+    void setEngineFrameCommittedHandler(std::function<void()> handler);
 
 private:
     std::unique_ptr<QtPreviewPanel> panel_;

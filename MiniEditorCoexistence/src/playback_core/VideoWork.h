@@ -105,6 +105,27 @@ struct CompositedVideoFrame final {
     VideoFrameBuffer buffer;
 };
 
+// ADR-003: the renderer's acknowledgement that it has committed a frame to
+// its own presentation surface. Deliberately a different type from
+// CompositedVideoFrame, which says a frame is *ready*: this one says it is
+// *on screen*, and criterion 12 requires the two to stay distinguishable.
+//
+// It carries no pixels and no clock, and nothing consumes it but presentation
+// diagnostics -- which is how "cannot advance transport" is enforced by the
+// type rather than by remembering not to.
+struct FramePresented final {
+    PresentationSessionId presentationSessionId;
+    PresentationRequestId requestId;
+    PresentationAuthority authority;
+    PresentedPosition position;
+};
+
+// The position a presentation request asked for, in the domain a presented
+// frame reports. Same mapping in both directions; kept in one place so a
+// renderer's acknowledgement cannot describe a different position than the
+// request it answers.
+PresentedPosition presentedPositionFor(const PresentationTarget &target);
+
 // ADR-007's framework-neutral compositor port. Composition is a separate
 // step from decoding (target-architecture decision 9): it turns one decoded
 // frame plus the presentation request it satisfies into one immutable,

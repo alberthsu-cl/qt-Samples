@@ -63,6 +63,8 @@ add_library(MiniEditorPlaybackCore STATIC
     src/playback_core/SequencePreviewDriver.cpp
     src/playback_core/TimelineTransportView.h
     src/playback_core/TimelineTransportView.cpp
+    src/playback_core/PresentationDiagnostics.h
+    src/playback_core/PresentationDiagnostics.cpp
     src/playback_core/PlaybackClock.h
     src/playback_core/PlaybackClock.cpp
     src/playback_core/PlaybackCommand.h

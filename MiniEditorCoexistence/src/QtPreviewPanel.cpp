@@ -57,6 +57,7 @@ QRect videoRectangle(const QRect &availableRect, const ClipSettings &settings)
 QtPreviewPanel::QtPreviewPanel(QWidget *parent)
     : QWidget(parent)
     , videoSink_(new QVideoSink(this))
+    , engineVideoSink_(new QVideoSink(this))
     , effectPipeline_(new QtPreviewEffectPipeline(this))
 {
     setMinimumSize(200, 150);
@@ -73,6 +74,44 @@ QtPreviewPanel::QtPreviewPanel(QWidget *parent)
                 processedImage_ = result;
                 update();
             });
+
+    // The engine's own surface. Its frames bypass the effect pipeline: the
+    // legacy pipeline reads the legacy PreviewState's effect settings, and
+    // per-clip effects on the routed path belong to a later milestone's
+    // compositor rather than to a shortcut through this one.
+    connect(engineVideoSink_, &QVideoSink::videoFrameChanged, this,
+            [this](const QVideoFrame &frame) {
+                engineVideoFrame_ = frame;
+                engineImage_ = frame.toImage();
+                hasAcknowledgedEngineFrame_ = false;
+                update();
+            });
+}
+
+QVideoSink *QtPreviewPanel::engineVideoSink() const
+{
+    return engineVideoSink_;
+}
+
+void QtPreviewPanel::setEnginePresentationActive(bool active)
+{
+    if (isEnginePresentationActive_ == active)
+        return;
+
+    isEnginePresentationActive_ = active;
+    if (!active) {
+        // Leaving the routed surface must not leave its last frame behind for
+        // the legacy path to appear to own.
+        engineVideoFrame_ = {};
+        engineImage_ = QImage();
+        hasAcknowledgedEngineFrame_ = true;
+    }
+    update();
+}
+
+void QtPreviewPanel::setEngineFrameCommittedHandler(std::function<void()> handler)
+{
+    engineFrameCommittedHandler_ = std::move(handler);
 }
 
 void QtPreviewPanel::setPreviewState(const PreviewState &state)
@@ -161,6 +200,28 @@ void QtPreviewPanel::paintEvent(QPaintEvent *)
                               std::max(0, height() - 32));
     if (availableRect.width() <= 0 || availableRect.height() <= 0)
         return;
+
+    if (isEnginePresentationActive_ && !engineImage_.isNull()) {
+        painter.fillRect(availableRect, QColor(24, 26, 30));
+        const QSize imageSize = engineImage_.size().scaled(availableRect.size(),
+                                                           Qt::KeepAspectRatio);
+        painter.drawImage(
+            QRect(availableRect.left() + (availableRect.width() - imageSize.width()) / 2,
+                  availableRect.top() + (availableRect.height() - imageSize.height()) / 2,
+                  imageSize.width(), imageSize.height()),
+            engineImage_);
+
+        // ADR-003: the acknowledgement comes *after* the commit, never before,
+        // and is queued so a handler that repaints cannot re-enter this event.
+        if (!hasAcknowledgedEngineFrame_) {
+            hasAcknowledgedEngineFrame_ = true;
+            if (engineFrameCommittedHandler_) {
+                QMetaObject::invokeMethod(this, engineFrameCommittedHandler_,
+                                          Qt::QueuedConnection);
+            }
+        }
+        return;
+    }
 
     const ClipSettings &settings = previewState_.settings;
     const QRect videoRect = videoRectangle(availableRect, settings);

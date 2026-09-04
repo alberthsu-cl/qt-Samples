@@ -12,6 +12,7 @@
 #include "SnapshotTimelineResolver.h"
 #include "SequencePreviewDriver.h"
 #include "TimelineTransportView.h"
+#include "PresentationDiagnostics.h"
 
 #include <thread>
 #include <vector>
@@ -1933,6 +1934,71 @@ bool verifyTimelineTransportView()
                    "A source-asset session must publish no timeline transport view.");
 }
 
+bool verifyFramePresentedIsDiagnosticsOnly()
+{
+    using namespace mini_editor::playback_core;
+
+    const SequenceId sequenceId = SequenceId::create();
+    FakePlaybackClock clock(MasterClockTime::fromMicroseconds(0));
+    PlaybackSession session(PlaybackSource{SequencePreview{sequenceId}}, clock);
+    session.applyCommand(
+        InstallSnapshot{makeSnapshot(sequenceId, FrameRate(30, 1), FrameCount::fromFrames(300))},
+        PlaybackCommandId::create());
+    session.applyCommand(
+        Seek{sequenceTimeAtFrameStart(TimelineFrame::fromFrameNumber(45), FrameRate(30, 1))},
+        PlaybackCommandId::create());
+
+    PreviewPresentationCoordinator coordinator;
+    coordinator.notifyPlaybackStatus(session.status(), true);
+    const FramePresentationRequest request = *coordinator.currentRequest();
+
+    // The position a renderer acknowledges is the position the request asked
+    // for, in the domain the request named.
+    const PresentedPosition position = presentedPositionFor(request.target);
+    const auto *sequencePosition = std::get_if<PresentedSequencePosition>(&position);
+    if (!require(sequencePosition != nullptr
+                     && sequencePosition->sequenceId == sequenceId
+                     && sequencePosition->timelineFrame == TimelineFrame::fromFrameNumber(45),
+                 "A sequence request must map to a sequence presented position at the "
+                 "same frame."))
+        return false;
+
+    PresentationDiagnostics diagnostics;
+    diagnostics.recordComposited(CompositedVideoFrame{
+        request.presentationSessionId, request.requestId, request.authority, position,
+        VideoFrameBuffer{3, nullptr}});
+    if (!require(diagnostics.compositedCount() == 1 && diagnostics.presentedCount() == 0
+                     && !diagnostics.lastPresented(),
+                 "ADR-003 criterion 12: a frame that composited but never reached a "
+                 "surface must not count as presented."))
+        return false;
+
+    // The status a renderer acknowledgement must not be able to change.
+    const PlaybackStatus before = session.status();
+    diagnostics.recordPresented(FramePresented{
+        request.presentationSessionId, request.requestId, request.authority, position});
+    const PlaybackStatus after = session.status();
+
+    if (!require(diagnostics.presentedCount() == 1 && diagnostics.compositedCount() == 1
+                     && diagnostics.lastPresented()
+                     && diagnostics.lastPresented()->requestId == request.requestId,
+                 "Presentation must be counted separately from composition readiness "
+                 "and keep the acknowledged request identity."))
+        return false;
+
+    // FramePresented carries no clock and no session reference, so this is
+    // less an assertion about behaviour than a statement that the type cannot
+    // express the thing criterion 12 forbids.
+    const auto &beforeSequence = std::get<SequencePreviewStatus>(before.context);
+    const auto &afterSequence = std::get<SequencePreviewStatus>(after.context);
+    return require(after.generation == before.generation
+                       && after.statusSeq == before.statusSeq
+                       && after.phase == before.phase
+                       && afterSequence.timelineFrame == beforeSequence.timelineFrame,
+                   "A renderer acknowledgement must not advance transport: not the "
+                   "playhead, not the generation, not the status sequence.");
+}
+
 } // namespace
 
 int main()
@@ -2002,7 +2068,8 @@ int main()
         || !verifyPreviewDriverFollowsThePlayheadAcrossClips()
         || !verifyPreviewDriverBoundsScrubbingAndSkipsStills()
         || !verifyPreviewDriverHoldsWhenItCannotResolve()
-        || !verifyTimelineTransportView()) {
+        || !verifyTimelineTransportView()
+        || !verifyFramePresentedIsDiagnosticsOnly()) {
         return 1;
     }
 

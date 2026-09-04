@@ -68,3 +68,20 @@ void QtPreviewHost::setDecodedVideoVisible(bool visible)
     if (panel_)
         panel_->setDecodedVideoVisible(visible);
 }
+
+QVideoSink *QtPreviewHost::engineVideoSink() const
+{
+    return panel_ ? panel_->engineVideoSink() : nullptr;
+}
+
+void QtPreviewHost::setEnginePresentationActive(bool active)
+{
+    if (panel_)
+        panel_->setEnginePresentationActive(active);
+}
+
+void QtPreviewHost::setEngineFrameCommittedHandler(std::function<void()> handler)
+{
+    if (panel_)
+        panel_->setEngineFrameCommittedHandler(std::move(handler));
+}
