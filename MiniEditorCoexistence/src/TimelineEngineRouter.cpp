@@ -320,7 +320,11 @@ void TimelineEngineRouter::drivePreview(const PlaybackStatus &status,
     if (status.phase == PlaybackPhase::Playing)
         worker_.play();
 
-    if (!previewWindow_->isVisible())
+    // Only the standalone smoke-test window needs showing. When the engine
+    // renders into the preview panel's own sink -- the default since M5-08 --
+    // there is no window here at all, and this line dereferenced null the
+    // first time a clip opened.
+    if (previewWindow_ && !previewWindow_->isVisible())
         previewWindow_->show();
 }
 
