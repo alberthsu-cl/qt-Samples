@@ -313,9 +313,13 @@ never mutates `PlaybackSession` directly; the consumer validates identity).
 
 ## M4-06 — Feature-flagged routing
 
-**Status: implemented, pending manual validation.** M4-07 and the user's
-manual smoke-test validation of M4-04/M4-05 both completed first, as
-required by this gate.
+**Status: implemented, pending manual validation, blocked/not accepted until
+M4-08 (below) is also complete.** M4-07 and the user's manual smoke-test
+validation of M4-04/M4-05 both completed first, as required by this gate.
+M4-08 was added after M4-06 landed: `TimelineEngineRouter` reused
+`QtPlaybackMediaWorker` without replicating M4-07's failure-observation
+wiring, so a real media failure during routed timeline preview was silently
+dropped.
 
 Wires everything above together behind a flag that defaults off.
 
@@ -377,6 +381,34 @@ first video clip on V1 is opened for preview. Multi-clip timeline resolution
 (switching source as the playhead crosses clip boundaries) needs
 `TimelinePlaybackResolver` adapted to consume a snapshot — ADR-003 migration
 step 3, still unstarted, out of scope here.
+
+## M4-08 — Media-failure observation path for TimelineEngineRouter
+
+**Status: complete.** Added after M4-06 landed, mirroring the exact gap
+M4-07 closed for `EngineSmokeTestSession`: `TimelineEngineRouter` reuses
+`QtPlaybackMediaWorker` but never connected its `mediaErrorOccurred` signal
+to anything, so a real media failure during routed timeline preview was
+silently dropped — the worker emitted the signal, `PlaybackSession` never
+transitioned to Failed.
+
+**Scope**
+
+- `TimelineEngineRouter`'s constructor connects `mediaErrorOccurred` to a
+  handler calling `engine_->reportFailure(...)`, reading the session/
+  generation identity from `engine_->status()` at report time — the exact
+  same pattern `EngineSmokeTestSession` already uses. No other routing code
+  changed: `executeEditorCommand()`/`seekPreviewToCurrentFrame()`/
+  `OnTimer()`'s gating, the single-clip preview scope, and
+  `PlaybackEngine`/`PlaybackSession` themselves are all untouched.
+- Strengthened `verifyPlaybackEngineFailureObservation()` with two scenarios
+  modeling this exact call shape literally — one `status()` read, both
+  identity fields destructured from that single snapshot, not read
+  independently — proving a current snapshot's identity still transitions to
+  Failed, and one captured before other commands ran (now stale) is
+  discarded.
+
+Architecture: ADR-002 (failure/Failed-phase criteria), ADR-005 (a worker
+never mutates `PlaybackSession` directly).
 
 ## What remains deliberately deferred
 
