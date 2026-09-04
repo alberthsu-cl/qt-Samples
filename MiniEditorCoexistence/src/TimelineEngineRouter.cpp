@@ -65,28 +65,52 @@ TimelineEngineRouter::~TimelineEngineRouter()
 
 void TimelineEngineRouter::installSnapshot(SequencePlaybackSnapshotPtr snapshot)
 {
-    if (!snapshot)
+    if (!snapshot) {
+        logLine(L"installSnapshot() called with a null snapshot; ignoring.");
         return;
+    }
 
     currentFrameRate_ = snapshot->frameRate;
     currentDuration_ = snapshot->duration;
 
+    logLine(L"Installing snapshot: sequenceId=%llu revision=%llu videoClips=%zu audioClips=%zu "
+            L"mediaDescriptors=%zu durationFrames=%lld",
+            static_cast<unsigned long long>(snapshot->sequenceId.valueForDiagnostics()),
+            static_cast<unsigned long long>(snapshot->revision.value()),
+            snapshot->videoClips.size(), snapshot->audioClips.size(), snapshot->media.size(),
+            static_cast<long long>(snapshot->duration.frames()));
+
     engine_->submit(InstallSnapshot{snapshot}, PlaybackCommandId::create());
 
     // Single-clip preview scope for this milestone -- see the class comment.
-    if (!snapshot->videoClips.empty()) {
-        const PlaybackClip &firstClip = snapshot->videoClips.front();
-        const auto mediaIt = std::find_if(snapshot->media.begin(), snapshot->media.end(),
-            [&firstClip](const PlaybackMediaDescriptor &descriptor) {
-                return descriptor.mediaAssetId == firstClip.mediaAssetId;
-            });
-        if (mediaIt != snapshot->media.end() && mediaIt->availability == MediaAvailability::Available) {
-            logLine(L"Installed snapshot; opening first V1 clip's media for preview.");
-            worker_.openSource(QString::fromStdString(mediaIt->immutableSourceLocator));
-            if (!previewWindow_->isVisible())
-                previewWindow_->show();
-        }
+    if (snapshot->videoClips.empty()) {
+        logLine(L"Snapshot has no V1 video clips; nothing to preview.");
+        return;
     }
+
+    const PlaybackClip &firstClip = snapshot->videoClips.front();
+    const auto mediaIt = std::find_if(snapshot->media.begin(), snapshot->media.end(),
+        [&firstClip](const PlaybackMediaDescriptor &descriptor) {
+            return descriptor.mediaAssetId == firstClip.mediaAssetId;
+        });
+    if (mediaIt == snapshot->media.end()) {
+        logLine(L"First V1 clip references mediaAssetId=%d, but no matching descriptor exists "
+                L"in the snapshot's media list.",
+                firstClip.mediaAssetId);
+        return;
+    }
+    if (mediaIt->availability != MediaAvailability::Available) {
+        logLine(L"First V1 clip's media (mediaAssetId=%d, locator=%hs) is marked Unavailable "
+                L"(file not found at that path); nothing to preview.",
+                firstClip.mediaAssetId, mediaIt->immutableSourceLocator.c_str());
+        return;
+    }
+
+    logLine(L"Opening first V1 clip's media for preview: %hs",
+            mediaIt->immutableSourceLocator.c_str());
+    worker_.openSource(QString::fromStdString(mediaIt->immutableSourceLocator));
+    if (!previewWindow_->isVisible())
+        previewWindow_->show();
 }
 
 void TimelineEngineRouter::applyIntent(EditorIntent intent)

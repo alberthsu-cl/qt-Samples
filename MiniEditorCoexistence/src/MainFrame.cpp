@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdio>
 #include <cwchar>
 #include <filesystem>
 
@@ -561,8 +562,11 @@ bool MainFrame::isTimelineEngineRoutingActive() const
 void MainFrame::updateTimelineEngineSnapshot(EditorChange changes)
 {
 #if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_ROUTING
-    if (!timelineEngineRouter_)
+    if (!timelineEngineRouter_) {
+        ::OutputDebugStringW(L"[MainFrame] updateTimelineEngineSnapshot: no router "
+                            L"(projectRuntime had no active sequence at OnCreate time).\n");
         return;
+    }
     if (!includesChange(changes, EditorChange::TimelineClip)
         && !includesChange(changes, EditorChange::AudioMix)
         && !includesChange(changes, EditorChange::All)) {
@@ -572,8 +576,15 @@ void MainFrame::updateTimelineEngineSnapshot(EditorChange changes)
     mini_editor::playback_core::SnapshotBuildResult result =
         SequencePlaybackSnapshotBuilder::build(editorSession_.projectSnapshot(),
                                                editorSession_.projectRuntime());
-    if (auto *snapshot = std::get_if<mini_editor::playback_core::SequencePlaybackSnapshotPtr>(&result))
+    if (auto *snapshot = std::get_if<mini_editor::playback_core::SequencePlaybackSnapshotPtr>(&result)) {
         timelineEngineRouter_->installSnapshot(*snapshot);
+    } else {
+        const auto &error = std::get<mini_editor::playback_core::SnapshotBuildError>(result);
+        wchar_t buffer[512];
+        _snwprintf_s(buffer, _countof(buffer), _TRUNCATE, L"[MainFrame] Snapshot build failed: %hs\n",
+                    error.message.c_str());
+        ::OutputDebugStringW(buffer);
+    }
 #else
     (void)changes;
 #endif
@@ -663,6 +674,16 @@ int MainFrame::contentBottomForClient(int clientHeight)
 
 void MainFrame::executeEditorCommand(EditorIntent command)
 {
+    if (command == EditorIntent::TogglePlayback || command == EditorIntent::StopPlayback
+        || command == EditorIntent::StepBackward || command == EditorIntent::StepForward) {
+        wchar_t buffer[256];
+        _snwprintf_s(buffer, _countof(buffer), _TRUNCATE,
+                    L"[MainFrame] playback intent=%d isTimelineFocused=%d routingActive=%d\n",
+                    static_cast<int>(command), editorSession_.isTimelineFocused() ? 1 : 0,
+                    isTimelineEngineRoutingActive() ? 1 : 0);
+        ::OutputDebugStringW(buffer);
+    }
+
     if (isTimelineEngineRoutingActive()) {
         switch (command) {
         case EditorIntent::TogglePlayback:
