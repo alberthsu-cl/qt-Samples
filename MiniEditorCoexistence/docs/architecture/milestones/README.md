@@ -17,7 +17,7 @@ implementation steps. It is the practical bridge between:
 | 1. Core foundation | A framework-neutral C++ playback-core target and the explicit `LegacyPlaybackCommand` name for the existing UI path. | **Complete** |
 | 2. Project + snapshots | Strong time/identity values plus immutable project-runtime and sequence snapshots. | **Complete** |
 | 3. Playback authority | `PlaybackSession`, injected fake clock, engine commands, and stale-result rules. | **Complete** |
-| 4. Media integration | Decoder, audio, compositor, and MFC/Qt notification adapters behind a feature flag. | In progress |
+| 4. Media integration | Decoder, audio, compositor, and MFC/Qt notification adapters behind a feature flag. | **Complete** |
 | 5. Rollout + migration | Route timeline preview through the new core, compare behavior, make it default, and retire legacy timer advancement. | Planned |
 
 ## How to read and use a milestone
@@ -40,15 +40,19 @@ human decision.
 
 [Milestone 1 — Core Foundation](milestone-01-core-foundation.md),
 [Milestone 2 — Project and snapshots](milestone-02-project-and-snapshots.md),
-and [Milestone 3 — Playback authority](milestone-03-playback-authority.md)
-are complete. [Milestone 4 — Media integration](milestone-04-media-integration.md)
-has all seven issues (M4-01 through M4-07) implemented, including the
-feature-flagged timeline routing that was this milestone's last piece; it is
-the first milestone to introduce real concurrency and touch live Qt/MFC
-application code, so it called out its higher-risk, real-integration issues
-explicitly throughout rather than treating them as equivalent to the
-fake-port core work. M4-04/M4-05 have completed manual validation; M4-06's
-own manual validation (does the routed timeline preview actually show real
-video) is still pending. Everything remains behind feature flags that
-default off — current application behavior is unchanged until Milestone 5
-deliberately switches one on for comparison.
+[Milestone 3 — Playback authority](milestone-03-playback-authority.md), and
+[Milestone 4 — Media integration](milestone-04-media-integration.md) are all
+complete. Milestone 4's eight issues (M4-01 through M4-08) introduced this
+application's first real background thread, its first `PostMessage`/
+`ON_MESSAGE` notification bridge, its first real Qt Multimedia adapter, and
+feature-flagged routing of timeline preview through the new engine — so it
+called out its higher-risk, real-integration issues explicitly throughout
+rather than treating them as equivalent to the fake-port core work. Both
+manual validations (real playback, and a real corrupt-file failure) passed,
+and the failure path is now covered automatically by an end-to-end Qt test.
+
+Everything still sits behind feature flags that default off — current
+application behavior is unchanged. [Milestone 5](README.md) is where the new
+path becomes the default: route timeline preview through the new core,
+compare behavior against the legacy path, then retire MFC timer advancement
+and the legacy backend.

@@ -313,13 +313,22 @@ never mutates `PlaybackSession` directly; the consumer validates identity).
 
 ## M4-06 — Feature-flagged routing
 
-**Status: implemented, pending manual validation, blocked/not accepted until
-M4-08 (below) is also complete.** M4-07 and the user's manual smoke-test
-validation of M4-04/M4-05 both completed first, as required by this gate.
-M4-08 was added after M4-06 landed: `TimelineEngineRouter` reused
-`QtPlaybackMediaWorker` without replicating M4-07's failure-observation
-wiring, so a real media failure during routed timeline preview was silently
-dropped.
+**Status: complete.** Happy path manually validated (project loaded, timeline
+clip focused, Space plays real video in the standalone preview window);
+failure path covered automatically by M4-08's end-to-end test. M4-07 and the
+manual smoke-test validation of M4-04/M4-05 both completed first, as required
+by this gate, and M4-08 (added after M4-06 landed) closed the last blocker.
+
+**Bug found during that manual validation, and fixed:**
+`updateTimelineEngineSnapshot()` passed `EditorSession::projectSnapshot()`
+straight to the snapshot builder, but that function deliberately returns an
+`EditorProject` with `mediaAssets` empty — it is the serialization-side view,
+and `ProjectDocumentService` fills the library in separately. With no media
+assets the builder rejected every snapshot
+("A timeline clip has an invalid identity or media reference"), so nothing was
+installed, the worker was never given a file, and Play appeared to do nothing
+while routing itself was working correctly. Diagnostic logging added at every
+silent branch is what pinpointed it; that logging stays.
 
 Wires everything above together behind a flag that defaults off.
 
@@ -370,11 +379,11 @@ Architecture: ADR-002 (criterion 13, now reachable), ADR-007 (feature-flag
 section).
 
 **Verification:** both build trees pass all tests with the flag at its OFF
-default; a build with the flag on compiles, links, and passes the full
-headless test suite. Not yet verified: actually running the app with routing
-on and confirming the standalone timeline-preview window shows real video
-during timeline playback — needs a human running the build by hand, the same
-as M4-04/M4-05 did.
+default; a build with the flag on compiles, links, and passes the full test
+suite. Manually confirmed by running the routing build: opening a project,
+focusing a timeline clip, and pressing Space plays real video and audio in
+the standalone "Timeline Preview (New Engine)" window, with the app's own
+preview panel untouched.
 
 **Scope note carried over from the router's own implementation:** only the
 first video clip on V1 is opened for preview. Multi-clip timeline resolution
@@ -406,6 +415,23 @@ transitioned to Failed.
   independently — proving a current snapshot's identity still transitions to
   Failed, and one captured before other commands ran (now stale) is
   discarded.
+- The duplicated "read status, tag, enqueue" step in both Qt adapters was
+  then extracted into a shared framework-neutral
+  `reportWorkerFailure(PlaybackEngine &, std::string)`, so the call shape
+  exists once and is covered once.
+
+**Automated end-to-end verification.** Because this failure path produces
+log/state output rather than visual or audio output, it is verified by test
+rather than by hand:
+`MiniEditorQtWidgetTests::workerMediaErrorEntersFailedThroughTheEngineQueue()`
+writes an undecodable file to a `QTemporaryDir` (so an upstream
+`std::filesystem::exists` check passes and decode is genuinely attempted),
+opens it through a real `QtPlaybackMediaWorker` on its own thread, waits for
+the real `QMediaPlayer` error, and asserts `PlaybackSession` reached Failed
+with a non-empty error. Since `shutdownAndJoin()` drains the queue after the
+already-queued observation, it also proves the failure travelled through the
+engine's serialized queue rather than mutating the session directly. No GUI,
+no saved project, no sample media involved.
 
 Architecture: ADR-002 (failure/Failed-phase criteria), ADR-005 (a worker
 never mutates `PlaybackSession` directly).
