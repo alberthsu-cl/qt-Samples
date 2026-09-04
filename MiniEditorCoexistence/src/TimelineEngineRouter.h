@@ -4,10 +4,14 @@
 #include "MfcPlaybackNotificationBridge.h"
 #include "QtPlaybackMediaWorker.h"
 #include "playback_core/PlaybackEngine.h"
+#include "playback_core/PreviewPresentation.h"
 #include "playback_core/SequencePlaybackSnapshot.h"
+#include "playback_core/SequencePreviewDriver.h"
 #include "playback_core/SteadyPlaybackClock.h"
+#include "playback_core/VideoWorkScheduler.h"
 
 #include <QObject>
+#include <QTimer>
 
 #include <memory>
 
@@ -34,11 +38,10 @@ class QVideoWidget;
 // which is what makes "at no point may both paths hold transport authority
 // for the same preview session" true by construction rather than by care.
 //
-// Scope note: only the first video clip on V1 is opened for preview.
-// Multi-clip timeline resolution (switching source as the playhead crosses
-// clip boundaries) needs TimelinePlaybackResolver adapted to consume a
-// snapshot, which is ADR-003 migration step 3 and is still unstarted --
-// this milestone does not attempt it.
+// M5-02 lifted this class's original "first V1 clip only" scope. Which clip
+// is under the playhead, when that is a source switch, and when a gap must
+// blank the viewport are all decided by SequencePreviewDriver in the core;
+// what is left here is executing those decisions against Qt.
 class TimelineEngineRouter final : public QObject {
     Q_OBJECT
 
@@ -69,6 +72,23 @@ public:
 private:
     void handleEvents(std::vector<mini_editor::playback_core::PlaybackEvent> events);
 
+    // Runs the driver for one status and executes what it asks for.
+    void drivePreview(const mini_editor::playback_core::PlaybackStatus &status,
+                      bool transportJustRepositioned);
+
+    // A free-running transport publishes no status of its own, so nothing
+    // would notice the playhead crossing a clip boundary. This samples while
+    // Playing. It is a *presentation* tick, not transport: PlaybackSession's
+    // clock still owns position, and this never advances it. That is why
+    // M5-09 can retire the MFC timer's transport advancement without
+    // affecting this.
+    void onPresentationTick();
+
+    // Called by VideoWorkScheduler when a scrub decode has been composited.
+    // May arrive on any thread; marshals to the GUI thread before touching
+    // the coordinator.
+    void onFrameComposited(mini_editor::playback_core::CompositedVideoFrame frame);
+
     // What the engine's session last accepted, so a view-only editor change
     // that rebuilds an identical snapshot does not re-open media for content
     // the session will refuse. PlaybackSession remains the authority; this is
@@ -81,6 +101,10 @@ private:
     mini_editor::playback_core::SteadyPlaybackClock clock_;
     std::unique_ptr<mini_editor::playback_core::PlaybackEngine> engine_;
     QtPlaybackMediaWorker worker_;
+    mini_editor::playback_core::PreviewPresentationCoordinator coordinator_;
+    std::unique_ptr<mini_editor::playback_core::VideoWorkScheduler> scheduler_;
+    std::unique_ptr<mini_editor::playback_core::SequencePreviewDriver> driver_;
+    QTimer presentationTimer_;
     std::unique_ptr<QVideoWidget> previewWindow_;
     mini_editor::playback_core::PlaybackPhase lastAppliedPhase_ =
         mini_editor::playback_core::PlaybackPhase::Stopped;

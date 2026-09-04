@@ -37,6 +37,20 @@ TimelineEngineRouter::TimelineEngineRouter(HWND notifyTarget, UINT notifyMessage
     previewWindow_->resize(640, 360);
     worker_.attachExternalVideoOutput(previewWindow_->videoSink());
 
+    // M5-02, decision A: the coordinator and the scheduler stop being tested
+    // machinery nothing calls and become the production routed path.
+    scheduler_ = std::make_unique<VideoWorkScheduler>(
+        worker_.videoDecodeService(), worker_.videoCompositor(),
+        [this](CompositedVideoFrame frame) { onFrameComposited(std::move(frame)); });
+    driver_ = std::make_unique<SequencePreviewDriver>(coordinator_, *scheduler_, clock_);
+
+    // 15 ms: half a frame at 30 fps, so a clip boundary is noticed within the
+    // frame it happens in rather than after it.
+    presentationTimer_.setInterval(15);
+    presentationTimer_.setTimerType(Qt::PreciseTimer);
+    QObject::connect(&presentationTimer_, &QTimer::timeout, this,
+                     &TimelineEngineRouter::onPresentationTick);
+
     // M4-08: the worker never touches PlaybackSession/PlaybackEngine directly
     // -- it only emits this signal. Reporting the failure through the
     // engine's serialized queue, tagged with whatever session/generation is
@@ -57,6 +71,8 @@ TimelineEngineRouter::TimelineEngineRouter(HWND notifyTarget, UINT notifyMessage
 TimelineEngineRouter::~TimelineEngineRouter()
 {
     logLine(L"Router shutting down.");
+    presentationTimer_.stop();
+    coordinator_.shutdown();
     if (engine_)
         engine_->shutdownAndJoin();
 }
@@ -96,35 +112,9 @@ void TimelineEngineRouter::installSnapshot(SequencePlaybackSnapshotPtr snapshot)
 
     engine_->submit(InstallSnapshot{snapshot}, PlaybackCommandId::create());
 
-    // Single-clip preview scope for this milestone -- see the class comment.
-    if (snapshot->videoClips.empty()) {
-        logLine(L"Snapshot has no V1 video clips; nothing to preview.");
-        return;
-    }
-
-    const PlaybackClip &firstClip = snapshot->videoClips.front();
-    const auto mediaIt = std::find_if(snapshot->media.begin(), snapshot->media.end(),
-        [&firstClip](const PlaybackMediaDescriptor &descriptor) {
-            return descriptor.mediaAssetId == firstClip.mediaAssetId;
-        });
-    if (mediaIt == snapshot->media.end()) {
-        logLine(L"First V1 clip references mediaAssetId=%d, but no matching descriptor exists "
-                L"in the snapshot's media list.",
-                firstClip.mediaAssetId);
-        return;
-    }
-    if (mediaIt->availability != MediaAvailability::Available) {
-        logLine(L"First V1 clip's media (mediaAssetId=%d, locator=%hs) is marked Unavailable "
-                L"(file not found at that path); nothing to preview.",
-                firstClip.mediaAssetId, mediaIt->immutableSourceLocator.c_str());
-        return;
-    }
-
-    logLine(L"Opening first V1 clip's media for preview: %hs",
-            mediaIt->immutableSourceLocator.c_str());
-    worker_.openSource(QString::fromStdString(mediaIt->immutableSourceLocator));
-    if (!previewWindow_->isVisible())
-        previewWindow_->show();
+    // Which clip to open, and when, is now decided per status by the driver
+    // against the playhead -- not once, here, from clip zero.
+    driver_->installSnapshot(snapshot);
 }
 
 void TimelineEngineRouter::applyIntent(EditorIntent intent)
@@ -180,17 +170,31 @@ void TimelineEngineRouter::handleEvents(std::vector<PlaybackEvent> events)
         if (!status)
             continue;
 
+        // Resolve and open before mirroring the phase, so that on the first
+        // Play the clip's media is already on its way to the worker thread
+        // when play() is queued behind it.
+        //
+        // Every status here is the result of a command this router submitted,
+        // and the routed path issues no editing selections yet, so
+        // "repositioned" is true for all of them. M5-05 introduces
+        // timeline-selection overrides and will have to distinguish Pause and
+        // SetRate from the override-clearing commands.
+        drivePreview(*status, /*transportJustRepositioned=*/true);
+
         if (status->phase != lastAppliedPhase_) {
             lastAppliedPhase_ = status->phase;
             switch (status->phase) {
             case PlaybackPhase::Playing:
                 worker_.play();
+                presentationTimer_.start();
                 break;
             case PlaybackPhase::Paused:
             case PlaybackPhase::Stopped:
+                presentationTimer_.stop();
                 worker_.pause();
                 break;
             case PlaybackPhase::Failed:
+                presentationTimer_.stop();
                 logLine(L"phase=Failed error=%hs",
                         status->error ? status->error->message.c_str() : "(none)");
                 break;
@@ -199,4 +203,78 @@ void TimelineEngineRouter::handleEvents(std::vector<PlaybackEvent> events)
             }
         }
     }
+}
+
+void TimelineEngineRouter::onPresentationTick()
+{
+    // A plain refresh, not a reposition: the transport is simply where the
+    // clock says it is.
+    drivePreview(engine_->status(), /*transportJustRepositioned=*/false);
+}
+
+void TimelineEngineRouter::drivePreview(const PlaybackStatus &status,
+                                        bool transportJustRepositioned)
+{
+    const PreviewDriveOutcome outcome =
+        driver_->notifyPlaybackStatus(status, transportJustRepositioned);
+
+    if (outcome.showNothing) {
+        // A gap, the tail past the last clip, or missing media. Freeze rather
+        // than tear down: the engine's clock keeps running through a gap, and
+        // the next clip will open on its own when the playhead reaches it.
+        worker_.pause();
+        return;
+    }
+    if (!outcome.openClip)
+        return;
+
+    const PreviewSourceChange &change = *outcome.openClip;
+    if (change.mediaKind != PlaybackMediaKind::Video) {
+        // A still (or an audio-only clip) has no source timeline. Handing one
+        // to QMediaPlayer is how a picture becomes a decoder error and, from
+        // there, a Failed session. Rendering stills belongs to the dedicated
+        // presentation path in M5-05.
+        logLine(L"Clip %d is not video (mediaKind=%d); not opening it in the continuous "
+                L"player. Still-image presentation arrives with M5-05.",
+                change.clipId, static_cast<int>(change.mediaKind));
+        worker_.pause();
+        return;
+    }
+
+    logLine(L"Playhead entered clip %d; opening %hs", change.clipId,
+            change.immutableSourceLocator.c_str());
+    worker_.openSource(QString::fromStdString(change.immutableSourceLocator));
+    if (change.sourceTime)
+        worker_.seekTo(*change.sourceTime);
+    if (status.phase == PlaybackPhase::Playing)
+        worker_.play();
+
+    if (!previewWindow_->isVisible())
+        previewWindow_->show();
+}
+
+void TimelineEngineRouter::onFrameComposited(CompositedVideoFrame frame)
+{
+    // The scheduler calls back on whichever thread the compositor finished
+    // on. PreviewPresentationCoordinator belongs to the GUI thread, so the
+    // currency check has to happen there, not here (ADR-005).
+    const PresentationSessionId presentationSessionId = frame.presentationSessionId;
+    const PresentationRequestId requestId = frame.requestId;
+    const PresentationAuthority authority = frame.authority;
+    QMetaObject::invokeMethod(this,
+        [this, presentationSessionId, requestId, authority] {
+            // ADR-003: the worker does not decide its own currency. A frame
+            // that finished after a newer want superseded it is dropped here.
+            if (!coordinator_.isCurrentRequest(presentationSessionId, requestId, authority)) {
+                logLine(L"Discarding a composited frame: request %llu is no longer current.",
+                        static_cast<unsigned long long>(requestId.value()));
+                return;
+            }
+            // The frame itself already reached the viewport through the
+            // worker's attached video sink. Presenting it through this path
+            // instead is M5-05's dedicated presentation surface.
+            logLine(L"Composited frame accepted for request %llu.",
+                    static_cast<unsigned long long>(requestId.value()));
+        },
+        Qt::QueuedConnection);
 }

@@ -10,6 +10,7 @@
 #include "SteadyPlaybackClock.h"
 #include "PlaybackEventSink.h"
 #include "SnapshotTimelineResolver.h"
+#include "SequencePreviewDriver.h"
 
 #include <thread>
 #include <vector>
@@ -1581,6 +1582,285 @@ bool verifySessionRetargetAcrossProjectReload()
                    "retarget onto the new sequence.");
 }
 
+// Everything the driver has to get right, in one timeline: two video clips
+// with a gap between them, then a still. Same shape as the resolver fixture,
+// but tied to a real session's sequence so the statuses fed in are genuine.
+//
+//  frame   0        30       60       90      120
+//  V1     [clip 10 ][  gap  ][clip 11 ][clip 12]
+//                            11 = second video, 12 = still image
+mini_editor::playback_core::SequencePlaybackSnapshotPtr makeDriverFixture(
+    mini_editor::playback_core::SequenceId sequenceId,
+    mini_editor::playback_core::MediaAvailability firstClipAvailability
+        = mini_editor::playback_core::MediaAvailability::Available)
+{
+    using namespace mini_editor::playback_core;
+
+    SequencePlaybackSnapshot snapshot {
+        sequenceId, SequenceRevision::initial(), FrameRate(30, 1),
+        FrameCount::fromFrames(120),
+        {
+            { 1, PlaybackMediaKind::Video, "first.mp4", firstClipAvailability,
+              SourceTimestamp::fromMicroseconds(10'000'000) },
+            { 2, PlaybackMediaKind::Video, "second.mp4", MediaAvailability::Available,
+              SourceTimestamp::fromMicroseconds(10'000'000) },
+            { 3, PlaybackMediaKind::Image, "still.png", MediaAvailability::Available,
+              std::nullopt }
+        },
+        {
+            { 10, 1, PlaybackTrackType::Video, TimelineFrame::fromFrameNumber(0),
+              FrameCount::fromFrames(30),
+              SourceTimestamp::fromMicroseconds(2'000'000), {} },
+            { 11, 2, PlaybackTrackType::Video, TimelineFrame::fromFrameNumber(60),
+              FrameCount::fromFrames(30), SourceTimestamp::fromMicroseconds(0), {} },
+            { 12, 3, PlaybackTrackType::Video, TimelineFrame::fromFrameNumber(90),
+              FrameCount::fromFrames(30), std::nullopt, {} }
+        },
+        {},
+        false
+    };
+    return std::make_shared<const SequencePlaybackSnapshot>(std::move(snapshot));
+}
+
+// Everything a driver test needs, assembled once: a session producing real
+// statuses, the coordinator and scheduler the driver drives, and the fake
+// ports underneath them.
+struct DriverHarness final {
+    explicit DriverHarness(
+        mini_editor::playback_core::MediaAvailability firstClipAvailability
+            = mini_editor::playback_core::MediaAvailability::Available)
+        : sequenceId(mini_editor::playback_core::SequenceId::create())
+        , clock(mini_editor::playback_core::MasterClockTime::fromMicroseconds(0))
+        , session(mini_editor::playback_core::PlaybackSource{
+                      mini_editor::playback_core::SequencePreview{sequenceId}}, clock)
+        , scheduler(decoder, compositor,
+                    [this](mini_editor::playback_core::CompositedVideoFrame frame) {
+                        presented.push_back(std::move(frame));
+                    })
+        , driver(coordinator, scheduler, clock)
+    {
+        using namespace mini_editor::playback_core;
+        snapshot = makeDriverFixture(sequenceId, firstClipAvailability);
+        session.applyCommand(InstallSnapshot{snapshot}, PlaybackCommandId::create());
+        driver.installSnapshot(snapshot);
+    }
+
+    // Moves the transport to one frame and lets the driver react, the way the
+    // router does for a status arriving from the engine.
+    mini_editor::playback_core::PreviewDriveOutcome seekTo(std::int64_t frame)
+    {
+        using namespace mini_editor::playback_core;
+        session.applyCommand(
+            Seek{sequenceTimeAtFrameStart(TimelineFrame::fromFrameNumber(frame),
+                                          FrameRate(30, 1))},
+            PlaybackCommandId::create());
+        return driver.notifyPlaybackStatus(session.status(),
+                                           /*transportJustRepositioned=*/true);
+    }
+
+    // The other way the driver is called: sampling a free-running transport,
+    // which is the only thing that notices a clip boundary while playing.
+    mini_editor::playback_core::PreviewDriveOutcome tick()
+    {
+        return driver.notifyPlaybackStatus(session.status(),
+                                           /*transportJustRepositioned=*/false);
+    }
+
+    mini_editor::playback_core::SequenceId sequenceId;
+    FakePlaybackClock clock;
+    mini_editor::playback_core::PlaybackSession session;
+    mini_editor::playback_core::SequencePlaybackSnapshotPtr snapshot;
+    mini_editor::playback_core::PreviewPresentationCoordinator coordinator;
+    FakeVideoDecodeService decoder;
+    FakeVideoCompositor compositor;
+    std::vector<mini_editor::playback_core::CompositedVideoFrame> presented;
+    mini_editor::playback_core::VideoWorkScheduler scheduler;
+    mini_editor::playback_core::SequencePreviewDriver driver;
+};
+
+bool verifyPreviewDriverFollowsThePlayheadAcrossClips()
+{
+    using namespace mini_editor::playback_core;
+
+    DriverHarness harness;
+
+    const PreviewDriveOutcome atStart = harness.seekTo(0);
+    if (!require(atStart.openClip && atStart.openClip->clipId == 10
+                     && atStart.openClip->immutableSourceLocator == "first.mp4"
+                     && !atStart.showNothing,
+                 "The first status must open the clip under the playhead."))
+        return false;
+
+    // Inside the same clip nothing may be re-opened: re-opening a file every
+    // frame is exactly the stall this issue exists to avoid.
+    if (!require(!harness.seekTo(10).openClip && !harness.seekTo(29).openClip,
+                 "Moving within one clip must not re-open its media."))
+        return false;
+
+    // The gap. Not a failure and not an error -- there is simply nothing to
+    // show, and the driver must say so rather than leave the previous clip up.
+    const PreviewDriveOutcome inGap = harness.seekTo(30);
+    if (!require(inGap.showNothing && !inGap.openClip
+                     && !harness.driver.openClipId(),
+                 "A gap must blank the viewport and forget the open clip."))
+        return false;
+
+    // Crossing into the second clip.
+    const PreviewDriveOutcome secondClip = harness.seekTo(60);
+    if (!require(secondClip.openClip && secondClip.openClip->clipId == 11
+                     && secondClip.openClip->immutableSourceLocator == "second.mp4"
+                     && secondClip.openClip->sourceTime
+                     && *secondClip.openClip->sourceTime
+                         == SourceTimestamp::fromMicroseconds(0),
+                 "Crossing a clip boundary must open the new clip at its source in."))
+        return false;
+
+    // Mid-clip, the source time follows the playhead rather than restarting.
+    const PreviewDriveOutcome midSecond = harness.seekTo(75);
+    if (!require(!midSecond.openClip && harness.driver.openClipId() == 11,
+                 "The second clip must stay open as the playhead moves through it."))
+        return false;
+
+    // Going back to the first clip is a boundary crossing too.
+    const PreviewDriveOutcome backToFirst = harness.seekTo(5);
+    if (!require(backToFirst.openClip && backToFirst.openClip->clipId == 10,
+                 "Seeking backwards across a boundary must re-open the earlier clip."))
+        return false;
+
+    // Back through the gap and out the other side: leaving a clip forgets it,
+    // so re-entering it is a boundary crossing again rather than a no-op.
+    harness.seekTo(45);
+    const PreviewDriveOutcome reentered = harness.seekTo(60);
+    return require(reentered.openClip && reentered.openClip->clipId == 11
+                       && harness.driver.openClipId() == 11,
+                   "Re-entering a clip after a gap must open it again.");
+}
+
+bool verifyPreviewDriverBoundsScrubbingAndSkipsStills()
+{
+    using namespace mini_editor::playback_core;
+
+    DriverHarness harness;
+
+    // Scrubbing while paused is the request/response case: each new position
+    // asks for a decode, and the scheduler bounds them to one in flight plus
+    // one pending.
+    harness.seekTo(0);
+    if (!require(harness.decoder.pendingCount() == 1 && harness.scheduler.hasInFlightWork(),
+                 "A paused/stopped position must request a decode."))
+        return false;
+
+    harness.seekTo(5);
+    harness.seekTo(10);
+    harness.seekTo(15);
+    if (!require(harness.decoder.pendingCount() == 1 && harness.scheduler.hasPendingWork(),
+                 "Three further scrub positions must collapse to one pending decode, "
+                 "not three queued ones."))
+        return false;
+
+    // The in-flight decode for frame 0 finishes after frame 15 superseded it.
+    // ADR-003: the worker does not decide its own currency, so the scheduler
+    // discards the result rather than presenting a frame the user has already
+    // scrubbed past.
+    const VideoDecodeRequest stale = *harness.decoder.oldestRequest();
+    harness.decoder.completeOldest(DecodedVideoFrame{
+        stale.sequence, stale.mediaAssetId, stale.sourceTime, VideoFrameBuffer{7, nullptr}});
+    const bool stalePresented = std::any_of(
+        harness.presented.begin(), harness.presented.end(),
+        [](const CompositedVideoFrame &frame) { return frame.buffer.placeholderPixelChecksum == 7; });
+    if (!require(!stalePresented,
+                 "A decode that completes after a newer scrub position superseded it "
+                 "must be discarded, not presented."))
+        return false;
+
+    // The other half of the same rule: discarding the superseded result is
+    // what lets the newest one start, and that one does reach presentation.
+    // Without this the assertion above would also pass if nothing ever did.
+    const VideoDecodeRequest newest = *harness.decoder.oldestRequest();
+    harness.decoder.completeOldest(DecodedVideoFrame{
+        newest.sequence, newest.mediaAssetId, newest.sourceTime, VideoFrameBuffer{9, nullptr}});
+    const bool newestPresented = std::any_of(
+        harness.presented.begin(), harness.presented.end(),
+        [](const CompositedVideoFrame &frame) { return frame.buffer.placeholderPixelChecksum == 9; });
+    if (!require(newestPresented && harness.presented.size() == 1,
+                 "The newest scrub position's decode must be the one -- and the only "
+                 "one -- that reaches presentation."))
+        return false;
+
+    // A still image has no source timeline. It is opened for presentation but
+    // never handed to a decoder -- which is what stops a picture from coming
+    // back as a decode error and taking the session to Failed.
+    const std::size_t decodesBeforeStill = harness.decoder.pendingCount();
+    const PreviewDriveOutcome still = harness.seekTo(95);
+    if (!require(still.openClip && still.openClip->clipId == 12
+                     && still.openClip->mediaKind == PlaybackMediaKind::Image
+                     && !still.openClip->sourceTime
+                     && harness.decoder.pendingCount() == decodesBeforeStill,
+                 "A still must be opened for presentation but never requested from a "
+                 "decoder."))
+        return false;
+
+    // While playing, the adapter's continuous player is already producing
+    // frames; a second, request/response producer for the same viewport would
+    // be two sources of truth.
+    harness.seekTo(0);
+    const std::size_t decodesBeforePlay = harness.decoder.pendingCount();
+    harness.session.applyCommand(Play{}, PlaybackCommandId::create());
+    harness.driver.notifyPlaybackStatus(harness.session.status(), true);
+    harness.clock.set(MasterClockTime::fromMicroseconds(500'000));
+    harness.tick();
+    return require(harness.decoder.pendingCount() == decodesBeforePlay,
+                   "Playing must not request decodes: the continuous player is already "
+                   "producing frames.");
+}
+
+bool verifyPreviewDriverHoldsWhenItCannotResolve()
+{
+    using namespace mini_editor::playback_core;
+
+    // Media the snapshot could not find is not a failure -- it is nothing to
+    // show, and it must not reach a decoder either.
+    DriverHarness unavailable(MediaAvailability::Unavailable);
+    const PreviewDriveOutcome missing = unavailable.seekTo(0);
+    if (!require(missing.showNothing && !missing.openClip
+                     && unavailable.decoder.pendingCount() == 0,
+                 "Unavailable media must blank the viewport without asking a decoder "
+                 "for anything."))
+        return false;
+
+    DriverHarness harness;
+    harness.seekTo(0);
+
+    // A status describing a sequence the driver has no snapshot for resolves
+    // nothing. Guessing in between is how a wrong-clip frame reaches the
+    // viewport during a project reload.
+    const SequenceId otherSequence = SequenceId::create();
+    FakePlaybackClock otherClock(MasterClockTime::fromMicroseconds(0));
+    PlaybackSession otherSession(PlaybackSource{SequencePreview{otherSequence}}, otherClock);
+    otherSession.applyCommand(
+        InstallSnapshot{makeDriverFixture(otherSequence)}, PlaybackCommandId::create());
+    const PreviewDriveOutcome foreign =
+        harness.driver.notifyPlaybackStatus(otherSession.status(), true);
+    if (!require(!foreign.openClip && !foreign.showNothing
+                     && harness.driver.openClipId() == 10,
+                 "A status for another sequence must change nothing, not blank the "
+                 "viewport."))
+        return false;
+
+    // ADR-003 retains the last accepted frame on failure. Blanking here would
+    // take away the picture at exactly the moment the user needs to see what
+    // was playing when it broke.
+    const PlaybackStatus current = harness.session.status();
+    harness.session.reportFailure(current.sessionId, current.generation,
+                                  PlaybackError{"decoder failed"});
+    const PreviewDriveOutcome failed =
+        harness.driver.notifyPlaybackStatus(harness.session.status(), true);
+    return require(!failed.openClip && !failed.showNothing
+                       && harness.driver.openClipId() == 10,
+                   "A failed session must hold the last frame rather than blank the "
+                   "viewport or switch clips.");
+}
+
 } // namespace
 
 int main()
@@ -1646,7 +1926,10 @@ int main()
         || !verifySnapshotTimelineResolverSourceTime()
         || !verifySnapshotTimelineResolverEdgeCases()
         || !verifySnapshotInstallRevisionRules()
-        || !verifySessionRetargetAcrossProjectReload()) {
+        || !verifySessionRetargetAcrossProjectReload()
+        || !verifyPreviewDriverFollowsThePlayheadAcrossClips()
+        || !verifyPreviewDriverBoundsScrubbingAndSkipsStills()
+        || !verifyPreviewDriverHoldsWhenItCannotResolve()) {
         return 1;
     }
 

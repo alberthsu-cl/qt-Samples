@@ -59,6 +59,8 @@ add_library(MiniEditorPlaybackCore STATIC
     src/playback_core/SequencePlaybackSnapshot.h
     src/playback_core/SnapshotTimelineResolver.h
     src/playback_core/SnapshotTimelineResolver.cpp
+    src/playback_core/SequencePreviewDriver.h
+    src/playback_core/SequencePreviewDriver.cpp
     src/playback_core/PlaybackClock.h
     src/playback_core/PlaybackClock.cpp
     src/playback_core/PlaybackCommand.h
