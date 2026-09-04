@@ -9,6 +9,7 @@
 #include "VideoWorkScheduler.h"
 #include "SteadyPlaybackClock.h"
 #include "PlaybackEventSink.h"
+#include "SnapshotTimelineResolver.h"
 
 #include <thread>
 #include <vector>
@@ -1240,6 +1241,198 @@ bool verifyPlaybackEngineFailureObservation()
                    "corrupt-file error arriving after the user has already moved on.");
 }
 
+// A three-clip, two-track fixture covering everything the resolver has to
+// distinguish: a trimmed time-based clip, a gap, a still image, and an audio
+// clip whose boundaries deliberately do not line up with the video track's.
+//
+//  frame   0        30       60       90
+//  V1     [clip 10 ][  gap  ][clip 11 ]      10 = trimmed video, 11 = still
+//  A1              [ clip 20 ]                 starts 15, ends 45
+mini_editor::playback_core::SequencePlaybackSnapshot makeResolverFixture()
+{
+    using namespace mini_editor::playback_core;
+
+    const SourceTimestamp trimmedIn = SourceTimestamp::fromMicroseconds(2'000'000);
+    const SourceTimestamp audioIn = SourceTimestamp::fromMicroseconds(0);
+
+    return SequencePlaybackSnapshot {
+        SequenceId::create(), SequenceRevision::initial(), FrameRate(30, 1),
+        FrameCount::fromFrames(90),
+        {
+            { 1, PlaybackMediaKind::Video, "v1.mp4", MediaAvailability::Available,
+              SourceTimestamp::fromMicroseconds(10'000'000) },
+            { 2, PlaybackMediaKind::Image, "still.png", MediaAvailability::Available,
+              std::nullopt },
+            { 3, PlaybackMediaKind::Audio, "a1.wav", MediaAvailability::Available,
+              SourceTimestamp::fromMicroseconds(10'000'000) }
+        },
+        {
+            { 10, 1, PlaybackTrackType::Video, TimelineFrame::fromFrameNumber(0),
+              FrameCount::fromFrames(30), trimmedIn, {} },
+            { 11, 2, PlaybackTrackType::Video, TimelineFrame::fromFrameNumber(60),
+              FrameCount::fromFrames(30), std::nullopt, {} }
+        },
+        {
+            { 20, 3, PlaybackTrackType::Audio, TimelineFrame::fromFrameNumber(15),
+              FrameCount::fromFrames(30), audioIn, {} }
+        },
+        false
+    };
+}
+
+bool verifySnapshotTimelineResolverBoundaries()
+{
+    using namespace mini_editor::playback_core;
+
+    const SequencePlaybackSnapshot snapshot = makeResolverFixture();
+    auto at = [&snapshot](std::int64_t frame) {
+        return SnapshotTimelineResolver::resolve(
+            snapshot, TimelineFrame::fromFrameNumber(frame));
+    };
+
+    // First frame of clip 10: video only, because A1 has not started yet.
+    const ResolvedSnapshotFrame first = at(0);
+    if (!require(first.video && first.video->clipId == 10
+                     && first.video->clipLocalFrame == FrameCount::zero()
+                     && !first.audio,
+                 "The resolver must return the clip covering the first frame, and "
+                 "nothing on a track whose clip has not started."))
+        return false;
+
+    // Both tracks at once, each with its own clip-local frame.
+    const ResolvedSnapshotFrame both = at(20);
+    if (!require(both.video && both.video->clipId == 10
+                     && both.video->clipLocalFrame == FrameCount::fromFrames(20)
+                     && both.audio && both.audio->clipId == 20
+                     && both.audio->clipLocalFrame == FrameCount::fromFrames(5),
+                 "V1 and A1 must resolve independently, each against its own "
+                 "clip start."))
+        return false;
+
+    // The exclusive end boundary: frame 30 belongs to the gap, not clip 10.
+    const ResolvedSnapshotFrame lastCovered = at(29);
+    const ResolvedSnapshotFrame firstUncovered = at(30);
+    if (!require(lastCovered.video && lastCovered.video->clipId == 10
+                     && !firstUncovered.video,
+                 "A clip must cover [start, start + duration) exactly: its last "
+                 "frame resolves, the frame after it does not."))
+        return false;
+
+    // A1-only, in the middle of V1's gap.
+    if (!require(!at(40).video && at(40).audio && at(40).audio->clipId == 20,
+                 "A gap on one track must not suppress the other track."))
+        return false;
+
+    // A gap on both tracks is a resolved frame with no media, not a failure.
+    const ResolvedSnapshotFrame emptyGap = at(50);
+    return require(!emptyGap.video && !emptyGap.audio
+                       && emptyGap.timelineFrame == TimelineFrame::fromFrameNumber(50),
+                   "A frame covered by no clip must resolve to a frame with no "
+                   "media rather than to nothing at all.");
+}
+
+bool verifySnapshotTimelineResolverSourceTime()
+{
+    using namespace mini_editor::playback_core;
+
+    const SequencePlaybackSnapshot snapshot = makeResolverFixture();
+    auto at = [&snapshot](std::int64_t frame) {
+        return SnapshotTimelineResolver::resolve(
+            snapshot, TimelineFrame::fromFrameNumber(frame));
+    };
+
+    // Trimmed source-in: clip-local elapsed time is added to the trim point,
+    // never to zero. At 30 fps frame 29 starts at ceil(29e6/30) = 966'667 us.
+    const ResolvedSnapshotFrame trimmed = at(29);
+    if (!require(trimmed.video && trimmed.video->sourceTime
+                     && *trimmed.video->sourceTime
+                         == SourceTimestamp::fromMicroseconds(2'966'667),
+                 "A trimmed clip's source time must be its source-in plus the "
+                 "clip-local elapsed time."))
+        return false;
+
+    // The same relationship, stated compositionally rather than as a constant.
+    const ResolvedSnapshotFrame midAudio = at(25);
+    const std::int64_t expectedAudioUs =
+        sequenceTimeAtFrameStart(TimelineFrame::fromFrameNumber(10), FrameRate(30, 1))
+            .microsecondsForAdapter();
+    if (!require(midAudio.audio && midAudio.audio->sourceTime
+                     && midAudio.audio->sourceTime->microsecondsForAdapter()
+                         == expectedAudioUs,
+                 "An untrimmed clip's source time must equal the clip-local "
+                 "elapsed time."))
+        return false;
+
+    // A still image has no source timeline, so no frame of it has a source
+    // time -- including the last one, where a naive offset would run past the
+    // end of a zero-length source.
+    const ResolvedSnapshotFrame stillStart = at(60);
+    const ResolvedSnapshotFrame stillEnd = at(89);
+    return require(stillStart.video && stillStart.video->clipId == 11
+                       && stillStart.video->mediaKind == PlaybackMediaKind::Image
+                       && !stillStart.video->sourceTime
+                       && stillEnd.video && !stillEnd.video->sourceTime
+                       && stillEnd.video->clipLocalFrame == FrameCount::fromFrames(29),
+                   "A still image must resolve with a clip-local frame but no "
+                   "source time, at every frame it covers.");
+}
+
+bool verifySnapshotTimelineResolverEdgeCases()
+{
+    using namespace mini_editor::playback_core;
+
+    // An empty snapshot resolves rather than crashing or reporting an error.
+    const SequencePlaybackSnapshot empty {
+        SequenceId::create(), SequenceRevision::initial(), FrameRate(30, 1),
+        FrameCount::zero(), {}, {}, {}, false
+    };
+    const ResolvedSnapshotFrame emptyResult =
+        SnapshotTimelineResolver::resolve(empty, TimelineFrame::fromFrameNumber(0));
+    if (!require(!emptyResult.video && !emptyResult.audio,
+                 "An empty snapshot must resolve to a frame with no media."))
+        return false;
+
+    const SequencePlaybackSnapshot snapshot = makeResolverFixture();
+
+    // Past the end of the sequence.
+    const ResolvedSnapshotFrame past = SnapshotTimelineResolver::resolve(
+        snapshot, TimelineFrame::fromFrameNumber(90));
+    if (!require(!past.video && !past.audio,
+                 "A frame at or past the sequence duration must resolve to no "
+                 "media."))
+        return false;
+
+    // The legacy resolver clamps a negative raw int to zero. Nothing here
+    // needs to: TimelineFrame will not construct from a negative number, so
+    // the resolver's whole input domain is already non-negative.
+    static_assert(!std::is_constructible<TimelineFrame, std::int64_t>::value,
+                  "TimelineFrame must be built through its checked factory.");
+
+    // A clip whose media descriptor is missing resolves to nothing on that
+    // track: better a visibly blank track than a decode request naming a file
+    // the snapshot never described.
+    SequencePlaybackSnapshot missingMedia = makeResolverFixture();
+    missingMedia.media.erase(missingMedia.media.begin());
+    const ResolvedSnapshotFrame orphaned = SnapshotTimelineResolver::resolve(
+        missingMedia, TimelineFrame::fromFrameNumber(0));
+    if (!require(!orphaned.video,
+                 "A clip with no media descriptor must resolve to no media on "
+                 "its track."))
+        return false;
+
+    // Availability is reported, not filtered: the caller decides whether a
+    // missing file is a failure (ADR-002 keeps that decision in the session).
+    SequencePlaybackSnapshot unavailable = makeResolverFixture();
+    unavailable.media.front().availability = MediaAvailability::Unavailable;
+    const ResolvedSnapshotFrame offline = SnapshotTimelineResolver::resolve(
+        unavailable, TimelineFrame::fromFrameNumber(0));
+    return require(offline.video
+                       && offline.video->availability == MediaAvailability::Unavailable
+                       && offline.video->immutableSourceLocator == "v1.mp4",
+                   "Unavailable media must still resolve, with its availability "
+                   "reported to the caller.");
+}
+
 } // namespace
 
 int main()
@@ -1300,7 +1493,10 @@ int main()
         || !verifyVideoWorkSchedulerBoundedLatestWins()
         || !verifySteadyPlaybackClock()
         || !verifyUiNotificationQueueAndEngineIntegration()
-        || !verifyPlaybackEngineFailureObservation()) {
+        || !verifyPlaybackEngineFailureObservation()
+        || !verifySnapshotTimelineResolverBoundaries()
+        || !verifySnapshotTimelineResolverSourceTime()
+        || !verifySnapshotTimelineResolverEdgeCases()) {
         return 1;
     }
 
