@@ -110,8 +110,15 @@ private:
     // its own: ADR-003's scheduler is a video policy, and ADR-004 defers
     // audio buffering. Resolving which clip is under the playhead is
     // identical for both tracks, though, so it is shared.
-    void driveAudioLane(const ResolvedSnapshotFrame &resolved, bool transportJustRepositioned,
+    void driveAudioLane(const ResolvedSnapshotFrame &resolved, bool playheadJumped,
                         PreviewDriveOutcome &outcome);
+
+    // Whether the playhead arrived where continuing from the last drive
+    // would have put it. Asking the position rather than trusting a caller's
+    // "I just seeked" flag is what makes this immune to the order a status
+    // event and a sampling tick happen to arrive in -- either one can be the
+    // first to observe the jump, and only the first one sees it.
+    bool playheadJumped(const PlaybackStatus &status, TimelineFrame timelineFrame);
 
     PreviewPresentationCoordinator &coordinator_;
     VideoWorkScheduler &scheduler_;
@@ -119,6 +126,8 @@ private:
     SequencePlaybackSnapshotPtr snapshot_;
     std::optional<int> openClipId_;
     std::optional<int> openAudioClipId_;
+    std::optional<TimelineFrame> lastDrivenFrame_;
+    std::optional<MasterClockTime> lastDrivenClock_;
 };
 
 } // namespace mini_editor::playback_core

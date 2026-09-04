@@ -2229,11 +2229,30 @@ bool verifyPreviewDriverRepositionsBothLanesOnASeek()
         return false;
 
     // A plain sampling tick is not a reposition. Re-seeking a continuous
-    // player sixty times a second is its own kind of broken.
-    harness.clock.set(MasterClockTime::fromMicroseconds(3'000'000));
+    // player sixty times a second is its own kind of broken. The clock is
+    // advanced by exactly the tick's worth of time, so the playhead arrives
+    // where continuing from the last drive would have put it.
+    const PreviewDriveOutcome settled = harness.seekTo(70);
+    (void)settled;
+    harness.clock.set(MasterClockTime::fromMicroseconds(
+        harness.clock.now().microsecondsForClockAdapter() + 15'000));
     const PreviewDriveOutcome sampled = harness.tick();
     if (!require(!sampled.repositionVideoTo && !sampled.repositionAudioTo,
                  "A sampling tick must not reposition anything."))
+        return false;
+
+    // And the reason it is decided from the position rather than from a "I
+    // just seeked" flag: a status event and a sampling tick race, and
+    // whichever observes the jump first has to be the one that acts on it.
+    // Here the tick observes it, with no flag having been passed at all.
+    harness.session.applyCommand(
+        Seek{sequenceTimeAtFrameStart(TimelineFrame::fromFrameNumber(20), FrameRate(30, 1))},
+        PlaybackCommandId::create());
+    const PreviewDriveOutcome observedByTick = harness.tick();
+    if (!require(observedByTick.repositionAudioTo.has_value(),
+                 "A jump first seen by a sampling tick must still reposition: the "
+                 "decision is about where the playhead is, not about which caller "
+                 "claims to have moved it."))
         return false;
 
     // While paused the video frame comes from the scheduler, which carries

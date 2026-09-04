@@ -79,6 +79,16 @@ public:
     // Called from MainFrame::OnTimelineEngineNotification.
     void onNotification();
 
+    // Whether timeline preview is the context the user is looking at.
+    //
+    // Selecting a library asset moves the preview to source-asset playback,
+    // which stays entirely on the legacy path (Decision E). Nothing told this
+    // router about that, so the panel went on painting the engine's last
+    // frame over the legacy source video -- a picture frozen on whatever the
+    // timeline was showing, while the legacy path's audio played underneath.
+    // The engine's own transport kept running too.
+    void setTimelinePreviewActive(bool active);
+
     // ADR-003's FramePresented moment, forwarded from the preview panel once
     // the frame is actually on its surface. This records a diagnostic and
     // nothing else: it does not touch the clock, the session, or the queue.
@@ -151,6 +161,7 @@ private:
     EnginePresentationActiveSink enginePresentationActiveSink_;
     mini_editor::playback_core::PresentationDiagnostics diagnostics_;
     bool isEnginePresentationActive_ = false;
+    bool isTimelinePreviewActive_ = true;
     int lastAudioLevelPercent_ = -1;
     bool isAudioSilenced_ = true;
     int lastVideoTrackMuted_ = -1;

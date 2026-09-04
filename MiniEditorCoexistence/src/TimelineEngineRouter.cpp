@@ -203,6 +203,32 @@ void TimelineEngineRouter::onEngineFrameCommitted()
         presentedPositionFor(request->target)});
 }
 
+void TimelineEngineRouter::setTimelinePreviewActive(bool active)
+{
+    if (isTimelinePreviewActive_ == active)
+        return;
+
+    isTimelinePreviewActive_ = active;
+    if (active) {
+        // The next drive re-opens whatever the playhead is over and puts the
+        // panel back into engine presentation.
+        logLine(L"Timeline preview is the active context again.");
+        return;
+    }
+
+    logLine(L"Timeline preview is no longer the active context; parking the engine.");
+    // Park the transport rather than letting it run on unseen: coming back to
+    // a playhead that raced ahead while you were auditioning a library asset
+    // is not what anyone means by switching contexts.
+    engine_->submit(Pause{}, PlaybackCommandId::create());
+    presentationTimer_.stop();
+    worker_.pause();
+    worker_.pauseAudio();
+    worker_.setAudioMuted(true);
+    isAudioSilenced_ = true;
+    setEnginePresentationActive(false);
+}
+
 void TimelineEngineRouter::onNotification()
 {
     handleEvents(bridge_.drain());
@@ -227,8 +253,10 @@ void TimelineEngineRouter::handleEvents(std::vector<PlaybackEvent> events)
             lastAppliedPhase_ = status->phase;
             switch (status->phase) {
             case PlaybackPhase::Playing:
-                worker_.play();
-                presentationTimer_.start();
+                if (isTimelinePreviewActive_) {
+                    worker_.play();
+                    presentationTimer_.start();
+                }
                 break;
             case PlaybackPhase::Paused:
             case PlaybackPhase::Stopped:
@@ -274,6 +302,17 @@ void TimelineEngineRouter::drivePreview(const PlaybackStatus &status,
     const PreviewDriveOutcome outcome =
         driver_->notifyPlaybackStatus(status, transportJustRepositioned);
 
+    if (!isTimelinePreviewActive_) {
+        // Source preview owns the panel and the speakers. Keep publishing the
+        // transport view -- the timeline ruler still paints -- but drive no
+        // media.
+        if (transportViewSink_) {
+            if (const auto view = timelineTransportViewFor(status))
+                transportViewSink_(*view);
+        }
+        return;
+    }
+
     // ADR-002: the legacy timeline PlaybackState survives as a painting cache
     // populated from a status publication. This is that publication, and it
     // goes one way only -- nothing here ever reads the cache back.
@@ -296,7 +335,8 @@ void TimelineEngineRouter::drivePreview(const PlaybackStatus &status,
     // The panel paints engine frames only while a clip is actually open, so a
     // gap falls back to the panel's own "no media at this position" rendering
     // instead of leaving the previous clip's last frame up.
-    setEnginePresentationActive(driver_->openClipId().has_value());
+    setEnginePresentationActive(isTimelinePreviewActive_
+                                && driver_->openClipId().has_value());
 
     if (outcome.showNothing) {
         // A gap, the tail past the last clip, or missing media. Freeze rather

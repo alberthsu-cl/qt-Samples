@@ -1,5 +1,7 @@
 #include "SequencePreviewDriver.h"
 
+#include <cstdlib>
+
 namespace mini_editor::playback_core {
 
 SequencePreviewDriver::SequencePreviewDriver(PreviewPresentationCoordinator &coordinator,
@@ -19,6 +21,38 @@ void SequencePreviewDriver::installSnapshot(SequencePlaybackSnapshotPtr snapshot
     snapshot_ = std::move(snapshot);
     openClipId_.reset();
     openAudioClipId_.reset();
+    // New content: no previous position to be continuous with.
+    lastDrivenFrame_.reset();
+    lastDrivenClock_.reset();
+}
+
+bool SequencePreviewDriver::playheadJumped(const PlaybackStatus &status,
+                                           TimelineFrame timelineFrame)
+{
+    // Two frames of slack: a sampling tick lands mid-frame, so the resolved
+    // frame is routinely one off the arithmetic, and a seek worth chasing is
+    // never that small.
+    constexpr std::int64_t kToleranceFrames = 2;
+
+    const bool continuous = lastDrivenFrame_ && lastDrivenClock_ && snapshot_
+        && [&] {
+            const ClockDuration elapsed = clock_.now() - *lastDrivenClock_;
+            // A parked transport advances by nothing, so any movement at all
+            // is a jump.
+            const std::int64_t advanced = status.phase == PlaybackPhase::Playing
+                ? frameAtSequenceTime(
+                      SequenceTime::fromMicroseconds(
+                          sequenceElapsedFor(elapsed, status.ratePercent)
+                              .microsecondsForAdapter()),
+                      snapshot_->frameRate).frameNumber()
+                : 0;
+            const std::int64_t expected = lastDrivenFrame_->frameNumber() + advanced;
+            return std::llabs(timelineFrame.frameNumber() - expected) <= kToleranceFrames;
+        }();
+
+    lastDrivenFrame_ = timelineFrame;
+    lastDrivenClock_ = clock_.now();
+    return !continuous;
 }
 
 std::optional<int> SequencePreviewDriver::openClipId() const
@@ -32,7 +66,7 @@ std::optional<int> SequencePreviewDriver::openAudioClipId() const
 }
 
 void SequencePreviewDriver::driveAudioLane(const ResolvedSnapshotFrame &resolved,
-                                           bool transportJustRepositioned,
+                                           bool playheadJumped,
                                            PreviewDriveOutcome &outcome)
 {
     if (!resolved.audio || resolved.audio->availability != MediaAvailability::Available) {
@@ -58,7 +92,7 @@ void SequencePreviewDriver::driveAudioLane(const ResolvedSnapshotFrame &resolved
 
     // Same clip, but the playhead jumped: this lane's player is still running
     // from where it was.
-    if (transportJustRepositioned)
+    if (playheadJumped)
         outcome.repositionAudioTo = clip.sourceTime;
 }
 
@@ -91,10 +125,15 @@ PreviewDriveOutcome SequencePreviewDriver::notifyPlaybackStatus(const PlaybackSt
     PreviewDriveOutcome outcome;
     outcome.isVideoTrackMuted = snapshot_->isVideoTrackMuted;
 
+    // Whether the playhead jumped is a question about the position, not about
+    // which command produced this status -- so it survives a status event and
+    // a sampling tick racing each other.
+    const bool jumped = playheadJumped(status, sequence->timelineFrame);
+
     // A1 first, and unconditionally: the two tracks have their own clip
     // boundaries, so a V1 gap must not silence audio that is still running,
     // and an early return on the video side must not skip the audio lane.
-    driveAudioLane(resolved, transportJustRepositioned, outcome);
+    driveAudioLane(resolved, jumped, outcome);
 
     if (!resolved.video || resolved.video->availability != MediaAvailability::Available) {
         // A gap, the tail past the last clip, or a file the snapshot could not
@@ -111,12 +150,11 @@ PreviewDriveOutcome SequencePreviewDriver::notifyPlaybackStatus(const PlaybackSt
             clip.clipId, clip.mediaAssetId, clip.mediaKind,
             clip.immutableSourceLocator, clip.sourceTime
         };
-    } else if (transportJustRepositioned) {
-        // Same clip, but the playhead jumped. Only meaningful for a lane a
+    } else if (jumped && status.phase == PlaybackPhase::Playing) {
+        // Same clip, but the playhead jumped. Only meaningful while a
         // continuous player is actually running: while paused the frame comes
         // from the scheduler below, which carries its own source time.
-        if (status.phase == PlaybackPhase::Playing)
-            outcome.repositionVideoTo = clip.sourceTime;
+        outcome.repositionVideoTo = clip.sourceTime;
     }
 
     // Bounded latest-wins decode is the scrubbing case. While Playing, the

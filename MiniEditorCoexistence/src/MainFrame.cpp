@@ -765,6 +765,13 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     const PlaybackState &playbackState = editorSession_.playbackState();
     const ClipPropertiesViewState propertiesViewState =
         ClipPropertiesStateResolver::resolve(editorSession_, mediaLibrary_);
+#if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_ROUTING
+    // Which preview context owns the panel and the speakers. Source-asset
+    // preview stays on the legacy path (Decision E), so the engine has to be
+    // told to let go of both while it is showing.
+    if (timelineEngineRouter_)
+        timelineEngineRouter_->setTimelinePreviewActive(editorSession_.isTimelineFocused());
+#endif
     const bool selectionChanged = includesChange(changes, EditorChange::Selection);
     const bool clipSettingsChanged = includesChange(changes, EditorChange::ClipSettings);
     const bool playbackChanged = includesChange(changes, EditorChange::Playback);
