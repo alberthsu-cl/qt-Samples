@@ -27,16 +27,25 @@ option(MINI_EDITOR_ENABLE_ENGINE_SMOKE_TEST
        "Compile the Milestone 4 manual playback-engine smoke-test hotkey (Qt builds only)"
        OFF)
 
-# Milestone 4 (M4-06): routes timeline (sequence) preview's playback commands
-# through PlaybackEngine/QtPlaybackMediaWorker instead of the legacy
-# IPlaybackBackend path, using a standalone preview window (not the app's
-# real preview panel -- see the milestone doc's scoped decision). Source-
-# asset preview is completely untouched either way. Off by default: with
-# this flag off, application behavior is byte-for-byte unchanged. See
-# docs/architecture/milestones/milestone-04-media-integration.md.
+# Timeline (sequence) preview's transport, resolution, and presentation. ON
+# is the new engine -- PlaybackSession owns transport, SnapshotTimelineResolver
+# resolves against an immutable snapshot, and frames reach a dedicated sink
+# inside the app's own preview panel. OFF is the legacy IPlaybackBackend path,
+# retained as a compile-time fallback through the next E2E/regression
+# milestone.
+#
+# Flipped to ON by M5-08, under Decision D's bar: M5-07's sixteen-scenario
+# comparison green at exact phase and frame equality, no legacy timeline
+# mutator called on the new path, and human visual/audio validation passed.
+# Both settings are built and tested; neither is a configuration nobody runs.
+#
+# Source-asset preview is on the legacy path either way (Decision E), and a
+# non-Qt build has no engine route at all -- the sources and this definition
+# live inside the Qt branch below. See
+# docs/architecture/milestones/milestone-05-rollout-and-migration.md.
 option(MINI_EDITOR_ENABLE_ENGINE_ROUTING
        "Route timeline preview through the new playback engine (Qt builds only)"
-       OFF)
+       ON)
 
 if(MINI_EDITOR_USE_QT)
     if(BUILD_TESTING)

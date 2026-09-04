@@ -33,12 +33,18 @@ while the new engine is verified behind feature flags.
   worker, MFC `PostMessage`/`ON_MESSAGE` bridge, failure routing through the
   serialized engine queue, and optional timeline-engine routing.
 
-M4's routing flag, `MINI_EDITOR_ENABLE_ENGINE_ROUTING`, defaults to `OFF`.
-When enabled for validation, it opens a dedicated preview window and currently
-resolves the first V1 video clip only. The normal application preview and
-source-asset route remain unchanged. Milestone 5 will compare the two paths,
-expand routing deliberately, and retire legacy timer advancement only after
-that comparison is accepted.
+`MINI_EDITOR_ENABLE_ENGINE_ROUTING` now defaults to `ON`: timeline preview
+runs on the new engine, resolving every clip on V1 and A1 against an immutable
+snapshot and rendering into a dedicated sink inside the app's own preview
+panel. Setting it `OFF` selects the legacy `IPlaybackBackend` path, retained as
+a compile-time fallback through the next regression milestone; both settings
+are built and tested. Source-asset preview stays on the legacy path either
+way.
+
+The default flipped only after M5-07's sixteen-scenario comparison harness
+matched both paths at exact phase and frame equality, with no legacy timeline
+mutator called on the new path, and after human visual/audio validation
+passed. Retiring the legacy MFC timer advancement is a separate, later step.
 
 For the rationale and detailed acceptance evidence, see the
 [architecture decisions](docs/architecture/decisions/README.md),
