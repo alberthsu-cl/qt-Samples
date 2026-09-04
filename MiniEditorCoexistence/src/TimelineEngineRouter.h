@@ -141,6 +141,17 @@ private:
     void driveAudioLane(const mini_editor::playback_core::PreviewDriveOutcome &outcome,
                         mini_editor::playback_core::PlaybackPhase phase);
 
+    // Whether sound may come out at all. The transport phase is the authority
+    // on that, so it is applied from the phase mirror rather than inferred
+    // from a drive outcome -- SequencePreviewDriver has several early returns
+    // that yield a default outcome, and every one of them used to leave the
+    // audio lane running.
+    // `force` re-issues the calls even when this router believes the lanes
+    // are already in that state. The phase mirror uses it: a belief that has
+    // drifted is precisely the case where sound is still coming out, and
+    // silencing is cheap enough to be worth doing unconditionally.
+    void setTransportAudible(bool audible, bool force = false);
+
     // What the engine's session last accepted, so a view-only editor change
     // that rebuilds an identical snapshot does not re-open media for content
     // the session will refuse. PlaybackSession remains the authority; this is

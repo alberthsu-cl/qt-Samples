@@ -250,11 +250,14 @@ void TimelineEngineRouter::handleEvents(std::vector<PlaybackEvent> events)
         drivePreview(*status, takePendingReposition());
 
         if (status->phase != lastAppliedPhase_) {
+            logLine(L"phase %d -> %d", static_cast<int>(lastAppliedPhase_),
+                    static_cast<int>(status->phase));
             lastAppliedPhase_ = status->phase;
             switch (status->phase) {
             case PlaybackPhase::Playing:
                 if (isTimelinePreviewActive_) {
                     worker_.play();
+                    setTransportAudible(true);
                     presentationTimer_.start();
                 }
                 break;
@@ -262,9 +265,12 @@ void TimelineEngineRouter::handleEvents(std::vector<PlaybackEvent> events)
             case PlaybackPhase::Stopped:
                 presentationTimer_.stop();
                 worker_.pause();
+                setTransportAudible(false, /*force=*/true);
                 break;
             case PlaybackPhase::Failed:
                 presentationTimer_.stop();
+                worker_.pause();
+                setTransportAudible(false, /*force=*/true);
                 logLine(L"phase=Failed error=%hs",
                         status->error ? status->error->message.c_str() : "(none)");
                 break;
@@ -382,6 +388,24 @@ void TimelineEngineRouter::drivePreview(const PlaybackStatus &status,
         previewWindow_->show();
 }
 
+void TimelineEngineRouter::setTransportAudible(bool audible, bool force)
+{
+    // Both lanes, always. The video player carries its clip's own audio
+    // track, so pausing only the A1 lane leaves half the sound playing.
+    if (!force && isAudioSilenced_ == !audible)
+        return;
+
+    isAudioSilenced_ = !audible;
+    logLine(L"Transport audible=%d", audible ? 1 : 0);
+    worker_.setAudioMuted(!audible);
+    if (audible) {
+        worker_.playAudio();
+    } else {
+        worker_.pauseAudio();
+        worker_.pause();
+    }
+}
+
 void TimelineEngineRouter::driveAudioLane(const PreviewDriveOutcome &outcome,
                                           PlaybackPhase phase)
 {
@@ -398,11 +422,8 @@ void TimelineEngineRouter::driveAudioLane(const PreviewDriveOutcome &outcome,
         // No A1 clip here. Silence the lane rather than tearing it down: the
         // next clip is usually a few frames away, and re-opening a file for
         // every gap is how a timeline starts stuttering.
-        if (!isAudioSilenced_) {
-            isAudioSilenced_ = true;
-            worker_.setAudioMuted(true);
-            worker_.pauseAudio();
-        }
+        worker_.setAudioMuted(true);
+        worker_.pauseAudio();
         return;
     }
 
@@ -429,14 +450,13 @@ void TimelineEngineRouter::driveAudioLane(const PreviewDriveOutcome &outcome,
     // Seeking while stopped or paused prepares the decoder position but must
     // never leak a short packet through the speakers -- the same rule the
     // legacy path follows.
-    const bool shouldSound = phase == PlaybackPhase::Playing;
-    if (isAudioSilenced_ != !shouldSound || outcome.openAudioClip) {
-        isAudioSilenced_ = !shouldSound;
-        worker_.setAudioMuted(!shouldSound);
-        if (shouldSound)
-            worker_.playAudio();
-        else
-            worker_.pauseAudio();
+    setTransportAudible(phase == PlaybackPhase::Playing);
+
+    // A newly opened clip starts paused and muted, so a running transport has
+    // to say so again for this lane specifically.
+    if (outcome.openAudioClip && phase == PlaybackPhase::Playing) {
+        worker_.setAudioMuted(false);
+        worker_.playAudio();
     }
 }
 
