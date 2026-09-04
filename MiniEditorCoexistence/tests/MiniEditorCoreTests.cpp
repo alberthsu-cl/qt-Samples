@@ -2051,6 +2051,65 @@ void projectRuntimeTracksExplicitSequenceIdentity()
             "Project replacement must create fresh runtime and sequence identities.");
 }
 
+// M5-04. With timeline preview routed through the new engine, the legacy
+// timeline PlaybackState survives only as a painting cache (ADR-002). This
+// pins down what "only a cache" means in code: it stores exactly what was
+// published and leaves every editing concern alone.
+void routedTransportOnlyWritesThePaintingCache()
+{
+    using namespace mini_editor::playback_core;
+
+    EditorSession session(1);
+    session.addTimelineClip(1, TimelineTrackType::Video, 0, 30);
+    const SequenceRevision revisionBefore =
+        session.projectRuntime().sequences().front().revision;
+    const bool dirtyBefore = session.isProjectDirty();
+    const bool canUndoBefore = session.canUndo();
+
+    int playbackNotifications = 0;
+    session.addObserver([&playbackNotifications](EditorChange changes) {
+        if (includesChange(changes, EditorChange::Playback))
+            ++playbackNotifications;
+    });
+
+    const TimelineTransportView playing { true, false, 42, 300, 30, 150 };
+    session.adoptRoutedTimelineTransport(playing);
+
+    const PlaybackState &cache = session.timelinePlaybackState();
+    require(cache.isPlaying && !cache.isPaused && cache.currentFrame == 42
+                && cache.durationFrames == 300 && cache.framesPerSecond == 30
+                && cache.playbackRatePercent == 150,
+            "The routed transport view must land in the timeline painting cache "
+            "verbatim.");
+    require(playbackNotifications == 1,
+            "Adopting a changed transport view must publish exactly one playback "
+            "change.");
+
+    // None of an edit's side effects: the engine is the authority, and a
+    // repaint is not a modification of the project.
+    require(session.projectRuntime().sequences().front().revision == revisionBefore,
+            "Adopting a transport view must not advance the sequence revision.");
+    require(session.isProjectDirty() == dirtyBefore,
+            "Adopting a transport view must not dirty the project.");
+    require(session.canUndo() == canUndoBefore,
+            "Adopting a transport view must not record undo history.");
+
+    // The routed path publishes at presentation cadence, so an unchanged view
+    // has to cost nothing -- otherwise the timeline repaints sixty times a
+    // second while the playhead sits still.
+    session.adoptRoutedTimelineTransport(playing);
+    require(playbackNotifications == 1,
+            "Re-adopting an unchanged transport view must publish nothing.");
+
+    // Paused is not stopped: both stop the clock, but only one keeps showing
+    // the frame under the playhead.
+    session.adoptRoutedTimelineTransport(TimelineTransportView{ false, true, 42, 300, 30, 150 });
+    require(!session.timelinePlaybackState().isPlaying
+                && session.timelinePlaybackState().isPaused
+                && playbackNotifications == 2,
+            "A change from playing to paused must reach the cache and publish once.");
+}
+
 void sequenceSnapshotIsImmutableAndSelfContained()
 {
     using namespace mini_editor::playback_core;
@@ -2121,6 +2180,7 @@ int main()
         timelinePresentationResolverBuildsOneCompleteViewSnapshot();
         sourcePlaybackDoesNotMoveTheTimelinePlayhead();
         projectRuntimeTracksExplicitSequenceIdentity();
+        routedTransportOnlyWritesThePaintingCache();
         sequenceSnapshotIsImmutableAndSelfContained();
         projectDocumentServiceMaintainsProjectAndMediaConsistency();
         internalTimelineClipboardSupportsCopyCutPasteAndDuplicate();

@@ -7,6 +7,7 @@
 #include "TimelineClipEdit.h"
 #include "TimelineModel.h"
 #include "playback_core/ProjectRuntime.h"
+#include "playback_core/TimelineTransportView.h"
 
 #include <cstddef>
 #include <functional>
@@ -75,6 +76,20 @@ public:
     void updatePlaybackFromBackend(int currentFrame, int durationFrames,
                                    bool isPlaying, bool isPaused);
     void updatePlaybackRatePercent(int ratePercent);
+
+    // ADR-002's migration strategy: with timeline preview routed through the
+    // new engine, the timeline PlaybackState survives only as a painting
+    // cache, and this is the one way it may be written. It stores what
+    // PlaybackSession published and nothing else -- no clamping, no
+    // inference, no history, no dirty flag, no sequence revision -- because
+    // any of those would make the cache a second opinion about transport.
+    // Nothing reads it back into the engine.
+    //
+    // The routed path calls this at presentation cadence, so an unchanged
+    // view publishes nothing rather than repainting the timeline sixty times
+    // a second.
+    void adoptRoutedTimelineTransport(
+        const mini_editor::playback_core::TimelineTransportView &view);
     // Explicit timeline editing may replace a frozen paused preview without
     // moving the playhead. Call this before publishing the new selection so
     // every observer resolves that selection as the edit target.

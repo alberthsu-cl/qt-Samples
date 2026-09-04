@@ -860,6 +860,30 @@ void EditorSession::updateTimelineViewState(const TimelineViewState &state)
     notifyStateChanged(EditorChange::TimelineView);
 }
 
+void EditorSession::adoptRoutedTimelineTransport(
+    const mini_editor::playback_core::TimelineTransportView &view)
+{
+    PlaybackState adopted = timelinePlaybackState_;
+    adopted.isPlaying = view.isPlaying;
+    adopted.isPaused = view.isPaused;
+    adopted.currentFrame = static_cast<int>(view.timelineFrame);
+    adopted.durationFrames = static_cast<int>(view.durationFrames);
+    adopted.framesPerSecond = view.framesPerSecond;
+    adopted.playbackRatePercent = view.playbackRatePercent;
+
+    if (adopted.isPlaying == timelinePlaybackState_.isPlaying
+        && adopted.isPaused == timelinePlaybackState_.isPaused
+        && adopted.currentFrame == timelinePlaybackState_.currentFrame
+        && adopted.durationFrames == timelinePlaybackState_.durationFrames
+        && adopted.framesPerSecond == timelinePlaybackState_.framesPerSecond
+        && adopted.playbackRatePercent == timelinePlaybackState_.playbackRatePercent) {
+        return;
+    }
+
+    timelinePlaybackState_ = adopted;
+    notifyStateChanged(EditorChange::Playback);
+}
+
 void EditorSession::updateTimelineAudioMixState(
     const TimelineAudioMixState &state)
 {

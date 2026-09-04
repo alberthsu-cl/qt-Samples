@@ -280,6 +280,13 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         timelineEngineRouter_ = std::make_unique<TimelineEngineRouter>(
             GetSafeHwnd(), WM_TIMELINE_ENGINE_NOTIFICATION,
             *editorSession_.projectRuntime().activeSequenceId());
+        // M5-04: the routed path's only write into EditorSession. It goes to
+        // the painting cache ADR-002 allows, never to a playback mutator, and
+        // it is never read back into the engine.
+        timelineEngineRouter_->setTransportViewSink(
+            [this](const mini_editor::playback_core::TimelineTransportView &view) {
+                editorSession_.adoptRoutedTimelineTransport(view);
+            });
     }
 #endif
 

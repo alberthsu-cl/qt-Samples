@@ -8,11 +8,13 @@
 #include "playback_core/SequencePlaybackSnapshot.h"
 #include "playback_core/SequencePreviewDriver.h"
 #include "playback_core/SteadyPlaybackClock.h"
+#include "playback_core/TimelineTransportView.h"
 #include "playback_core/VideoWorkScheduler.h"
 
 #include <QObject>
 #include <QTimer>
 
+#include <functional>
 #include <memory>
 
 class QVideoWidget;
@@ -69,6 +71,14 @@ public:
     // Called from MainFrame::OnTimelineEngineNotification.
     void onNotification();
 
+    // M5-04: where each published PlaybackStatus goes to become the UI's
+    // read-only painting cache (ADR-002). Always invoked on the GUI thread --
+    // both callers, the notification drain and the presentation tick, run
+    // there. Set once, before the first snapshot.
+    using TransportViewSink =
+        std::function<void(const mini_editor::playback_core::TimelineTransportView &)>;
+    void setTransportViewSink(TransportViewSink sink);
+
 private:
     void handleEvents(std::vector<mini_editor::playback_core::PlaybackEvent> events);
 
@@ -105,6 +115,7 @@ private:
     std::unique_ptr<mini_editor::playback_core::VideoWorkScheduler> scheduler_;
     std::unique_ptr<mini_editor::playback_core::SequencePreviewDriver> driver_;
     QTimer presentationTimer_;
+    TransportViewSink transportViewSink_;
     std::unique_ptr<QVideoWidget> previewWindow_;
     mini_editor::playback_core::PlaybackPhase lastAppliedPhase_ =
         mini_editor::playback_core::PlaybackPhase::Stopped;

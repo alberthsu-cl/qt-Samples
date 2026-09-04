@@ -11,6 +11,7 @@
 #include "PlaybackEventSink.h"
 #include "SnapshotTimelineResolver.h"
 #include "SequencePreviewDriver.h"
+#include "TimelineTransportView.h"
 
 #include <thread>
 #include <vector>
@@ -1861,6 +1862,77 @@ bool verifyPreviewDriverHoldsWhenItCannotResolve()
                    "viewport or switch clips.");
 }
 
+bool verifyTimelineTransportView()
+{
+    using namespace mini_editor::playback_core;
+
+    const SequenceId sequenceId = SequenceId::create();
+    FakePlaybackClock clock(MasterClockTime::fromMicroseconds(0));
+    PlaybackSession session(PlaybackSource{SequencePreview{sequenceId}}, clock);
+    session.applyCommand(
+        InstallSnapshot{makeSnapshot(sequenceId, FrameRate(30, 1), FrameCount::fromFrames(300))},
+        PlaybackCommandId::create());
+
+    const auto stopped = timelineTransportViewFor(session.status());
+    if (!require(stopped && !stopped->isPlaying && !stopped->isPaused
+                     && stopped->timelineFrame == 0
+                     && stopped->durationFrames == 300
+                     && stopped->framesPerSecond == 30
+                     && stopped->playbackRatePercent == 100,
+                 "A stopped sequence session must publish a stopped transport view "
+                 "carrying the snapshot's duration and rate."))
+        return false;
+
+    session.applyCommand(Play{}, PlaybackCommandId::create());
+    clock.set(MasterClockTime::fromMicroseconds(1'000'000));
+    const auto playing = timelineTransportViewFor(session.status());
+    if (!require(playing && playing->isPlaying && !playing->isPaused
+                     && playing->timelineFrame == 30,
+                 "A playing view must report the frame the clock resolves to, not a "
+                 "cached one."))
+        return false;
+
+    session.applyCommand(Pause{}, PlaybackCommandId::create());
+    const auto paused = timelineTransportViewFor(session.status());
+    if (!require(paused && !paused->isPlaying && paused->isPaused
+                     && paused->timelineFrame == 30,
+                 "Paused must be distinguishable from stopped, holding its frame."))
+        return false;
+
+    session.applyCommand(SetRate{50}, PlaybackCommandId::create());
+    if (!require(timelineTransportViewFor(session.status())->playbackRatePercent == 50,
+                 "The transport rate must reach the view."))
+        return false;
+
+    // A failure is neither playing nor paused, and does not invent a phase.
+    const PlaybackStatus current = session.status();
+    session.reportFailure(current.sessionId, current.generation, PlaybackError{"broken"});
+    const auto failed = timelineTransportViewFor(session.status());
+    if (!require(failed && !failed->isPlaying && !failed->isPaused,
+                 "A failed session must publish neither playing nor paused."))
+        return false;
+
+    // 30000/1001 has to paint as 30, not 29: PlaybackState carries a whole
+    // number and truncation would show the wrong rate for every NTSC project.
+    const SequenceId ntscId = SequenceId::create();
+    FakePlaybackClock ntscClock(MasterClockTime::fromMicroseconds(0));
+    PlaybackSession ntsc(PlaybackSource{SequencePreview{ntscId}}, ntscClock);
+    ntsc.applyCommand(
+        InstallSnapshot{makeSnapshot(ntscId, FrameRate(30'000, 1'001), FrameCount::fromFrames(90))},
+        PlaybackCommandId::create());
+    if (!require(timelineTransportViewFor(ntsc.status())->framesPerSecond == 30,
+                 "A rational frame rate must round to the nearest whole rate."))
+        return false;
+
+    // A source-asset session has no timeline transport to paint. Inventing
+    // one would put two meanings on the same cache.
+    FakePlaybackClock sourceClock(MasterClockTime::fromMicroseconds(0));
+    PlaybackSession sourceSession(
+        PlaybackSource{SourceAssetPreview{MediaAssetId(4)}}, sourceClock);
+    return require(!timelineTransportViewFor(sourceSession.status()),
+                   "A source-asset session must publish no timeline transport view.");
+}
+
 } // namespace
 
 int main()
@@ -1929,7 +2001,8 @@ int main()
         || !verifySessionRetargetAcrossProjectReload()
         || !verifyPreviewDriverFollowsThePlayheadAcrossClips()
         || !verifyPreviewDriverBoundsScrubbingAndSkipsStills()
-        || !verifyPreviewDriverHoldsWhenItCannotResolve()) {
+        || !verifyPreviewDriverHoldsWhenItCannotResolve()
+        || !verifyTimelineTransportView()) {
         return 1;
     }
 

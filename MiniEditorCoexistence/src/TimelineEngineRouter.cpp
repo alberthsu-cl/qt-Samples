@@ -158,6 +158,11 @@ void TimelineEngineRouter::seekToTimelineFrame(int timelineFrame)
     engine_->submit(Seek{target}, PlaybackCommandId::create());
 }
 
+void TimelineEngineRouter::setTransportViewSink(TransportViewSink sink)
+{
+    transportViewSink_ = std::move(sink);
+}
+
 void TimelineEngineRouter::onNotification()
 {
     handleEvents(bridge_.drain());
@@ -217,6 +222,14 @@ void TimelineEngineRouter::drivePreview(const PlaybackStatus &status,
 {
     const PreviewDriveOutcome outcome =
         driver_->notifyPlaybackStatus(status, transportJustRepositioned);
+
+    // ADR-002: the legacy timeline PlaybackState survives as a painting cache
+    // populated from a status publication. This is that publication, and it
+    // goes one way only -- nothing here ever reads the cache back.
+    if (transportViewSink_) {
+        if (const auto view = timelineTransportViewFor(status))
+            transportViewSink_(*view);
+    }
 
     if (outcome.showNothing) {
         // A gap, the tail past the last clip, or missing media. Freeze rather
