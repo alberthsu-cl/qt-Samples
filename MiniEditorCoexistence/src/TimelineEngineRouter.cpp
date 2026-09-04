@@ -120,6 +120,7 @@ void TimelineEngineRouter::installSnapshot(SequencePlaybackSnapshotPtr snapshot)
     lastInstalledSnapshot_ = snapshot;
 
     engine_->submit(InstallSnapshot{snapshot}, PlaybackCommandId::create());
+    transportRepositionPending_ = true;
 
     // Which clip to open, and when, is now decided per status by the driver
     // against the playhead -- not once, here, from clip zero.
@@ -131,14 +132,18 @@ void TimelineEngineRouter::applyIntent(EditorIntent intent)
     switch (intent) {
     case EditorIntent::TogglePlayback: {
         const PlaybackPhase phase = engine_->status().phase;
-        if (phase == PlaybackPhase::Playing)
+        if (phase == PlaybackPhase::Playing) {
+            // Pause holds the position it already has, so nothing has to move.
             engine_->submit(Pause{}, PlaybackCommandId::create());
-        else
+        } else {
             engine_->submit(Play{}, PlaybackCommandId::create());
+            transportRepositionPending_ = true;
+        }
         break;
     }
     case EditorIntent::StopPlayback:
         engine_->submit(Stop{}, PlaybackCommandId::create());
+        transportRepositionPending_ = true;
         break;
     case EditorIntent::StepBackward:
     case EditorIntent::StepForward: {
@@ -153,6 +158,7 @@ void TimelineEngineRouter::applyIntent(EditorIntent intent)
         const SequenceTime target =
             sequenceTimeAtFrameStart(TimelineFrame::fromFrameNumber(newFrameNumber), currentFrameRate_);
         engine_->submit(Seek{target}, PlaybackCommandId::create());
+        transportRepositionPending_ = true;
         break;
     }
     default:
@@ -165,6 +171,7 @@ void TimelineEngineRouter::seekToTimelineFrame(int timelineFrame)
     const TimelineFrame frame = TimelineFrame::fromFrameNumber(std::max(0, timelineFrame));
     const SequenceTime target = sequenceTimeAtFrameStart(frame, currentFrameRate_);
     engine_->submit(Seek{target}, PlaybackCommandId::create());
+    transportRepositionPending_ = true;
 }
 
 void TimelineEngineRouter::setTransportViewSink(TransportViewSink sink)
@@ -212,12 +219,9 @@ void TimelineEngineRouter::handleEvents(std::vector<PlaybackEvent> events)
         // Play the clip's media is already on its way to the worker thread
         // when play() is queued behind it.
         //
-        // Every status here is the result of a command this router submitted,
-        // and the routed path issues no editing selections yet, so
-        // "repositioned" is true for all of them. M5-05 introduces
-        // timeline-selection overrides and will have to distinguish Pause and
-        // SetRate from the override-clearing commands.
-        drivePreview(*status, /*transportJustRepositioned=*/true);
+        // Consumed by whichever drive runs first -- this one or the
+        // presentation tick -- so a reposition is acted on exactly once.
+        drivePreview(*status, takePendingReposition());
 
         if (status->phase != lastAppliedPhase_) {
             lastAppliedPhase_ = status->phase;
@@ -243,6 +247,13 @@ void TimelineEngineRouter::handleEvents(std::vector<PlaybackEvent> events)
     }
 }
 
+bool TimelineEngineRouter::takePendingReposition()
+{
+    const bool pending = transportRepositionPending_;
+    transportRepositionPending_ = false;
+    return pending;
+}
+
 void TimelineEngineRouter::onPresentationTick()
 {
     // M5-07 found this the hard way: PlaybackEngine::status() is the status
@@ -254,9 +265,7 @@ void TimelineEngineRouter::onPresentationTick()
     // ADR-005.
     engine_->observeClock();
 
-    // A plain refresh, not a reposition: the transport is simply where the
-    // clock says it is.
-    drivePreview(engine_->status(), /*transportJustRepositioned=*/false);
+    drivePreview(engine_->status(), takePendingReposition());
 }
 
 void TimelineEngineRouter::drivePreview(const PlaybackStatus &status,
@@ -295,6 +304,11 @@ void TimelineEngineRouter::drivePreview(const PlaybackStatus &status,
         // the next clip will open on its own when the playhead reaches it.
         worker_.pause();
         return;
+    }
+    if (outcome.repositionVideoTo) {
+        // Same clip, jumped playhead: the player is still running from where
+        // it was, and nothing else in this function would move it.
+        worker_.seekTo(*outcome.repositionVideoTo);
     }
     if (!outcome.openClip)
         return;
@@ -360,6 +374,11 @@ void TimelineEngineRouter::driveAudioLane(const PreviewDriveOutcome &outcome,
             QString::fromStdString(outcome.openAudioClip->immutableSourceLocator));
         if (outcome.openAudioClip->sourceTime)
             worker_.seekAudioTo(*outcome.openAudioClip->sourceTime);
+    } else if (outcome.repositionAudioTo) {
+        // The lane the seek did not happen to cross a boundary in. Before
+        // this, it kept playing from the old position alongside the lane that
+        // did move -- two positions of the same timeline, audible together.
+        worker_.seekAudioTo(*outcome.repositionAudioTo);
     }
 
     if (lastAudioLevelPercent_ != outcome.audioLevelPercent) {

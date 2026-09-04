@@ -32,6 +32,7 @@ std::optional<int> SequencePreviewDriver::openAudioClipId() const
 }
 
 void SequencePreviewDriver::driveAudioLane(const ResolvedSnapshotFrame &resolved,
+                                           bool transportJustRepositioned,
                                            PreviewDriveOutcome &outcome)
 {
     if (!resolved.audio || resolved.audio->availability != MediaAvailability::Available) {
@@ -52,7 +53,13 @@ void SequencePreviewDriver::driveAudioLane(const ResolvedSnapshotFrame &resolved
             clip.clipId, clip.mediaAssetId, clip.mediaKind,
             clip.immutableSourceLocator, clip.sourceTime
         };
+        return;
     }
+
+    // Same clip, but the playhead jumped: this lane's player is still running
+    // from where it was.
+    if (transportJustRepositioned)
+        outcome.repositionAudioTo = clip.sourceTime;
 }
 
 PreviewDriveOutcome SequencePreviewDriver::notifyPlaybackStatus(const PlaybackStatus &status,
@@ -87,7 +94,7 @@ PreviewDriveOutcome SequencePreviewDriver::notifyPlaybackStatus(const PlaybackSt
     // A1 first, and unconditionally: the two tracks have their own clip
     // boundaries, so a V1 gap must not silence audio that is still running,
     // and an early return on the video side must not skip the audio lane.
-    driveAudioLane(resolved, outcome);
+    driveAudioLane(resolved, transportJustRepositioned, outcome);
 
     if (!resolved.video || resolved.video->availability != MediaAvailability::Available) {
         // A gap, the tail past the last clip, or a file the snapshot could not
@@ -104,6 +111,12 @@ PreviewDriveOutcome SequencePreviewDriver::notifyPlaybackStatus(const PlaybackSt
             clip.clipId, clip.mediaAssetId, clip.mediaKind,
             clip.immutableSourceLocator, clip.sourceTime
         };
+    } else if (transportJustRepositioned) {
+        // Same clip, but the playhead jumped. Only meaningful for a lane a
+        // continuous player is actually running: while paused the frame comes
+        // from the scheduler below, which carries its own source time.
+        if (status.phase == PlaybackPhase::Playing)
+            outcome.repositionVideoTo = clip.sourceTime;
     }
 
     // Bounded latest-wins decode is the scrubbing case. While Playing, the

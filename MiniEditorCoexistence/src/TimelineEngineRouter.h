@@ -115,6 +115,9 @@ private:
     // affecting this.
     void onPresentationTick();
 
+    // Reads and clears transportRepositionPending_.
+    bool takePendingReposition();
+
     // Called by VideoWorkScheduler when a scrub decode has been composited.
     // May arrive on any thread; marshals to the GUI thread before touching
     // the coordinator.
@@ -152,6 +155,13 @@ private:
     bool isAudioSilenced_ = true;
     int lastVideoTrackMuted_ = -1;
     int lastRatePercent_ = -1;
+    // Set when this router submits a command that can move the playhead, and
+    // consumed by the next drive. M5-02 passed "repositioned" for every
+    // engine-driven status because nothing then depended on the distinction;
+    // once a reposition means "re-seek the continuous players", passing it
+    // loosely re-seeks on every Pause and passing it never leaves a lane
+    // playing from where the seek left it.
+    bool transportRepositionPending_ = false;
     std::unique_ptr<QVideoWidget> previewWindow_;
     mini_editor::playback_core::PlaybackPhase lastAppliedPhase_ =
         mini_editor::playback_core::PlaybackPhase::Stopped;

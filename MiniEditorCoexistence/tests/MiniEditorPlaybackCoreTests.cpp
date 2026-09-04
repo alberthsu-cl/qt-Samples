@@ -1673,6 +1673,18 @@ struct DriverHarness final {
                                            /*transportJustRepositioned=*/true);
     }
 
+    // Playing, then a seek, then the sampling ticks that follow it -- the
+    // shape that produced two audible positions at once before M5-08's
+    // follow-up.
+    mini_editor::playback_core::PreviewDriveOutcome playFrom(std::int64_t frame)
+    {
+        using namespace mini_editor::playback_core;
+        seekTo(frame);
+        session.applyCommand(Play{}, PlaybackCommandId::create());
+        return driver.notifyPlaybackStatus(session.status(),
+                                           /*transportJustRepositioned=*/true);
+    }
+
     // The other way the driver is called: sampling a free-running transport,
     // which is the only thing that notices a clip boundary while playing.
     mini_editor::playback_core::PreviewDriveOutcome tick()
@@ -2169,6 +2181,72 @@ bool verifyNaturalSequenceCompletion()
                    "An empty sequence has no end to complete at.");
 }
 
+bool verifyPreviewDriverRepositionsBothLanesOnASeek()
+{
+    using namespace mini_editor::playback_core;
+
+    // The bug this pins down: a seek during playback repositioned only
+    // whichever lane happened to cross a clip boundary. The other kept
+    // playing from where it was, and the two were audible together for the
+    // rest of the clip -- and never resynchronised, because nothing else ever
+    // moved a lane whose clip had not changed.
+    // Frame 20: inside V1 clip 10 (0..29) and inside A1 clip 20 (15..74).
+    DriverHarness harness;
+    harness.playFrom(20);
+    harness.tick();
+    if (!require(harness.driver.openClipId() == 10 && harness.driver.openAudioClipId() == 20,
+                 "Both lanes must be open before the seek under test."))
+        return false;
+
+    // Frame 65 crosses V1's boundary (clip 10 -> clip 11) but stays inside
+    // A1's clip 20, which spans 15..74. Exactly the asymmetry that broke.
+    const PreviewDriveOutcome seeked = harness.seekTo(65);
+    if (!require(seeked.openClip && seeked.openClip->clipId == 11,
+                 "The seek must re-open the V1 clip it crossed into."))
+        return false;
+    if (!require(!seeked.openAudioClip && seeked.repositionAudioTo,
+                 "A1 did not change clip, so it must be repositioned rather than "
+                 "re-opened -- and it must not simply be left where it was."))
+        return false;
+
+    // A1 clip 20 starts at frame 15 with source-in zero, so frame 65 is 50
+    // frames into it.
+    const std::int64_t expectedAudioUs =
+        sequenceTimeAtFrameStart(TimelineFrame::fromFrameNumber(50), FrameRate(30, 1))
+            .microsecondsForAdapter();
+    if (!require(seeked.repositionAudioTo->microsecondsForAdapter() == expectedAudioUs,
+                 "The audio lane must be repositioned to the seek target's source "
+                 "time, not to the clip start."))
+        return false;
+
+    // The mirror case: a seek that stays inside both clips must still move
+    // both. Nothing crosses a boundary here, so before the fix nothing moved
+    // at all except the reported playhead.
+    const PreviewDriveOutcome within = harness.seekTo(70);
+    if (!require(!within.openClip && !within.openAudioClip
+                     && within.repositionVideoTo && within.repositionAudioTo,
+                 "A seek that crosses no boundary must still reposition both lanes."))
+        return false;
+
+    // A plain sampling tick is not a reposition. Re-seeking a continuous
+    // player sixty times a second is its own kind of broken.
+    harness.clock.set(MasterClockTime::fromMicroseconds(3'000'000));
+    const PreviewDriveOutcome sampled = harness.tick();
+    if (!require(!sampled.repositionVideoTo && !sampled.repositionAudioTo,
+                 "A sampling tick must not reposition anything."))
+        return false;
+
+    // While paused the video frame comes from the scheduler, which carries
+    // its own source time; seeking the continuous player as well would fight
+    // it for the same viewport.
+    harness.session.applyCommand(Pause{}, PlaybackCommandId::create());
+    harness.driver.notifyPlaybackStatus(harness.session.status(), true);
+    const PreviewDriveOutcome pausedSeek = harness.seekTo(72);
+    return require(!pausedSeek.repositionVideoTo,
+                   "A paused seek must leave the continuous video player alone and "
+                   "let the scheduler serve the frame.");
+}
+
 } // namespace
 
 int main()
@@ -2241,7 +2319,8 @@ int main()
         || !verifyTimelineTransportView()
         || !verifyFramePresentedIsDiagnosticsOnly()
         || !verifyPreviewDriverSchedulesAudioIndependently()
-        || !verifyNaturalSequenceCompletion()) {
+        || !verifyNaturalSequenceCompletion()
+        || !verifyPreviewDriverRepositionsBothLanesOnASeek()) {
         return 1;
     }
 

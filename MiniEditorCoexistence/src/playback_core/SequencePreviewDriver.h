@@ -49,6 +49,18 @@ struct PreviewDriveOutcome final {
 
     // The snapshot's mix state, applied to the *video* player's own audio.
     bool isVideoTrackMuted = false;
+
+    // The playhead jumped rather than advanced, and this lane's clip did not
+    // change -- so its player is still running from where it was and must be
+    // moved. Opening a clip already seeks it, so these are set only when no
+    // open was issued for that lane, and never both with the corresponding
+    // openClip/openAudioClip.
+    //
+    // Without this, a seek during playback repositioned only whichever lane
+    // happened to cross a clip boundary. The other kept playing from the old
+    // position, and the two were audible together for the rest of the clip.
+    std::optional<SourceTimestamp> repositionVideoTo;
+    std::optional<SourceTimestamp> repositionAudioTo;
 };
 
 // The glue Milestone 4 built the pieces for but never assembled: turns one
@@ -82,6 +94,10 @@ public:
     // `transportJustRepositioned` has the meaning
     // PreviewPresentationCoordinator gives it: true for a status produced by
     // one of ADR-003's override-clearing commands, false for a plain refresh.
+    // It is also what tells this driver the playhead may have jumped rather
+    // than advanced, so a caller that passes it loosely will make continuous
+    // players re-seek for no reason -- and one that never passes it will
+    // leave them behind after a seek.
     PreviewDriveOutcome notifyPlaybackStatus(const PlaybackStatus &status,
                                              bool transportJustRepositioned);
 
@@ -94,7 +110,7 @@ private:
     // its own: ADR-003's scheduler is a video policy, and ADR-004 defers
     // audio buffering. Resolving which clip is under the playhead is
     // identical for both tracks, though, so it is shared.
-    void driveAudioLane(const ResolvedSnapshotFrame &resolved,
+    void driveAudioLane(const ResolvedSnapshotFrame &resolved, bool transportJustRepositioned,
                         PreviewDriveOutcome &outcome);
 
     PreviewPresentationCoordinator &coordinator_;
