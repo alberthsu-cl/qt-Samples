@@ -25,6 +25,11 @@ using mini_editor::playback_core::VideoFrameBuffer;
 
 namespace {
 
+// The legacy path's base volume (QtMediaPlaybackBackend), multiplied by the
+// clip's fade ramp. Matching the constant is the point: a fade has to sound
+// the same on both paths, not merely follow the same curve.
+constexpr float kBaseAudioVolume = 0.75F;
+
 VideoFrameBuffer wrapFrame(const QVideoFrame &frame)
 {
     VideoFrameBuffer buffer;
@@ -155,6 +160,28 @@ void QtPlaybackMediaWorker::ensureMediaObjectsExist()
                          if (player_->playbackState() == QMediaPlayer::PlayingState)
                              emit framePlayed(wrapFrame(frame));
                      });
+    audioOutput_->setMuted(isVideoTrackAudioMuted_);
+}
+
+void QtPlaybackMediaWorker::ensureAudioLaneObjectsExist()
+{
+    // Worker thread only, like ensureMediaObjectsExist(). Created lazily so a
+    // project with no A1 audio never constructs a second player at all.
+    if (audioLanePlayer_)
+        return;
+
+    audioLaneOutput_ = new QAudioOutput(this);
+    audioLaneOutput_->setVolume(kBaseAudioVolume * audioLaneLevelPercent_ / 100.0F);
+    audioLanePlayer_ = new QMediaPlayer(this);
+    audioLanePlayer_->setAudioOutput(audioLaneOutput_);
+
+    // The same signal the video player uses, so an unreadable A1 file reaches
+    // PlaybackSession through exactly the path M4-08 built for V1 -- reported
+    // into the engine's serialized queue, never applied inline here.
+    QObject::connect(audioLanePlayer_, &QMediaPlayer::errorOccurred, this,
+                     [this](QMediaPlayer::Error, const QString &errorString) {
+                         emit mediaErrorOccurred(errorString);
+                     });
 }
 
 void QtPlaybackMediaWorker::openSource(const QString &filePath)
@@ -202,6 +229,82 @@ void QtPlaybackMediaWorker::setRatePercent(int ratePercent)
     QMetaObject::invokeMethod(this, [this, ratePercent] {
         ensureMediaObjectsExist();
         player_->setPlaybackRate(ratePercent / 100.0);
+    }, Qt::QueuedConnection);
+}
+
+void QtPlaybackMediaWorker::openAudioSource(const QString &filePath)
+{
+    QMetaObject::invokeMethod(this, [this, filePath] {
+        ensureAudioLaneObjectsExist();
+        audioLanePlayer_->setSource(QUrl::fromLocalFile(filePath));
+    }, Qt::QueuedConnection);
+}
+
+void QtPlaybackMediaWorker::playAudio()
+{
+    QMetaObject::invokeMethod(this, [this] {
+        ensureAudioLaneObjectsExist();
+        audioLanePlayer_->play();
+    }, Qt::QueuedConnection);
+}
+
+void QtPlaybackMediaWorker::pauseAudio()
+{
+    QMetaObject::invokeMethod(this, [this] {
+        ensureAudioLaneObjectsExist();
+        audioLanePlayer_->pause();
+    }, Qt::QueuedConnection);
+}
+
+void QtPlaybackMediaWorker::stopAudio()
+{
+    QMetaObject::invokeMethod(this, [this] {
+        ensureAudioLaneObjectsExist();
+        audioLaneOutput_->setMuted(true);
+        audioLanePlayer_->stop();
+        audioLanePlayer_->setSource({});
+    }, Qt::QueuedConnection);
+}
+
+void QtPlaybackMediaWorker::seekAudioTo(SourceTimestamp position)
+{
+    QMetaObject::invokeMethod(this, [this, position] {
+        ensureAudioLaneObjectsExist();
+        audioLanePlayer_->setPosition(position.microsecondsForAdapter() / 1000);
+    }, Qt::QueuedConnection);
+}
+
+void QtPlaybackMediaWorker::setAudioRatePercent(int ratePercent)
+{
+    QMetaObject::invokeMethod(this, [this, ratePercent] {
+        ensureAudioLaneObjectsExist();
+        audioLanePlayer_->setPlaybackRate(ratePercent / 100.0);
+    }, Qt::QueuedConnection);
+}
+
+void QtPlaybackMediaWorker::setAudioLevelPercent(int levelPercent)
+{
+    QMetaObject::invokeMethod(this, [this, levelPercent] {
+        audioLaneLevelPercent_ = levelPercent;
+        ensureAudioLaneObjectsExist();
+        audioLaneOutput_->setVolume(kBaseAudioVolume * levelPercent / 100.0F);
+    }, Qt::QueuedConnection);
+}
+
+void QtPlaybackMediaWorker::setAudioMuted(bool muted)
+{
+    QMetaObject::invokeMethod(this, [this, muted] {
+        ensureAudioLaneObjectsExist();
+        audioLaneOutput_->setMuted(muted);
+    }, Qt::QueuedConnection);
+}
+
+void QtPlaybackMediaWorker::setVideoTrackAudioMuted(bool muted)
+{
+    QMetaObject::invokeMethod(this, [this, muted] {
+        isVideoTrackAudioMuted_ = muted;
+        if (audioOutput_)
+            audioOutput_->setMuted(muted);
     }, Qt::QueuedConnection);
 }
 

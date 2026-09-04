@@ -1508,6 +1508,24 @@ void workspaceLayoutProtectsPaneBounds()
 
 void clipFadeOwnsRampPolicyIndependentlyOfAnyRenderer()
 {
+    // M5-06 moved the arithmetic into playback_core so the routed path's A1
+    // audio levels and this path's opacity come from one implementation. The
+    // point of that move is that the two agree at every frame, not merely at
+    // the ones someone thought to check -- so sweep a ramp shape across a
+    // whole clip before testing the policy itself.
+    for (int duration : { 1, 7, 20, 100 }) {
+        for (int frame = -3; frame <= duration + 3; ++frame) {
+            ClipSettings swept;
+            swept.fadeInFrames = 10;
+            swept.fadeOutFrames = 20;
+            require(ClipFade::gainPercentAt(swept, frame, duration)
+                        == mini_editor::playback_core::clipFadeGainPercentAt(
+                               swept.fadeInFrames, swept.fadeOutFrames, frame, duration),
+                    "The legacy fade face and the core fade policy must agree at every "
+                    "frame, including outside the clip.");
+        }
+    }
+
     ClipSettings settings;
     settings.opacityPercent = 100;
     settings.fadeInFrames = 10;

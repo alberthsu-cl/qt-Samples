@@ -1,25 +1,24 @@
 #pragma once
 
 #include "ProjectState.h"
+#include "playback_core/ClipFadePolicy.h"
 
-// The fade lengths that actually apply to one placement. They may be shorter
-// than the stored request when a trim made the clip shorter than the two
-// ramps combined.
-struct ClipFadeRange {
-    int fadeInFrames = 0;
-    int fadeOutFrames = 0;
-};
+using ClipFadeRange = mini_editor::playback_core::ClipFadeRange;
 
-// Framework-neutral fade policy. A fade is an edit decision on one placement,
-// so it lives beside ClipSettings rather than in a renderer. Both the Qt
-// preview (video opacity) and the timeline overlay (ramp drawing) ask this
-// class the same question, which keeps the two surfaces consistent.
+// The ClipSettings-shaped face of the fade policy. A fade is an edit decision
+// on one placement, so it lives beside ClipSettings rather than in a
+// renderer. Both the Qt preview (video opacity) and the timeline overlay
+// (ramp drawing) ask this class the same question, which keeps the two
+// surfaces consistent.
+//
+// M5-06 moved the arithmetic itself into playback_core's ClipFadePolicy, so
+// the routed path's A1 audio levels and this path's opacity come from one
+// implementation rather than two that can drift.
 class ClipFade final
 {
 public:
-    // Long enough for a slow ten-second dissolve at 30 FPS, short enough that
-    // a stored value can never dominate the whole learning timeline.
-    static constexpr int kMaximumFadeFrames = 300;
+    static constexpr int kMaximumFadeFrames =
+        mini_editor::playback_core::kMaximumFadeFrames;
 
     // Clamps negative requests away and, when the two ramps would overlap,
     // shortens them proportionally so they exactly meet inside the clip.

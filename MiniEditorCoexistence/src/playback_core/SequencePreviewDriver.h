@@ -25,13 +25,30 @@ struct PreviewSourceChange final {
 };
 
 struct PreviewDriveOutcome final {
-    // The playhead moved onto a different clip. Point the player here and,
+    // The playhead moved onto a different V1 clip. Point the player here and,
     // when a source time is given, seek to it.
     std::optional<PreviewSourceChange> openClip;
 
     // The playhead is over a gap, past the end, or over media the snapshot
     // marked unavailable. Blank the viewport and ask no decoder for anything.
     bool showNothing = false;
+
+    // The A1 lane, resolved independently of V1 (M5-06, decision C). The two
+    // tracks have their own clip boundaries, so re-opening one must never
+    // interrupt the other -- which is the whole reason the adapter owns two
+    // players rather than one.
+    std::optional<PreviewSourceChange> openAudioClip;
+
+    // No A1 clip under the playhead, or its media is unavailable. Silence the
+    // lane; do not tear it down.
+    bool silenceAudio = false;
+
+    // The A1 clip's fade ramp at this frame, from the one shared fade policy.
+    // Meaningless while silenceAudio is set.
+    int audioLevelPercent = 100;
+
+    // The snapshot's mix state, applied to the *video* player's own audio.
+    bool isVideoTrackMuted = false;
 };
 
 // The glue Milestone 4 built the pieces for but never assembled: turns one
@@ -68,15 +85,24 @@ public:
     PreviewDriveOutcome notifyPlaybackStatus(const PlaybackStatus &status,
                                              bool transportJustRepositioned);
 
-    // The clip the adapter was last told to open, if any.
+    // The clips the adapter was last told to open, if any.
     std::optional<int> openClipId() const;
+    std::optional<int> openAudioClipId() const;
 
 private:
+    // A1 has no presentation identity and no bounded latest-wins policy of
+    // its own: ADR-003's scheduler is a video policy, and ADR-004 defers
+    // audio buffering. Resolving which clip is under the playhead is
+    // identical for both tracks, though, so it is shared.
+    void driveAudioLane(const ResolvedSnapshotFrame &resolved,
+                        PreviewDriveOutcome &outcome);
+
     PreviewPresentationCoordinator &coordinator_;
     VideoWorkScheduler &scheduler_;
     const IPlaybackClock &clock_;
     SequencePlaybackSnapshotPtr snapshot_;
     std::optional<int> openClipId_;
+    std::optional<int> openAudioClipId_;
 };
 
 } // namespace mini_editor::playback_core

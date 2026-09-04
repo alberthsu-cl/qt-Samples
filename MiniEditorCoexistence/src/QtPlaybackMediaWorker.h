@@ -63,6 +63,33 @@ public:
     void seekTo(mini_editor::playback_core::SourceTimestamp position);
     void setRatePercent(int ratePercent);
 
+    // M5-06, decision C: the A1 lane gets its own QMediaPlayer/QAudioOutput
+    // pair on this same worker thread, mirroring the legacy two-player
+    // topology. A separate pair rather than a second track on one player is
+    // what lets the audio lane be scheduled without waiting on video
+    // (ADR-004): V1 can be re-opened at a clip boundary while A1 keeps
+    // playing straight through its own clip.
+    //
+    // Audio-master clock selection stays deferred -- the monotonic
+    // steady_clock is still the master (ADR-004's milestone-1 exception), so
+    // this lane follows the transport rather than defining it.
+    void openAudioSource(const QString &filePath);
+    void playAudio();
+    void pauseAudio();
+    void stopAudio();
+    void seekAudioTo(mini_editor::playback_core::SourceTimestamp position);
+    void setAudioRatePercent(int ratePercent);
+
+    // The A1 clip's fade ramp, as a percentage. Applied on top of the same
+    // base volume the legacy path uses, so a fade sounds identical on both.
+    void setAudioLevelPercent(int levelPercent);
+    // Silences the lane without tearing its player down: seeking while
+    // stopped or paused must never leak a short packet through the speakers.
+    void setAudioMuted(bool muted);
+    // The snapshot's timelineAudioMix.isVideoTrackMuted, applied to the video
+    // player's own audio output.
+    void setVideoTrackAudioMuted(bool muted);
+
     mini_editor::playback_core::IVideoDecodeService &videoDecodeService();
     mini_editor::playback_core::IVideoCompositor &videoCompositor();
 
@@ -90,11 +117,16 @@ private:
     class VideoCompositorImpl;
 
     void ensureMediaObjectsExist();
+    void ensureAudioLaneObjectsExist();
 
     QThread thread_;
     QMediaPlayer *player_ = nullptr;
     QVideoSink *videoSink_ = nullptr;
     QAudioOutput *audioOutput_ = nullptr;
+    QMediaPlayer *audioLanePlayer_ = nullptr;
+    QAudioOutput *audioLaneOutput_ = nullptr;
+    int audioLaneLevelPercent_ = 100;
+    bool isVideoTrackAudioMuted_ = false;
     QVideoSink *externalVideoSink_ = nullptr; // set only via attachExternalVideoOutput(), read only on thread_.
     std::unique_ptr<VideoDecodeServiceImpl> videoDecodeService_;
     std::unique_ptr<VideoCompositorImpl> videoCompositor_;

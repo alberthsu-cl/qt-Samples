@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ClipFadePolicy.h"
 #include "PlaybackCommand.h"
 #include "SequencePlaybackSnapshot.h"
 
@@ -25,6 +26,9 @@ struct ResolvedSnapshotClip final {
     // Empty for a still image, which has no source timeline to seek along.
     std::optional<SourceTimestamp> sourceTime;
     PlaybackClipSettings settings;
+    // The clip's own fade ramp evaluated at clipLocalFrame. Video multiplies
+    // it into opacity; audio multiplies it into level (M5-06).
+    int fadeGainPercent;
 };
 
 struct ResolvedSnapshotFrame final {
@@ -37,12 +41,6 @@ struct ResolvedSnapshotFrame final {
 // TimelineModel/MediaLibrary state, so what it returns depends on when it is
 // asked; this one is a pure function of a snapshot, which is what lets a
 // stale result be recognized as stale instead of silently winning a race.
-//
-// Deliberately not computed here: the fade ramp. ClipFade is the legacy
-// path's fade policy and lives in the application target, so duplicating its
-// arithmetic in the core would create two policies that can disagree. The
-// clip's settings are passed through instead, and the presentation step
-// applies the single shared policy (M5-05).
 class SnapshotTimelineResolver final {
 public:
     // TimelinePlaybackResolver takes a raw int and has to clamp negatives to

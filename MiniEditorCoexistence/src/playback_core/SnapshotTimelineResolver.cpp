@@ -66,7 +66,13 @@ std::optional<ResolvedSnapshotClip> SnapshotTimelineResolver::resolveTrack(
         sourceTimestampFor(timelineFrame,
                            ClipTimeMapping { found->startFrame, found->sourceIn,
                                              snapshot.frameRate }),
-        found->settings
+        found->settings,
+        // The same policy the legacy path uses for opacity, so the two cannot
+        // disagree about the ramp at a given frame.
+        clipFadeGainPercentAt(found->settings.fadeInFrames,
+                              found->settings.fadeOutFrames,
+                              static_cast<int>((timelineFrame - found->startFrame).frames()),
+                              static_cast<int>(found->duration.frames()))
     };
 }
 

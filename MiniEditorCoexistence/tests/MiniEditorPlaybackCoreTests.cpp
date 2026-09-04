@@ -1590,11 +1590,16 @@ bool verifySessionRetargetAcrossProjectReload()
 //
 //  frame   0        30       60       90      120
 //  V1     [clip 10 ][  gap  ][clip 11 ][clip 12]
+//  A1          [-------- clip 20 -------]
 //                            11 = second video, 12 = still image
+//
+// A1 deliberately starts and ends on neither of V1's boundaries, and spans
+// V1's gap: nothing about one lane's clip changes may disturb the other.
 mini_editor::playback_core::SequencePlaybackSnapshotPtr makeDriverFixture(
     mini_editor::playback_core::SequenceId sequenceId,
     mini_editor::playback_core::MediaAvailability firstClipAvailability
-        = mini_editor::playback_core::MediaAvailability::Available)
+        = mini_editor::playback_core::MediaAvailability::Available,
+    bool isVideoTrackMuted = false)
 {
     using namespace mini_editor::playback_core;
 
@@ -1607,7 +1612,9 @@ mini_editor::playback_core::SequencePlaybackSnapshotPtr makeDriverFixture(
             { 2, PlaybackMediaKind::Video, "second.mp4", MediaAvailability::Available,
               SourceTimestamp::fromMicroseconds(10'000'000) },
             { 3, PlaybackMediaKind::Image, "still.png", MediaAvailability::Available,
-              std::nullopt }
+              std::nullopt },
+            { 4, PlaybackMediaKind::Audio, "voice.wav", MediaAvailability::Available,
+              SourceTimestamp::fromMicroseconds(10'000'000) }
         },
         {
             { 10, 1, PlaybackTrackType::Video, TimelineFrame::fromFrameNumber(0),
@@ -1618,8 +1625,14 @@ mini_editor::playback_core::SequencePlaybackSnapshotPtr makeDriverFixture(
             { 12, 3, PlaybackTrackType::Video, TimelineFrame::fromFrameNumber(90),
               FrameCount::fromFrames(30), std::nullopt, {} }
         },
-        {},
-        false
+        {
+            // 60 frames with a 10-frame ramp at each end, so the fade gain is
+            // a value the test can predict rather than just "not 100".
+            { 20, 4, PlaybackTrackType::Audio, TimelineFrame::fromFrameNumber(15),
+              FrameCount::fromFrames(60), SourceTimestamp::fromMicroseconds(0),
+              { 100, 100, 10, 10, 0, 100 } }
+        },
+        isVideoTrackMuted
     };
     return std::make_shared<const SequencePlaybackSnapshot>(std::move(snapshot));
 }
@@ -1999,6 +2012,73 @@ bool verifyFramePresentedIsDiagnosticsOnly()
                    "playhead, not the generation, not the status sequence.");
 }
 
+bool verifyPreviewDriverSchedulesAudioIndependently()
+{
+    using namespace mini_editor::playback_core;
+
+    DriverHarness harness;
+
+    // Before A1 starts: video only, and the lane is explicitly silent rather
+    // than left in whatever state it happened to be in.
+    const PreviewDriveOutcome beforeAudio = harness.seekTo(0);
+    if (!require(beforeAudio.openClip && beforeAudio.openClip->clipId == 10
+                     && !beforeAudio.openAudioClip && beforeAudio.silenceAudio,
+                 "Before A1 starts, the audio lane must be silenced explicitly."))
+        return false;
+
+    // A1 opens on its own boundary, which is nowhere near V1's.
+    const PreviewDriveOutcome audioStart = harness.seekTo(15);
+    if (!require(audioStart.openAudioClip && audioStart.openAudioClip->clipId == 20
+                     && audioStart.openAudioClip->immutableSourceLocator == "voice.wav"
+                     && !audioStart.openClip && !audioStart.silenceAudio,
+                 "A1 must open at its own start frame without re-opening V1."))
+        return false;
+
+    // The fade ramp, from the same policy the legacy path uses for opacity:
+    // 60 frames with a 10-frame ramp at each end.
+    if (!require(audioStart.audioLevelPercent == 0
+                     && harness.seekTo(20).audioLevelPercent == 50
+                     && harness.seekTo(25).audioLevelPercent == 100
+                     && harness.seekTo(70).audioLevelPercent == 50,
+                 "The A1 level must follow the clip's fade ramp at each frame."))
+        return false;
+
+    // The heart of decision C: V1's gap, and then V1's next clip boundary,
+    // must leave A1 completely alone. One player per lane is what makes this
+    // possible -- with a single player, re-opening V1 would cut the audio.
+    const PreviewDriveOutcome videoGap = harness.seekTo(40);
+    if (!require(videoGap.showNothing && !videoGap.silenceAudio
+                     && !videoGap.openAudioClip
+                     && harness.driver.openAudioClipId() == 20,
+                 "A gap on V1 must not silence A1, and must not re-open it either."))
+        return false;
+
+    const PreviewDriveOutcome videoBoundary = harness.seekTo(60);
+    if (!require(videoBoundary.openClip && videoBoundary.openClip->clipId == 11
+                     && !videoBoundary.openAudioClip && !videoBoundary.silenceAudio,
+                 "Crossing a V1 clip boundary must not interrupt A1."))
+        return false;
+
+    // And the reverse: A1 ending must not disturb V1.
+    const PreviewDriveOutcome audioEnd = harness.seekTo(80);
+    if (!require(audioEnd.silenceAudio && !harness.driver.openAudioClipId()
+                     && !audioEnd.showNothing
+                     && harness.driver.openClipId() == 11,
+                 "A1 ending must silence only the audio lane, leaving V1 open."))
+        return false;
+
+    // Mix state travels with the snapshot rather than with the transport.
+    DriverHarness muted(MediaAvailability::Available);
+    muted.driver.installSnapshot(
+        makeDriverFixture(muted.sequenceId, MediaAvailability::Available,
+                          /*isVideoTrackMuted=*/true));
+    muted.session.applyCommand(
+        InstallSnapshot{makeDriverFixture(muted.sequenceId, MediaAvailability::Available, true)},
+        PlaybackCommandId::create());
+    return require(muted.seekTo(20).isVideoTrackMuted,
+                   "The snapshot's isVideoTrackMuted must reach the adapter.");
+}
+
 } // namespace
 
 int main()
@@ -2069,7 +2149,8 @@ int main()
         || !verifyPreviewDriverBoundsScrubbingAndSkipsStills()
         || !verifyPreviewDriverHoldsWhenItCannotResolve()
         || !verifyTimelineTransportView()
-        || !verifyFramePresentedIsDiagnosticsOnly()) {
+        || !verifyFramePresentedIsDiagnosticsOnly()
+        || !verifyPreviewDriverSchedulesAudioIndependently()) {
         return 1;
     }
 

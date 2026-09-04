@@ -18,11 +18,41 @@ void SequencePreviewDriver::installSnapshot(SequencePlaybackSnapshotPtr snapshot
 
     snapshot_ = std::move(snapshot);
     openClipId_.reset();
+    openAudioClipId_.reset();
 }
 
 std::optional<int> SequencePreviewDriver::openClipId() const
 {
     return openClipId_;
+}
+
+std::optional<int> SequencePreviewDriver::openAudioClipId() const
+{
+    return openAudioClipId_;
+}
+
+void SequencePreviewDriver::driveAudioLane(const ResolvedSnapshotFrame &resolved,
+                                           PreviewDriveOutcome &outcome)
+{
+    if (!resolved.audio || resolved.audio->availability != MediaAvailability::Available) {
+        openAudioClipId_.reset();
+        outcome.silenceAudio = true;
+        return;
+    }
+
+    const ResolvedSnapshotClip &clip = *resolved.audio;
+    // A1 is a continuous lane with no still-image case and no request/response
+    // decode: ADR-003's bounded latest-wins policy is a video policy, and
+    // ADR-004 defers audio buffering to a later milestone. All this lane needs
+    // is which file, where in it, and how loud.
+    outcome.audioLevelPercent = clip.fadeGainPercent;
+    if (openAudioClipId_ != clip.clipId) {
+        openAudioClipId_ = clip.clipId;
+        outcome.openAudioClip = PreviewSourceChange{
+            clip.clipId, clip.mediaAssetId, clip.mediaKind,
+            clip.immutableSourceLocator, clip.sourceTime
+        };
+    }
 }
 
 PreviewDriveOutcome SequencePreviewDriver::notifyPlaybackStatus(const PlaybackStatus &status,
@@ -52,6 +82,13 @@ PreviewDriveOutcome SequencePreviewDriver::notifyPlaybackStatus(const PlaybackSt
         SnapshotTimelineResolver::resolve(*snapshot_, sequence->timelineFrame);
 
     PreviewDriveOutcome outcome;
+    outcome.isVideoTrackMuted = snapshot_->isVideoTrackMuted;
+
+    // A1 first, and unconditionally: the two tracks have their own clip
+    // boundaries, so a V1 gap must not silence audio that is still running,
+    // and an early return on the video side must not skip the audio lane.
+    driveAudioLane(resolved, outcome);
+
     if (!resolved.video || resolved.video->availability != MediaAvailability::Available) {
         // A gap, the tail past the last clip, or a file the snapshot could not
         // find. None of these is a failure -- there is simply nothing to show.

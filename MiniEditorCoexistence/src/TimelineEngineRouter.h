@@ -122,6 +122,12 @@ private:
 
     void setEnginePresentationActive(bool active);
 
+    // Executes the A1 half of a drive outcome (M5-06). Separate from the
+    // video half because the two lanes have independent clip boundaries: a
+    // V1 source switch must not interrupt audio that is still running.
+    void driveAudioLane(const mini_editor::playback_core::PreviewDriveOutcome &outcome,
+                        mini_editor::playback_core::PlaybackPhase phase);
+
     // What the engine's session last accepted, so a view-only editor change
     // that rebuilds an identical snapshot does not re-open media for content
     // the session will refuse. PlaybackSession remains the authority; this is
@@ -142,6 +148,10 @@ private:
     EnginePresentationActiveSink enginePresentationActiveSink_;
     mini_editor::playback_core::PresentationDiagnostics diagnostics_;
     bool isEnginePresentationActive_ = false;
+    int lastAudioLevelPercent_ = -1;
+    bool isAudioSilenced_ = true;
+    int lastVideoTrackMuted_ = -1;
+    int lastRatePercent_ = -1;
     std::unique_ptr<QVideoWidget> previewWindow_;
     mini_editor::playback_core::PlaybackPhase lastAppliedPhase_ =
         mini_editor::playback_core::PlaybackPhase::Stopped;

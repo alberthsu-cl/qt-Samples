@@ -264,6 +264,17 @@ void TimelineEngineRouter::drivePreview(const PlaybackStatus &status,
             transportViewSink_(*view);
     }
 
+    // Both lanes follow one transport rate. Nothing submits SetRate on the
+    // routed path yet, but if anything ever does, the two players desyncing
+    // is not a failure that would announce itself.
+    if (lastRatePercent_ != status.ratePercent) {
+        lastRatePercent_ = status.ratePercent;
+        worker_.setRatePercent(status.ratePercent);
+        worker_.setAudioRatePercent(status.ratePercent);
+    }
+
+    driveAudioLane(outcome, status.phase);
+
     // The panel paints engine frames only while a clip is actually open, so a
     // gap falls back to the panel's own "no media at this position" rendering
     // instead of leaving the previous clip's last frame up.
@@ -302,6 +313,59 @@ void TimelineEngineRouter::drivePreview(const PlaybackStatus &status,
 
     if (!previewWindow_->isVisible())
         previewWindow_->show();
+}
+
+void TimelineEngineRouter::driveAudioLane(const PreviewDriveOutcome &outcome,
+                                          PlaybackPhase phase)
+{
+    // The snapshot's mix state, applied to the *video* player's own audio.
+    // Sent only on change: every drive would otherwise re-issue it at the
+    // presentation tick's cadence.
+    const int videoTrackMuted = outcome.isVideoTrackMuted ? 1 : 0;
+    if (lastVideoTrackMuted_ != videoTrackMuted) {
+        lastVideoTrackMuted_ = videoTrackMuted;
+        worker_.setVideoTrackAudioMuted(outcome.isVideoTrackMuted);
+    }
+
+    if (outcome.silenceAudio) {
+        // No A1 clip here. Silence the lane rather than tearing it down: the
+        // next clip is usually a few frames away, and re-opening a file for
+        // every gap is how a timeline starts stuttering.
+        if (!isAudioSilenced_) {
+            isAudioSilenced_ = true;
+            worker_.setAudioMuted(true);
+            worker_.pauseAudio();
+        }
+        return;
+    }
+
+    if (outcome.openAudioClip) {
+        logLine(L"Playhead entered A1 clip %d; opening %hs",
+                outcome.openAudioClip->clipId,
+                outcome.openAudioClip->immutableSourceLocator.c_str());
+        worker_.openAudioSource(
+            QString::fromStdString(outcome.openAudioClip->immutableSourceLocator));
+        if (outcome.openAudioClip->sourceTime)
+            worker_.seekAudioTo(*outcome.openAudioClip->sourceTime);
+    }
+
+    if (lastAudioLevelPercent_ != outcome.audioLevelPercent) {
+        lastAudioLevelPercent_ = outcome.audioLevelPercent;
+        worker_.setAudioLevelPercent(outcome.audioLevelPercent);
+    }
+
+    // Seeking while stopped or paused prepares the decoder position but must
+    // never leak a short packet through the speakers -- the same rule the
+    // legacy path follows.
+    const bool shouldSound = phase == PlaybackPhase::Playing;
+    if (isAudioSilenced_ != !shouldSound || outcome.openAudioClip) {
+        isAudioSilenced_ = !shouldSound;
+        worker_.setAudioMuted(!shouldSound);
+        if (shouldSound)
+            worker_.playAudio();
+        else
+            worker_.pauseAudio();
+    }
 }
 
 void TimelineEngineRouter::setEnginePresentationActive(bool active)
