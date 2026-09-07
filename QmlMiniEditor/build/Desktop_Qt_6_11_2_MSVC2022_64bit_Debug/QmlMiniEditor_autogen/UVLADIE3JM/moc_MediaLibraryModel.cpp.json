@@ -1,0 +1,38 @@
+{
+    "classes": [
+        {
+            "classInfos": [
+                {
+                    "name": "QML.Element",
+                    "value": "auto"
+                }
+            ],
+            "className": "MediaLibraryModel",
+            "enums": [
+                {
+                    "isClass": false,
+                    "isFlag": false,
+                    "lineNumber": 16,
+                    "name": "Role",
+                    "values": [
+                        "TitleRole",
+                        "KindRole",
+                        "DurationRole",
+                        "AccentColorRole"
+                    ]
+                }
+            ],
+            "lineNumber": 10,
+            "object": true,
+            "qualifiedClassName": "MediaLibraryModel",
+            "superClasses": [
+                {
+                    "access": "public",
+                    "name": "QAbstractListModel"
+                }
+            ]
+        }
+    ],
+    "inputFile": "MediaLibraryModel.h",
+    "outputRevision": 69
+}

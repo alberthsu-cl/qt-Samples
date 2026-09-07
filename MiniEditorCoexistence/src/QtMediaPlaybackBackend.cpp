@@ -44,6 +44,8 @@ QtMediaPlaybackBackend::QtMediaPlaybackBackend(
 
     QObject::connect(&timelineAudioPlayer_, &QMediaPlayer::mediaStatusChanged,
                      [this](QMediaPlayer::MediaStatus status) {
+        if (timelineRoutedExternally_)
+            return;
         if (status == QMediaPlayer::InvalidMedia) {
             stopTimelineAudioPlayback();
             return;
@@ -84,6 +86,10 @@ QtMediaPlaybackBackend::QtMediaPlaybackBackend(
     QObject::connect(&player_, &QMediaPlayer::mediaStatusChanged,
                      [this](QMediaPlayer::MediaStatus status) {
         if (session_.isTimelineFocused()) {
+            // The engine owns timeline preview; this player must not act on a
+            // painting cache it does not own.
+            if (timelineRoutedExternally_)
+                return;
             if (!isLoadedTimelineVideoStillActive())
                 return;
 
@@ -158,6 +164,27 @@ QtMediaPlaybackBackend::QtMediaPlaybackBackend(
             }
         }
     });
+}
+
+void QtMediaPlaybackBackend::setTimelineRoutedExternally(bool routed)
+{
+    if (timelineRoutedExternally_ == routed)
+        return;
+
+    timelineRoutedExternally_ = routed;
+    if (!routed)
+        return;
+
+    // Let go of whatever this backend was doing with the timeline, once,
+    // rather than waiting for a call that will never come again.
+    stopTimelineAudioPlayback();
+    // player_ and audioOutput_ are shared with source-asset preview, which
+    // this backend keeps serving -- so only stop them when it is a timeline
+    // clip they are currently on.
+    if (session_.isTimelineFocused()
+        && player_.playbackState() != QMediaPlayer::StoppedState) {
+        player_.stop();
+    }
 }
 
 void QtMediaPlaybackBackend::setVideoOutput(QVideoSink *videoSink)
@@ -264,6 +291,8 @@ PlaybackClockAction QtMediaPlaybackBackend::executeCommand(
     LegacyPlaybackCommand command)
 {
     if (session_.isTimelineFocused()) {
+        if (timelineRoutedExternally_)
+            return PlaybackClockAction::Stop;
         const PlaybackState stateBeforeCommand = session_.timelinePlaybackState();
         session_.handlePlaybackCommand(command);
         const bool isStartingPlayback =
@@ -335,6 +364,8 @@ PlaybackClockAction QtMediaPlaybackBackend::synchronize()
 {
     applyPlaybackRate();
     if (session_.isTimelineFocused()) {
+        if (timelineRoutedExternally_)
+            return PlaybackClockAction::Stop;
         const PlaybackClockAction action = synchronizeTimelinePlayback();
         synchronizeTimelineAudio(desiredTimelineAudioPlan(), false);
         return action;
@@ -366,6 +397,8 @@ PlaybackClockAction QtMediaPlaybackBackend::seek(
 
     const MediaPlaybackPlan &plan = request.playbackPlan;
     if (request.context == MediaPlaybackContext::Timeline) {
+        if (timelineRoutedExternally_)
+            return PlaybackClockAction::Stop;
         const PlaybackClockAction action =
             synchronizeTimelinePlayback(plan, true);
         synchronizeTimelineAudio(request.audioPlaybackPlan, true);
@@ -401,6 +434,8 @@ PlaybackClockAction QtMediaPlaybackBackend::seek(
 PlaybackClockAction QtMediaPlaybackBackend::advanceOneFrame()
 {
     if (session_.isTimelineFocused()) {
+        if (timelineRoutedExternally_)
+            return PlaybackClockAction::Stop;
         // MFC owns the outer message loop. Giving Qt a short event-processing
         // opportunity keeps the video decoder responsive. The timeline clock
         // itself is deliberately not taken from QMediaPlayer: it is the one

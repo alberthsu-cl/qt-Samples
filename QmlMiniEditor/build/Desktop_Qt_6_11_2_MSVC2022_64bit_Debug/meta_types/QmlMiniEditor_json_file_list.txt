@@ -1,0 +1,2 @@
+D:/Qt/Samples/QmlMiniEditor/build/Desktop_Qt_6_11_2_MSVC2022_64bit_Debug/QmlMiniEditor_autogen/include/../UVLADIE3JM/moc_EditorViewModel.cpp.json
+D:/Qt/Samples/QmlMiniEditor/build/Desktop_Qt_6_11_2_MSVC2022_64bit_Debug/QmlMiniEditor_autogen/include/../UVLADIE3JM/moc_MediaLibraryModel.cpp.json

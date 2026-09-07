@@ -1,0 +1,6 @@
+module QmlMiniEditor
+typeinfo QmlMiniEditor.qmltypes
+prefer :/qt/qml/QmlMiniEditor/
+Main 1.0 qml/Main.qml
+depends QtQuick
+

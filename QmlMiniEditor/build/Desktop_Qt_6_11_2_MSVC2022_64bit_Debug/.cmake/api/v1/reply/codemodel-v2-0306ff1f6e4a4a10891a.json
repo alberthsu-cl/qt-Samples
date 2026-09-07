@@ -1,0 +1,222 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"jsonFile" : "directory-.-Debug-d0094a50bb2071803777.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.16"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8,
+						9,
+						10,
+						11,
+						12,
+						13,
+						14,
+						15,
+						16,
+						17,
+						18
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "QmlMiniEditor",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8,
+						9,
+						10,
+						11,
+						12,
+						13,
+						14,
+						15,
+						16,
+						17,
+						18
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "QmlMiniEditor::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-QmlMiniEditor-Debug-12809bf98742a553d8aa.json",
+					"name" : "QmlMiniEditor",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "QmlMiniEditor_autogen::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-QmlMiniEditor_autogen-Debug-9697e2542948df3e0427.json",
+					"name" : "QmlMiniEditor_autogen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "QmlMiniEditor_automoc_json_extraction::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-QmlMiniEditor_automoc_json_extraction-Debug-321b660f0878ce383e6c.json",
+					"name" : "QmlMiniEditor_automoc_json_extraction",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "QmlMiniEditor_copy_qml::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-QmlMiniEditor_copy_qml-Debug-35cc52d52b9ade229007.json",
+					"name" : "QmlMiniEditor_copy_qml",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "QmlMiniEditor_copy_res::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-QmlMiniEditor_copy_res-Debug-67200dd6f18b437ecc30.json",
+					"name" : "QmlMiniEditor_copy_res",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "QmlMiniEditor_qmlimportscan::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-QmlMiniEditor_qmlimportscan-Debug-4afc5a96eef2a756b57e.json",
+					"name" : "QmlMiniEditor_qmlimportscan",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "QmlMiniEditor_qmllint::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-QmlMiniEditor_qmllint-Debug-c5aef53f9706b9425aeb.json",
+					"name" : "QmlMiniEditor_qmllint",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "QmlMiniEditor_qmllint_json::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-QmlMiniEditor_qmllint_json-Debug-8b3ff7d98a8e4666c337.json",
+					"name" : "QmlMiniEditor_qmllint_json",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "QmlMiniEditor_qmllint_module::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-QmlMiniEditor_qmllint_module-Debug-49c2058c072c14c8e9ca.json",
+					"name" : "QmlMiniEditor_qmllint_module",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "QmlMiniEditor_qmltyperegistration::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-QmlMiniEditor_qmltyperegistration-Debug-6c4bbc3f2e4dc2ac6b7c.json",
+					"name" : "QmlMiniEditor_qmltyperegistration",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "all_aotstats::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-all_aotstats-Debug-3343fbb789266643d058.json",
+					"name" : "all_aotstats",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "all_qmllint::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-all_qmllint-Debug-72991c962f1676a72d15.json",
+					"name" : "all_qmllint",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "all_qmllint_json::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-all_qmllint_json-Debug-32cca79d687597abdc4e.json",
+					"name" : "all_qmllint_json",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "all_qmllint_module::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-all_qmllint_module-Debug-f658028bf6d9d2c1b198.json",
+					"name" : "all_qmllint_module",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "all_qmltyperegistrations::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-all_qmltyperegistrations-Debug-b2dc98f1e40e30283de7.json",
+					"name" : "all_qmltyperegistrations",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "clean_qml_context_properties::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-clean_qml_context_properties-Debug-10f4e9d4e06ab265a907.json",
+					"name" : "clean_qml_context_properties",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "dump_qml_context_properties::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-dump_qml_context_properties-Debug-952696f674a3221979e8.json",
+					"name" : "dump_qml_context_properties",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "generate_qmlls_build_ini_file::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-generate_qmlls_build_ini_file-Debug-be4e6c97eccbe5a2e452.json",
+					"name" : "generate_qmlls_build_ini_file",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "module_QmlMiniEditor_aotstats_target::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-module_QmlMiniEditor_aotstats_target-Debug-8cd29b1cce577c1e47ed.json",
+					"name" : "module_QmlMiniEditor_aotstats_target",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "D:/Qt/Samples/QmlMiniEditor/build/Desktop_Qt_6_11_2_MSVC2022_64bit_Debug",
+		"source" : "D:/Qt/Samples/QmlMiniEditor"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 6
+	}
+}

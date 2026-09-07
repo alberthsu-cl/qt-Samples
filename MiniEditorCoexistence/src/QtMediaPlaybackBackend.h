@@ -30,6 +30,20 @@ public:
                            MediaLibrary &mediaLibrary);
 
     void setVideoOutput(QVideoSink *videoSink);
+
+    // Timeline preview is routed through the new engine (the default since
+    // M5-08), so this backend serves source-asset preview only (Decision E).
+    //
+    // Every timeline branch in here has to become inert, not merely go
+    // uncalled. ADR-002 permits EditorSession's timeline PlaybackState to
+    // survive as a painting cache the routed path writes, on condition that
+    // nothing reads it back as authority -- and this class does exactly that
+    // in its QMediaPlayer signal handlers: a media-status change was enough
+    // to call player_.play() again purely because the cache said "playing".
+    // Nothing on the routed path could then stop it, because every
+    // IPlaybackBackend entry point is bypassed while routing, so the sound
+    // continued until the process exited.
+    void setTimelineRoutedExternally(bool routed);
     void setVideoVisibilityHandler(VideoVisibilityHandler handler);
     void setSourceMetadataChangedHandler(SourceMetadataChangedHandler handler);
 
@@ -93,6 +107,7 @@ private:
     // old file. This becomes true only after the new source is loaded.
     bool loadedSourceMediaReady_ = false;
     bool pauseAfterFirstVideoFrame_ = false;
+    bool timelineRoutedExternally_ = false;
     int silentDecodeTargetFrame_ = 0;
     // Incremented every time a new silent-decode-then-pause wait begins
     // (beginSilentFrameDecode()) -- a new source selection or a preroll

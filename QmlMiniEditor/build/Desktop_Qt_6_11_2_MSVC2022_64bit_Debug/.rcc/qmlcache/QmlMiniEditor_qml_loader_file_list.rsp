@@ -1,0 +1,7 @@
+--resource
+D:/Qt/Samples/QmlMiniEditor/build/Desktop_Qt_6_11_2_MSVC2022_64bit_Debug/.qt/rcc/qmake_QmlMiniEditor.qrc
+--resource
+D:/Qt/Samples/QmlMiniEditor/build/Desktop_Qt_6_11_2_MSVC2022_64bit_Debug/.qt/rcc/QmlMiniEditor_raw_qml_0.qrc
+--resource
+D:/Qt/Samples/QmlMiniEditor/build/Desktop_Qt_6_11_2_MSVC2022_64bit_Debug/.qt/rcc/QmlMiniEditor_raw_qml_0_extra_qmldirs.qrc
+/qt/qml/QmlMiniEditor/qml/Main.qml

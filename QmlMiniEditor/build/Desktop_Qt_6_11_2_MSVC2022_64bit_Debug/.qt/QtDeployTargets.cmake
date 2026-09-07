@@ -1,0 +1,3 @@
+set(__QT_DEPLOY_TARGET_QmlMiniEditor_FILE D:/Qt/Samples/QmlMiniEditor/build/Desktop_Qt_6_11_2_MSVC2022_64bit_Debug/QmlMiniEditor.exe)
+set(__QT_DEPLOY_TARGET_QmlMiniEditor_TYPE EXECUTABLE)
+set(__QT_DEPLOY_TARGET_QmlMiniEditor_RUNTIME_DLLS C:/Qt/6.11.2/msvc2022_64/bin/Qt6QuickControls2d.dll;C:/Qt/6.11.2/msvc2022_64/bin/Qt6QuickTemplates2d.dll;C:/Qt/6.11.2/msvc2022_64/bin/Qt6Quickd.dll;C:/Qt/6.11.2/msvc2022_64/bin/Qt6OpenGLd.dll;C:/Qt/6.11.2/msvc2022_64/bin/Qt6QmlMetad.dll;C:/Qt/6.11.2/msvc2022_64/bin/Qt6QmlWorkerScriptd.dll;C:/Qt/6.11.2/msvc2022_64/bin/Qt6Guid.dll;C:/Qt/6.11.2/msvc2022_64/bin/Qt6QmlModelsd.dll;C:/Qt/6.11.2/msvc2022_64/bin/Qt6Qmld.dll;C:/Qt/6.11.2/msvc2022_64/bin/Qt6Networkd.dll;C:/Qt/6.11.2/msvc2022_64/bin/Qt6Cored.dll)

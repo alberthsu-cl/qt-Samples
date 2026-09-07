@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/">
+    <file alias="/qt/qml/QmlMiniEditor">D:/Qt/Samples/QmlMiniEditor/build/Desktop_Qt_6_11_2_MSVC2022_64bit_Debug/QmlMiniEditor</file>
+
+  </qresource>
+</RCC>

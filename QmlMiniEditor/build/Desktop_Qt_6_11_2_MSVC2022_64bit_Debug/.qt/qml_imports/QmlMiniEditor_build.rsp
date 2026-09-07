@@ -1,0 +1,15 @@
+-rootPath
+D:/Qt/Samples/QmlMiniEditor
+-cmake-output
+-output-file
+D:/Qt/Samples/QmlMiniEditor/build/Desktop_Qt_6_11_2_MSVC2022_64bit_Debug/.qt/qml_imports/QmlMiniEditor_build.cmake
+-importPath
+D:/Qt/Samples/QmlMiniEditor/build/Desktop_Qt_6_11_2_MSVC2022_64bit_Debug
+-importPath
+D:/Qt/Samples/QmlMiniEditor/build/Desktop_Qt_6_11_2_MSVC2022_64bit_Debug/QmlMiniEditor
+-importPath
+C:/Qt/6.11.2/msvc2022_64/qml
+-qrcFiles
+D:/Qt/Samples/QmlMiniEditor/build/Desktop_Qt_6_11_2_MSVC2022_64bit_Debug/.qt/rcc/qmake_QmlMiniEditor.qrc
+D:/Qt/Samples/QmlMiniEditor/build/Desktop_Qt_6_11_2_MSVC2022_64bit_Debug/.qt/rcc/QmlMiniEditor_raw_qml_0.qrc
+D:/Qt/Samples/QmlMiniEditor/build/Desktop_Qt_6_11_2_MSVC2022_64bit_Debug/.qt/rcc/QmlMiniEditor_raw_qml_0_extra_qmldirs.qrc

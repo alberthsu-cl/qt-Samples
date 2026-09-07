@@ -277,6 +277,12 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
     // M4-06: timeline preview routes through the new engine from here on.
     // Source preview and playbackBackend_ are completely unaffected.
     if (editorSession_.projectRuntime().activeSequenceId()) {
+        // The legacy backend keeps source-asset preview (Decision E) but must
+        // stop acting on timeline state: its QMediaPlayer handlers read
+        // EditorSession's timeline PlaybackState, which is now the routed
+        // path's painting cache, and ADR-002 forbids reading that back as
+        // authority.
+        playbackBackend_.setTimelineRoutedExternally(true);
         // M5-05, decision B: the engine renders into the preview panel's own
         // dedicated sink. previewHost_.videoSink() -- the legacy one
         // playbackBackend_ drives for source preview -- is deliberately not

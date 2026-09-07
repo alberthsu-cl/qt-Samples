@@ -11,6 +11,7 @@ gradual MFC-to-Qt video-editor migration.
 | [`ThreadedEffectPreview`](ThreadedEffectPreview/README.md) | A `QObject` worker on a `QThread`, queued communication, copied `QImage` work, and cooperative cancellation. |
 | [`MfcQtCoexistence`](MfcQtCoexistence/README.md) | A focused MFC-to-Qt coexistence migration: MFC frame shell with progressively replaced Qt panels and asynchronous effects. |
 | [`MiniEditorCoexistence`](MiniEditorCoexistence/README.md) | The main video-editor learning sample: media library, timeline editing, real Qt multimedia preview, strong playback-core contracts, and a staged MFC-to-Qt migration. |
+| [`QmlMiniEditor`](QmlMiniEditor/README.md) | A clean QML-first editor-shell study: C++ models/view-models expose state while QML owns layout and presentation. |
 
 ## Mini Editor: current architecture study
 

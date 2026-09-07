@@ -1,0 +1,38 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Visual Studio 17 2022",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "C:/Qt/6.11.2/msvc2022_64"
+      }
+    },
+    {
+      "name": "vs2022-qt-x64",
+      "displayName": "Visual Studio 2022 x64 (Qt 6.11.2)",
+      "description": "Debug/Release Qt Quick build using the MSVC 2022 64-bit Qt kit.",
+      "inherits": "base"
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "vs2022-qt-x64-debug",
+      "configurePreset": "vs2022-qt-x64",
+      "configuration": "Debug",
+      "targets": ["QmlMiniEditor"]
+    },
+    {
+      "name": "vs2022-qt-x64-release",
+      "configurePreset": "vs2022-qt-x64",
+      "configuration": "Release",
+      "targets": ["QmlMiniEditor"]
+    }
+  ]
+}
