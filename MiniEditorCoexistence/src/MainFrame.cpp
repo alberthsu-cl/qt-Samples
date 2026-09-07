@@ -772,11 +772,24 @@ void MainFrame::refreshEditorViews(EditorChange changes)
     const ClipPropertiesViewState propertiesViewState =
         ClipPropertiesStateResolver::resolve(editorSession_, mediaLibrary_);
 #if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_ROUTING
-    // Which preview context owns the panel and the speakers. Source-asset
-    // preview stays on the legacy path (Decision E), so the engine has to be
-    // told to let go of both while it is showing.
-    if (timelineEngineRouter_)
-        timelineEngineRouter_->setTimelinePreviewActive(editorSession_.isTimelineFocused());
+    // Which preview context owns the panel and the speakers -- one at a time,
+    // in both directions. Source-asset preview stays on the legacy path
+    // (Decision E), so each side has to be told when the other takes over.
+    if (timelineEngineRouter_) {
+        const bool timelineIsContext = editorSession_.isTimelineFocused();
+        if (lastPreviewContextWasTimeline_ != timelineIsContext) {
+            lastPreviewContextWasTimeline_ = timelineIsContext;
+            if (timelineIsContext) {
+                // Nothing else stops the library asset now: OnTimer returns
+                // early while routing, and every caller of the backend's own
+                // stopRealPlayback() is bypassed or inert when the timeline
+                // is focused.
+                playbackBackend_.releaseForTimelinePreview();
+                KillTimer(kPlaybackTimerId);
+            }
+        }
+        timelineEngineRouter_->setTimelinePreviewActive(timelineIsContext);
+    }
 #endif
     const bool selectionChanged = includesChange(changes, EditorChange::Selection);
     const bool clipSettingsChanged = includesChange(changes, EditorChange::ClipSettings);

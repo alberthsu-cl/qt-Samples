@@ -601,11 +601,26 @@ bool EditorSession::isProjectDirty() const
 
 void EditorSession::selectAsset(int assetIndex)
 {
+    const bool leavingTimeline = isTimelineFocused_;
     selectedAssetIndex_ = std::clamp(assetIndex, 0,
                                      static_cast<int>(clipSettings_.size()) - 1);
     selectedTimelineClipId_ = 0;
     isTimelineFocused_ = false;
+    if (leavingTimeline)
+        parkTimelineTransportForOtherContext();
     notifyStateChanged(EditorChange::Selection);
+}
+
+void EditorSession::parkTimelineTransportForOtherContext()
+{
+    recordLegacyTimelinePlaybackMutation();
+    if (!timelinePlaybackState_.isPlaying)
+        return;
+
+    timelinePlaybackState_.isPlaying = false;
+    timelinePlaybackState_.isPaused = true;
+    // currentFrame deliberately stays put: the head is frozen, not rewound.
+    notifyStateChanged(EditorChange::Playback);
 }
 
 void EditorSession::updateSelectedClipSettings(const ClipSettings &settings)

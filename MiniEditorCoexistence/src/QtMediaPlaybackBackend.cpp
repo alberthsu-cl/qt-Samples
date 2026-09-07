@@ -187,6 +187,12 @@ void QtMediaPlaybackBackend::setTimelineRoutedExternally(bool routed)
     }
 }
 
+void QtMediaPlaybackBackend::releaseForTimelinePreview()
+{
+    stopRealPlayback();
+    stopTimelineAudioPlayback();
+}
+
 void QtMediaPlaybackBackend::setVideoOutput(QVideoSink *videoSink)
 {
     player_.setVideoOutput(videoSink);

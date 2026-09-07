@@ -44,6 +44,17 @@ public:
     // IPlaybackBackend entry point is bypassed while routing, so the sound
     // continued until the process exited.
     void setTimelineRoutedExternally(bool routed);
+
+    // The timeline has become the preview context, so this backend must let
+    // go of the source asset it was playing -- one panel and one pair of
+    // speakers, one context at a time.
+    //
+    // In the pure-legacy build this happened by accident: OnTimer's
+    // advanceOneFrame() took the timeline branch and retargeted the shared
+    // player_ onto the timeline clip. Routing skips that call and
+    // setTimelineRoutedExternally() makes the branch inert, so the release
+    // has to be asked for explicitly.
+    void releaseForTimelinePreview();
     void setVideoVisibilityHandler(VideoVisibilityHandler handler);
     void setSourceMetadataChangedHandler(SourceMetadataChangedHandler handler);
 

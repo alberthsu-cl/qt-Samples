@@ -124,7 +124,9 @@ struct Step final {
         Tick,            // one legacy timer tick / one frame-time of clock
         ContentEdit,     // a playback-affecting edit: new duration, same sequence
         ReloadProject,   // a new project: new sequence identity
-        SelectClip       // an editing selection, not a transport command
+        SelectClip,      // an editing selection, not a transport command
+        FocusSourceAsset,// audition a library asset: the other preview context
+        FocusTimeline    // come back to the timeline
     };
 
     Kind kind;
@@ -141,6 +143,8 @@ Step tick(int count = 1)      { return { Step::Kind::Tick, count }; }
 Step contentEdit(int frames)  { return { Step::Kind::ContentEdit, frames }; }
 Step reloadProject()          { return { Step::Kind::ReloadProject }; }
 Step selectClip()             { return { Step::Kind::SelectClip }; }
+Step focusSourceAsset()       { return { Step::Kind::FocusSourceAsset }; }
+Step focusTimeline()          { return { Step::Kind::FocusTimeline }; }
 
 // ------------------------------------------------------------- content fixtures
 
@@ -241,6 +245,12 @@ public:
             break;
         case Step::Kind::SelectClip:
             session_.selectTimelineClip(2);
+            break;
+        case Step::Kind::FocusSourceAsset:
+            session_.selectAsset(0);
+            break;
+        case Step::Kind::FocusTimeline:
+            session_.selectTimelineClip(1);
             break;
         }
     }
@@ -349,6 +359,17 @@ public:
             // An editing selection is not a transport command. The routed
             // path submits nothing at all, which is the assertion.
             session_.selectTimelineClip(2);
+            break;
+        case Step::Kind::FocusSourceAsset:
+            // What TimelineEngineRouter::setTimelinePreviewActive(false)
+            // does: park the transport rather than let it run on unseen.
+            session_.selectAsset(0);
+            submit(Pause{});
+            break;
+        case Step::Kind::FocusTimeline:
+            // Coming back parks nothing and resumes nothing: an explicit Play
+            // is required, on both paths.
+            session_.selectTimelineClip(1);
             break;
         }
     }
@@ -540,6 +561,17 @@ std::vector<ScenarioResult> runMatrix()
 
     results.push_back(run("16 Select a clip while paused",
         { toggle(), tick(4), toggle(), selectClip(), selectClip() }));
+
+    // 17 and 18 exist because three defects reached the flipped default
+    // through this transition and none of the sixteen scenarios above went
+    // near it: the preview panel and the speakers serve one context at a
+    // time, and nothing was comparing what happened when that changed hands.
+    results.push_back(run("17 Audition a library asset while playing",
+        { toggle(), tick(5), focusSourceAsset(), tick(3) }));
+
+    results.push_back(run("18 Return to the timeline, then play again",
+        { toggle(), tick(5), focusSourceAsset(), tick(3), focusTimeline(),
+          tick(3), toggle(), tick(4) }));
 
     return results;
 }

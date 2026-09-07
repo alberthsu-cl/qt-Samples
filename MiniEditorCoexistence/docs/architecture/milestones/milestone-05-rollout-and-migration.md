@@ -270,6 +270,14 @@ observable traces are diffed:
 | 14 | Undo / redo while paused |
 | 15 | Project reload |
 | 16 | Selecting a clip while paused leaves the playhead and phase unchanged |
+| 17 | Auditioning a library asset while the timeline plays |
+| 18 | Returning to the timeline, then playing again |
+
+Scenarios 17 and 18 were added after the flip. Three defects reached the
+default through the preview-context handover -- the panel and the speakers
+serve one context at a time -- and none of the original sixteen went near it.
+Leaving the timeline parks its transport where it stood on both paths;
+returning resumes nothing, so an explicit `Play` is required.
 
 **Also required**
 

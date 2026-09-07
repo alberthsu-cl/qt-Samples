@@ -38,6 +38,15 @@ public:
     // moment when the user is adjusting a clip rather than watching one.
     // Transport resumption is what clears it.
     TimelinePreviewFocus timelinePreviewFocus() const;
+
+    // The preview panel and the speakers serve one context at a time, so
+    // leaving the timeline parks its transport where it stood. ADR-002:
+    // Paused means the authoritative position is frozen -- which it is, since
+    // nothing advances the timeline head while a library asset is being
+    // auditioned. The legacy path used to leave it flagged Playing and
+    // silently resume when focus came back; returning now needs an explicit
+    // Play, on both paths.
+    void parkTimelineTransportForOtherContext();
     const TimelineViewState &timelineViewState() const;
     const TimelineAudioMixState &timelineAudioMixState() const;
     const mini_editor::playback_core::ProjectRuntime &projectRuntime() const;

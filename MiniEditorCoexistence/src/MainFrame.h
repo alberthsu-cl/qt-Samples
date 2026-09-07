@@ -43,6 +43,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <optional>
 
 // ADR-007's MFC notification bridge (M4-05): "the MFC host posts one Windows
 // message to MainFrame when the UI notification queue becomes non-empty."
@@ -162,6 +163,9 @@ private:
     WorkspaceLayout workspaceLayout_;
     std::filesystem::path projectFilePath_;
     bool isWorkspaceReady_ = false;
+    // Which context last owned the preview panel and the speakers, so the
+    // handover is done once per change rather than on every refresh.
+    std::optional<bool> lastPreviewContextWasTimeline_;
 #if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_SMOKE_TEST
     // Milestone 4 manual validation only (M4-04/M4-05) -- unreachable except
     // through the debug hotkey in PreTranslateMessage. Never touches
