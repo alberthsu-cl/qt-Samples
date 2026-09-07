@@ -3,6 +3,10 @@
 **/.vs/
 out/
 **/out/
+build/
+**/build/
+.qtcreator/
+**/.qtcreator/
 test-results/
 **/test-results/
 CMakeCache.txt
