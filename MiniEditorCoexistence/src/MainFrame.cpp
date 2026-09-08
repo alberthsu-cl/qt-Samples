@@ -256,6 +256,14 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
             seekPreviewToCurrentFrame();
         });
     transportHost_.setPlaybackRateHandler([this](int ratePercent) {
+#if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_ROUTING
+        if (isTimelineEngineRoutingActive()) {
+            // The engine owns the rate as well as the position; it reaches the
+            // painting cache back through the published status.
+            timelineEngineRouter_->setRatePercent(ratePercent);
+            return;
+        }
+#endif
         editorSession_.updatePlaybackRatePercent(ratePercent);
         synchronizePlaybackTimer();
     });
@@ -303,6 +311,11 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         });
         timelineEngineRouter_->setEnginePresentationClearSink([this] {
             previewHost_.clearEnginePresentation();
+        });
+        // Every user action that repositions the timeline head goes to the
+        // engine, which owns the position now.
+        timelineController_.setRoutedTimelineSeekSink([this](int frame) {
+            timelineEngineRouter_->seekToTimelineFrame(frame);
         });
         // M5-04: the routed path's only write into EditorSession. It goes to
         // the painting cache ADR-002 allows, never to a playback mutator, and
@@ -759,9 +772,10 @@ void MainFrame::seekPreviewToCurrentFrame()
         nextPreviewSeekRequestId_++, editorSession_, mediaLibrary_);
 
     if (isTimelineEngineRoutingActive() && request.context == MediaPlaybackContext::Timeline) {
-#if MINI_EDITOR_USE_QT && MINI_EDITOR_ENABLE_ENGINE_ROUTING
-        timelineEngineRouter_->seekToTimelineFrame(request.timelineFrame);
-#endif
+        // The head has already been moved, through the controller's routed
+        // seek sink, with the frame the user actually asked for. Seeking again
+        // from the session's copy would undo it: that copy is a painting cache
+        // the engine writes, so it still holds the pre-seek position here.
         return;
     }
 

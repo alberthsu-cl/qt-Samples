@@ -2139,6 +2139,74 @@ void seekFromStoppedPausesAndKeepsTheEditingPreview()
 // are not removed -- the same seven still serve source-asset preview and still
 // serve the timeline in the retained fallback -- but on the routed path they
 // must be unable to act, not merely unreached.
+// The regression that reached the running app after M5-09: every user action
+// that moves the timeline head reached it through EditorSession::seekTimeline(),
+// which the routed guard made refuse. The intent kept arriving at a method that
+// no longer moved anything, so the head simply froze -- and no test noticed,
+// because nothing exercised TimelineEditingController with routing on.
+void routedTimelineHeadMovesThroughTheEngineNotTheSession()
+{
+    MediaLibrary library;
+    const int videoId = library.addKnownAsset(
+        L"D:/media/video.mp4", MediaKind::Video, 400, 0x5078A0);
+    library.addKnownAsset(L"D:/media/inserted.mp4", MediaKind::Video, 100, 0x113355);
+
+    // EditorSession sizes its per-asset arrays from this count, so the library
+    // has to be complete before it is constructed.
+    EditorSession session(2);
+    TimelineEditingController controller(session, library);
+    const int clipId = session.addTimelineClip(videoId, TimelineTrackType::Video, 0, 200);
+    require(clipId != 0, "The fixture needs a timeline clip to focus.");
+    controller.focusClip(clipId, true);
+
+    std::vector<int> routedSeeks;
+    controller.setRoutedTimelineSeekSink(
+        [&routedSeeks](int frame) { routedSeeks.push_back(frame); });
+    session.setTimelineTransportRoutedExternally(true);
+
+    const int frameBefore = session.timelinePlaybackState().currentFrame;
+
+    // A ruler click.
+    controller.focusFrame(120);
+    require(routedSeeks.size() == 1 && routedSeeks.back() == 120,
+            "A ruler click must send the frame the user asked for to the engine.");
+    require(session.timelinePlaybackState().currentFrame == frameBefore,
+            "It must not move the painting cache directly: the engine writes that "
+            "back through its published status.");
+
+    // The transport slider takes the same route while the timeline is focused.
+    controller.seekFocusedPreview(45);
+    require(routedSeeks.size() == 2 && routedSeeks.back() == 45,
+            "The transport slider must reach the engine too.");
+
+    // Duplicating parks the head on the new placement's first frame, through
+    // finishInsertedClip() -- the third and last way a user moves it.
+    controller.focusClip(clipId, true);
+    const std::size_t seeksBeforeDuplicate = routedSeeks.size();
+    require(controller.duplicate(), "The fixture needs a duplicate to complete.");
+    int duplicateStartFrame = -1;
+    for (const TimelineClip &clip : session.timelineModel().clips()) {
+        if (clip.id != clipId && clip.mediaAssetId == videoId)
+            duplicateStartFrame = clip.state.startFrame;
+    }
+    require(duplicateStartFrame >= 0, "The duplicate must be on the timeline.");
+    require(routedSeeks.size() > seeksBeforeDuplicate
+                && routedSeeks.back() == duplicateStartFrame,
+            "Finishing an insertion must move the head through the engine as well, "
+            "to wherever the new placement actually landed.");
+
+    // With no sink -- the retained fallback -- the head moves the old way.
+    EditorSession legacySession(2);
+    TimelineEditingController fallback(legacySession, library);
+    const int legacyClipId = legacySession.addTimelineClip(
+        videoId, TimelineTrackType::Video, 0, 200);
+    fallback.focusClip(legacyClipId, true);
+    fallback.focusFrame(77);
+    require(legacySession.timelinePlaybackState().currentFrame == 77,
+            "Without a routed sink the head still moves through EditorSession, "
+            "which is what the compile-time fallback depends on.");
+}
+
 void routedTimelineRefusesLegacyTransportMutators()
 {
     using namespace mini_editor::playback_core;
@@ -2329,6 +2397,7 @@ int main()
         seekFromStoppedPausesAndKeepsTheEditingPreview();
         routedTransportOnlyWritesThePaintingCache();
         routedTimelineRefusesLegacyTransportMutators();
+        routedTimelineHeadMovesThroughTheEngineNotTheSession();
         sequenceSnapshotIsImmutableAndSelfContained();
         projectDocumentServiceMaintainsProjectAndMediaConsistency();
         internalTimelineClipboardSupportsCopyCutPasteAndDuplicate();

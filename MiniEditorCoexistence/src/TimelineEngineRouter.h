@@ -76,6 +76,12 @@ public:
     // timeline branch.
     void seekToTimelineFrame(int timelineFrame);
 
+    // The transport rate control. Until M5-09 this only ever reached
+    // EditorSession's playback state, which meant the routed players never
+    // followed it; now that the same state refuses the write, it has to come
+    // here or the control does nothing at all.
+    void setRatePercent(int ratePercent);
+
     // Called from MainFrame::OnTimelineEngineNotification.
     void onNotification();
 

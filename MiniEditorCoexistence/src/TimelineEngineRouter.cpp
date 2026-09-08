@@ -238,6 +238,11 @@ void TimelineEngineRouter::setTimelinePreviewActive(bool active)
         enginePresentationClearSink_();
 }
 
+void TimelineEngineRouter::setRatePercent(int ratePercent)
+{
+    engine_->submit(SetRate{ratePercent}, PlaybackCommandId::create());
+}
+
 void TimelineEngineRouter::onNotification()
 {
     handleEvents(bridge_.drain());

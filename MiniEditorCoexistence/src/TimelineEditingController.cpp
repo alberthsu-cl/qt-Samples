@@ -32,8 +32,22 @@ bool TimelineEditingController::focusClip(int clipId, bool resetToBeginning)
     session_.selectTimelineClip(clipId, assetIndex);
     synchronizePlaybackDuration(resetToBeginning);
     if (wasSourceFocused && !resetToBeginning)
-        session_.seekTimeline(previousPreviewFrame);
+        seekTimelineHead(previousPreviewFrame);
     return true;
+}
+
+void TimelineEditingController::setRoutedTimelineSeekSink(TimelineSeekSink sink)
+{
+    routedTimelineSeekSink_ = std::move(sink);
+}
+
+void TimelineEditingController::seekTimelineHead(int frame)
+{
+    if (routedTimelineSeekSink_) {
+        routedTimelineSeekSink_(frame);
+        return;
+    }
+    session_.seekTimeline(frame);
 }
 
 void TimelineEditingController::focusFrame(int frame)
@@ -54,7 +68,7 @@ void TimelineEditingController::focusFrame(int frame)
 
     // Focus first so the seek is clamped against timeline duration rather
     // than the previously focused source asset's duration.
-    session_.seekTimeline(frame);
+    seekTimelineHead(frame);
 }
 
 void TimelineEditingController::followPlaybackFrame()
@@ -250,6 +264,6 @@ bool TimelineEditingController::finishInsertedClip(int clipId)
     // owns focus, Properties edits it, and the playhead shows its first frame.
     if (!focusClip(clipId, false))
         return false;
-    session_.seekTimeline(clipStart);
+    seekTimelineHead(clipStart);
     return true;
 }
