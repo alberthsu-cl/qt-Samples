@@ -2135,6 +2135,72 @@ void seekFromStoppedPausesAndKeepsTheEditingPreview()
             "Stopping returns to the defined start, where editing preview applies.");
 }
 
+// M5-09, ADR-002 migration steps 5-6. The legacy timeline transport mutators
+// are not removed -- the same seven still serve source-asset preview and still
+// serve the timeline in the retained fallback -- but on the routed path they
+// must be unable to act, not merely unreached.
+void routedTimelineRefusesLegacyTransportMutators()
+{
+    using namespace mini_editor::playback_core;
+
+    EditorSession session(1);
+    const int clipId = session.addTimelineClip(1, TimelineTrackType::Video, 0, 30);
+    session.selectTimelineClip(clipId);
+    session.setPlaybackDuration(90, true);
+    session.adoptRoutedTimelineTransport(TimelineTransportView{ true, false, 25, 90, 30, 100 });
+    session.setTimelineTransportRoutedExternally(true);
+
+    const PlaybackState before = session.timelinePlaybackState();
+    const std::size_t mutationsBefore = session.legacyTimelinePlaybackMutationCount();
+
+    auto unchanged = [&session, &before](const char *what) {
+        const PlaybackState &now = session.timelinePlaybackState();
+        require(now.isPlaying == before.isPlaying && now.isPaused == before.isPaused
+                    && now.currentFrame == before.currentFrame
+                    && now.durationFrames == before.durationFrames
+                    && now.playbackRatePercent == before.playbackRatePercent,
+                what);
+    };
+
+    session.handlePlaybackCommand(LegacyPlaybackCommand::TogglePlayPause);
+    unchanged("A legacy transport command must not move a routed timeline.");
+    session.handlePlaybackCommand(LegacyPlaybackCommand::Stop);
+    unchanged("A legacy Stop must not move a routed timeline.");
+    session.handlePlaybackCommand(LegacyPlaybackCommand::StepForward);
+    unchanged("A legacy step must not move a routed timeline.");
+    session.advancePlaybackFrame();
+    unchanged("A timer tick must not advance a routed timeline -- this is the one "
+              "ADR-002 migration step 5 names outright.");
+    session.seekTimeline(4);
+    unchanged("A legacy seek must not move a routed timeline.");
+    session.setPlaybackDuration(300, true);
+    unchanged("A legacy duration reset must not move a routed timeline.");
+    session.updatePlaybackFromBackend(7, 300, false, true);
+    unchanged("A legacy backend report must not move a routed timeline.");
+    session.updatePlaybackRatePercent(200);
+    unchanged("A legacy rate change must not move a routed timeline.");
+    session.leavePausedTimelinePlaybackForEditing();
+    unchanged("Leaving a paused preview for editing must not move a routed "
+              "timeline: M5-10 gave that its own state.");
+
+    require(session.legacyTimelinePlaybackMutationCount() == mutationsBefore,
+            "A refused mutation must not count as one that fired.");
+
+    // The single writer still works, and the fallback is unaffected.
+    session.adoptRoutedTimelineTransport(TimelineTransportView{ false, true, 61, 90, 30, 50 });
+    const PlaybackState &adopted = session.timelinePlaybackState();
+    require(!adopted.isPlaying && adopted.isPaused && adopted.currentFrame == 61
+                && adopted.playbackRatePercent == 50,
+            "adoptRoutedTimelineTransport must remain the one way the routed "
+            "timeline cache is written.");
+
+    session.setTimelineTransportRoutedExternally(false);
+    session.seekTimeline(4);
+    require(session.timelinePlaybackState().currentFrame == 4,
+            "With routing off, the legacy mutators must work exactly as before -- "
+            "the compile-time fallback depends on them.");
+}
+
 void routedTransportOnlyWritesThePaintingCache()
 {
     using namespace mini_editor::playback_core;
@@ -2262,6 +2328,7 @@ int main()
         projectRuntimeTracksExplicitSequenceIdentity();
         seekFromStoppedPausesAndKeepsTheEditingPreview();
         routedTransportOnlyWritesThePaintingCache();
+        routedTimelineRefusesLegacyTransportMutators();
         sequenceSnapshotIsImmutableAndSelfContained();
         projectDocumentServiceMaintainsProjectAndMediaConsistency();
         internalTimelineClipboardSupportsCopyCutPasteAndDuplicate();

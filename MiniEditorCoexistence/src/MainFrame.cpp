@@ -283,6 +283,10 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         // path's painting cache, and ADR-002 forbids reading that back as
         // authority.
         playbackBackend_.setTimelineRoutedExternally(true);
+        // M5-09: and the editor session stops accepting legacy timeline
+        // transport mutations at all, leaving adoptRoutedTimelineTransport()
+        // as the single writer of that state.
+        editorSession_.setTimelineTransportRoutedExternally(true);
         // M5-05, decision B: the engine renders into the preview panel's own
         // dedicated sink. previewHost_.videoSink() -- the legacy one
         // playbackBackend_ drives for source preview -- is deliberately not
@@ -449,11 +453,16 @@ void MainFrame::OnUpdateEditSplitClip(CCmdUI *commandUi)
 void MainFrame::OnTimer(UINT_PTR timerId)
 {
     if (timerId == kPlaybackTimerId) {
-        // ADR-002: "The MFC playback timer will no longer advance one
-        // timeline frame" on the routed path -- the new engine's own thread
-        // and clock own timeline transport instead, and EditorSession's
-        // timelinePlaybackState() is not updated for it, so there is
-        // nothing correct for this tick to read or advance.
+        // ADR-002 migration step 5: "the MFC playback timer will no longer
+        // advance one timeline frame". On the routed path this tick is a
+        // source-preview timer and nothing else -- the engine's own thread
+        // and clock own timeline transport, EditorSession now refuses legacy
+        // timeline mutations outright (M5-09), and the timeline's painting
+        // cache is written only from a published PlaybackStatus.
+        //
+        // The branch below still runs for source-asset preview, and still
+        // advances timeline transport in the retained compile-time fallback,
+        // which is the one configuration where this timer is still the clock.
         if (isTimelineEngineRoutingActive())
             return;
 

@@ -148,10 +148,20 @@ const PlaybackState &EditorSession::activePlaybackState() const
     return isTimelineFocused_ ? timelinePlaybackState_ : sourcePlaybackState_;
 }
 
-void EditorSession::recordLegacyTimelinePlaybackMutation()
+void EditorSession::setTimelineTransportRoutedExternally(bool routed)
 {
-    if (isTimelineFocused_)
-        ++legacyTimelinePlaybackMutations_;
+    timelineTransportRoutedExternally_ = routed;
+}
+
+bool EditorSession::beginLegacyTimelinePlaybackMutation()
+{
+    if (!isTimelineFocused_)
+        return true; // Source-asset preview still owns these (Decision E).
+    if (timelineTransportRoutedExternally_)
+        return false;
+
+    ++legacyTimelinePlaybackMutations_;
+    return true;
 }
 
 std::size_t EditorSession::legacyTimelinePlaybackMutationCount() const
@@ -613,7 +623,11 @@ void EditorSession::selectAsset(int assetIndex)
 
 void EditorSession::parkTimelineTransportForOtherContext()
 {
-    recordLegacyTimelinePlaybackMutation();
+    // Called after isTimelineFocused_ has already gone false, so it cannot
+    // ask beginLegacyTimelinePlaybackMutation(). When the engine owns the
+    // transport it parks itself, and this must not write the cache behind it.
+    if (timelineTransportRoutedExternally_)
+        return;
     if (!timelinePlaybackState_.isPlaying)
         return;
 
@@ -759,7 +773,8 @@ bool EditorSession::redo()
 
 void EditorSession::handlePlaybackCommand(LegacyPlaybackCommand command)
 {
-    recordLegacyTimelinePlaybackMutation();
+    if (!beginLegacyTimelinePlaybackMutation())
+        return;
     PlaybackState &playback = activePlaybackState();
 
     switch (command) {
@@ -795,7 +810,8 @@ void EditorSession::handlePlaybackCommand(LegacyPlaybackCommand command)
 
 void EditorSession::advancePlaybackFrame()
 {
-    recordLegacyTimelinePlaybackMutation();
+    if (!beginLegacyTimelinePlaybackMutation())
+        return;
     PlaybackState &playback = activePlaybackState();
     if (!playback.isPlaying)
         return;
@@ -820,7 +836,8 @@ void EditorSession::advancePlaybackFrame()
 
 void EditorSession::seekTimeline(int frame)
 {
-    recordLegacyTimelinePlaybackMutation();
+    if (!beginLegacyTimelinePlaybackMutation())
+        return;
     PlaybackState &playback = activePlaybackState();
     playback.currentFrame = std::clamp(
         frame, kFirstFrame, std::max(0, playback.durationFrames - 1));
@@ -835,7 +852,8 @@ void EditorSession::seekTimeline(int frame)
 
 void EditorSession::setPlaybackDuration(int durationFrames, bool resetToBeginning)
 {
-    recordLegacyTimelinePlaybackMutation();
+    if (!beginLegacyTimelinePlaybackMutation())
+        return;
     PlaybackState &playback = activePlaybackState();
     playback.durationFrames = std::max(1, durationFrames);
     playback.isPlaying = false;
@@ -848,7 +866,8 @@ void EditorSession::setPlaybackDuration(int durationFrames, bool resetToBeginnin
 void EditorSession::updatePlaybackFromBackend(
     int currentFrame, int durationFrames, bool isPlaying, bool isPaused)
 {
-    recordLegacyTimelinePlaybackMutation();
+    if (!beginLegacyTimelinePlaybackMutation())
+        return;
     PlaybackState &playback = activePlaybackState();
     PlaybackState updated = playback;
     updated.durationFrames = std::max(1, durationFrames);
@@ -870,7 +889,8 @@ void EditorSession::updatePlaybackFromBackend(
 
 void EditorSession::updatePlaybackRatePercent(int ratePercent)
 {
-    recordLegacyTimelinePlaybackMutation();
+    if (!beginLegacyTimelinePlaybackMutation())
+        return;
     const int clampedRate = std::clamp(ratePercent, 50, 200);
     if (sourcePlaybackState_.playbackRatePercent == clampedRate
         && timelinePlaybackState_.playbackRatePercent == clampedRate) {
@@ -886,7 +906,8 @@ void EditorSession::updatePlaybackRatePercent(int ratePercent)
 
 void EditorSession::leavePausedTimelinePlaybackForEditing()
 {
-    recordLegacyTimelinePlaybackMutation();
+    if (!beginLegacyTimelinePlaybackMutation())
+        return;
     if (timelinePlaybackState_.isPlaying || !timelinePlaybackState_.isPaused)
         return;
 

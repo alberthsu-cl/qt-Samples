@@ -114,6 +114,19 @@ public:
     // the build merely not crashing. adoptRoutedTimelineTransport() does not
     // count: it is the painting cache, not a mutator.
     std::size_t legacyTimelinePlaybackMutationCount() const;
+
+    // M5-09, ADR-002 migration steps 5-6. The engine owns timeline transport,
+    // so the legacy timeline playback mutators stop being reachable *and*
+    // stop being able to act: each one returns without effect when it would
+    // touch timeline transport. adoptRoutedTimelineTransport() becomes the
+    // single writer of that state.
+    //
+    // A guard rather than deletion, because the same seven methods still
+    // serve source-asset preview (Decision E) and still serve the timeline in
+    // the retained compile-time fallback (Decision D). M5-07's matrix already
+    // proves none of them fires on the routed path; this makes that a
+    // property of the code rather than of the call graph.
+    void setTimelineTransportRoutedExternally(bool routed);
     // Explicit timeline editing may replace a frozen paused preview without
     // moving the playhead. Call this before publishing the new selection so
     // every observer resolves that selection as the edit target.
@@ -142,7 +155,10 @@ private:
     const PlaybackState &activePlaybackState() const;
     // Called by every legacy playback mutator; counts only when the state it
     // is about to change is the timeline's.
-    void recordLegacyTimelinePlaybackMutation();
+    // Returns false when the caller must not proceed: the mutation would
+    // touch timeline transport that the engine owns. Counts the ones that do
+    // proceed, which is what M5-07 asserts is zero on the routed path.
+    bool beginLegacyTimelinePlaybackMutation();
     int insertTimelineClipCopy(const TimelineClip &sourceClip,
                                int sourceAssetIndex, int desiredStartFrame);
     void notifyStateChanged(EditorChange changes);
@@ -158,6 +174,7 @@ private:
     PlaybackState sourcePlaybackState_;
     PlaybackState timelinePlaybackState_;
     std::size_t legacyTimelinePlaybackMutations_ = 0;
+    bool timelineTransportRoutedExternally_ = false;
     TimelineViewState timelineViewState_;
     TimelineAudioMixState timelineAudioMixState_;
     mini_editor::playback_core::ProjectRuntime projectRuntime_;

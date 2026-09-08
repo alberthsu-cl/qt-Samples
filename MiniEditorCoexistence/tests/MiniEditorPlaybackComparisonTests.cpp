@@ -292,6 +292,10 @@ public:
         project_ = makeComparisonProject();
         session_.replaceProject(project_);
         session_.selectTimelineClip(1);
+        // M5-09: what MainFrame does on the routed path. The legacy timeline
+        // mutators now refuse to act, so "no legacy mutator fires" stops
+        // depending on nobody happening to call one.
+        session_.setTimelineTransportRoutedExternally(true);
         mutationsBeforeScript_ = session_.legacyTimelinePlaybackMutationCount();
 
         playback_ = std::make_unique<PlaybackSession>(

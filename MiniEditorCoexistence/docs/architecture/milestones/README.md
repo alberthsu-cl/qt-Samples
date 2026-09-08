@@ -18,7 +18,7 @@ implementation steps. It is the practical bridge between:
 | 2. Project + snapshots | Strong time/identity values plus immutable project-runtime and sequence snapshots. | **Complete** |
 | 3. Playback authority | `PlaybackSession`, injected fake clock, engine commands, and stale-result rules. | **Complete** |
 | 4. Media integration | Decoder, audio, compositor, and MFC/Qt notification adapters behind a feature flag. | **Complete** |
-| 5. Rollout + migration | Route timeline preview through the new core, compare behavior, make it default, and retire legacy timer advancement. | In progress — [plan](milestone-05-rollout-and-migration.md); default flipped, timer retirement outstanding |
+| 5. Rollout + migration | Route timeline preview through the new core, compare behavior, make it default, and retire legacy timer advancement. | **Complete** |
 
 ## How to read and use a milestone
 
@@ -55,12 +55,22 @@ and the failure path is now covered automatically by an end-to-end Qt test.
 about real playback either way.
 
 [Milestone 5 — Rollout and migration](milestone-05-rollout-and-migration.md)
-is **in progress**. It is the first milestone whose end state changes default
+is **complete**. It is the first milestone whose end state changed default
 behavior, so it put every behavior-changing step *after* an automated
-comparison gate. That gate is now green: M5-07's sixteen scenarios match at
-exact phase and frame equality with no legacy timeline mutator called on the
-new path, and human visual/audio validation passed — so M5-08 has flipped
-`MINI_EDITOR_ENABLE_ENGINE_ROUTING` to default `ON`. Source-asset preview
-stays on the legacy path throughout, and the compile-time legacy fallback is
-retained past the flip. Retiring MFC timer transport advancement (M5-09) is
-still to come.
+comparison gate. That gate is green: M5-07's eighteen scenarios match at exact
+phase and frame equality with no legacy timeline mutator firing on the new
+path, and human visual/audio validation passed — so
+`MINI_EDITOR_ENABLE_ENGINE_ROUTING` defaults to `ON` and no MFC timer tick
+advances timeline transport.
+
+Source-asset preview stays on the legacy path (Decision E) and the
+compile-time legacy fallback is retained (Decision D), so
+`IPlaybackBackend`/`QtMediaPlaybackBackend` and the seven legacy timeline
+mutators all still exist — they are guarded rather than deleted. Removing them
+belongs to whatever milestone retires the fallback.
+
+Worth carrying forward: every defect that reached the flipped default lived at
+the driver/adapter seam rather than inside either side, and the comparison
+matrix caught none of them until scenarios 17 and 18 were added for the
+preview-context handover. Transport equivalence was thoroughly tested; which
+context owned the panel and the speakers was not tested at all.
