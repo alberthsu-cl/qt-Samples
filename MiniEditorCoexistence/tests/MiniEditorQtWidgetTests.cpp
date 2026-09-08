@@ -1181,12 +1181,38 @@ void MiniEditorQtWidgetTests::enginePresentationSurfaceIsSeparateFromTheLegacySi
     QCoreApplication::processEvents();
     QCOMPARE(commits, 2);
 
-    // Leaving the routed surface must not leave its last frame behind for the
-    // legacy path to appear to own.
+    // Going inactive stops the panel painting engine frames...
     panel.setEnginePresentationActive(false);
+    QCoreApplication::processEvents();
+    const QColor inactiveAgainPixel = panel.grab().toImage().pixelColor(320, 200);
+    QVERIFY(!(inactiveAgainPixel.green() > 150 && inactiveAgainPixel.red() < 100));
+
+    // ...but must not discard the frame. This flag is asked on every drive and
+    // drops for a moment on a gap, a snapshot install, or any status the
+    // driver cannot resolve. Discarding here made a momentary drop permanent:
+    // only a new frame could restore the surface, and while paused no new
+    // frame ever arrives -- which is exactly what "seek while paused, the
+    // overlay shows forever" was.
+    panel.setEnginePresentationActive(true);
+    panel.grab();
+    QCoreApplication::processEvents();
+    const QColor restoredPixel = panel.grab().toImage().pixelColor(320, 200);
+    QVERIFY(restoredPixel.green() > 150);
+    QVERIFY(restoredPixel.red() < 100);
+
+    // Discarding is a separate, explicit act, for when the timeline hands the
+    // panel over to source preview.
+    panel.clearEnginePresentation();
     QCoreApplication::processEvents();
     const QColor clearedPixel = panel.grab().toImage().pixelColor(320, 200);
     QVERIFY(!(clearedPixel.green() > 150 && clearedPixel.red() < 100));
+
+    // And the frame stays gone until a new one arrives, even once the panel is
+    // painting engine frames again.
+    panel.setEnginePresentationActive(true);
+    QCoreApplication::processEvents();
+    const QColor stillClearedPixel = panel.grab().toImage().pixelColor(320, 200);
+    QVERIFY(!(stillClearedPixel.green() > 150 && stillClearedPixel.red() < 100));
 }
 
 #include "MiniEditorQtWidgetTests.moc"

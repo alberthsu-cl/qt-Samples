@@ -99,13 +99,14 @@ void QtPreviewPanel::setEnginePresentationActive(bool active)
         return;
 
     isEnginePresentationActive_ = active;
-    if (!active) {
-        // Leaving the routed surface must not leave its last frame behind for
-        // the legacy path to appear to own.
-        engineVideoFrame_ = {};
-        engineImage_ = QImage();
-        hasAcknowledgedEngineFrame_ = true;
-    }
+    update();
+}
+
+void QtPreviewPanel::clearEnginePresentation()
+{
+    engineVideoFrame_ = {};
+    engineImage_ = QImage();
+    hasAcknowledgedEngineFrame_ = true;
     update();
 }
 
@@ -297,7 +298,14 @@ void QtPreviewPanel::paintEvent(QPaintEvent *)
     // overlay for generated sample cards and timeline gaps only. In
     // particular, A1 playback must not cover a real V1 still image with an
     // audio timeframe panel.
-    if (isDecodedVideoVisible_ || isRealStillImageVisible
+    //
+    // isEnginePresentationActive_ is in this list because isDecodedVideoVisible_
+    // is fed exclusively by the legacy backend, which no longer drives timeline
+    // preview -- so once the engine owned the timeline, the flag stopped going
+    // true and the overlay started covering real video. The question the guard
+    // is asking is "is a real picture on screen", and the engine owning the
+    // surface answers it just as well as the legacy decoder did.
+    if (isEnginePresentationActive_ || isDecodedVideoVisible_ || isRealStillImageVisible
         || (!playbackState_.isPlaying && !playbackState_.isPaused)) {
         return;
     }

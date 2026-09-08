@@ -33,6 +33,7 @@ public:
     // sink, no redirection of the legacy one (decision B).
     QVideoSink *engineVideoSink() const;
     void setEnginePresentationActive(bool active);
+    void clearEnginePresentation();
     void setEngineFrameCommittedHandler(std::function<void()> handler);
 
 private:

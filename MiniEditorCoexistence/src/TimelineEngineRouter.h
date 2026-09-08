@@ -99,6 +99,11 @@ public:
     using EnginePresentationActiveSink = std::function<void(bool)>;
     void setEnginePresentationActiveSink(EnginePresentationActiveSink sink);
 
+    // Called when the timeline hands the panel over, so the surface discards
+    // the engine's frame instead of leaving it behind the legacy content.
+    using EnginePresentationClearSink = std::function<void()>;
+    void setEnginePresentationClearSink(EnginePresentationClearSink sink);
+
     const mini_editor::playback_core::PresentationDiagnostics &
     presentationDiagnostics() const;
 
@@ -170,6 +175,7 @@ private:
     QTimer presentationTimer_;
     TransportViewSink transportViewSink_;
     EnginePresentationActiveSink enginePresentationActiveSink_;
+    EnginePresentationClearSink enginePresentationClearSink_;
     mini_editor::playback_core::PresentationDiagnostics diagnostics_;
     bool isEnginePresentationActive_ = false;
     bool isTimelinePreviewActive_ = true;

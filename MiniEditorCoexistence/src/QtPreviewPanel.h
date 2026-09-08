@@ -35,8 +35,18 @@ public:
     QVideoSink *engineVideoSink() const;
 
     // While active, the panel paints what arrives on the engine sink instead
-    // of the legacy source-preview content.
+    // of the legacy source-preview content. This is asked on every drive and
+    // is transient -- a gap, a snapshot install, or a status the driver could
+    // not resolve all turn it off for a moment -- so it deliberately keeps
+    // the last frame. Discarding it here made a momentary drop permanent:
+    // only a *new* frame could restore the surface, and while paused no new
+    // frame ever arrives.
     void setEnginePresentationActive(bool active);
+
+    // Discards the engine's frame. Called when the timeline hands the panel
+    // over to source preview, so a stale timeline frame cannot reappear
+    // behind the legacy content -- a context handover, not a per-drive state.
+    void clearEnginePresentation();
 
     // Invoked on the GUI thread once per frame, immediately after that frame
     // has been committed to this surface -- ADR-003's FramePresented moment.

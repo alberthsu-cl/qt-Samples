@@ -184,6 +184,11 @@ void TimelineEngineRouter::setEnginePresentationActiveSink(EnginePresentationAct
     enginePresentationActiveSink_ = std::move(sink);
 }
 
+void TimelineEngineRouter::setEnginePresentationClearSink(EnginePresentationClearSink sink)
+{
+    enginePresentationClearSink_ = std::move(sink);
+}
+
 const PresentationDiagnostics &TimelineEngineRouter::presentationDiagnostics() const
 {
     return diagnostics_;
@@ -227,6 +232,10 @@ void TimelineEngineRouter::setTimelinePreviewActive(bool active)
     worker_.setAudioMuted(true);
     isAudioSilenced_ = true;
     setEnginePresentationActive(false);
+    // A handover, unlike the per-drive flag above: source preview owns the
+    // panel now, and the timeline's last frame must not sit behind it.
+    if (enginePresentationClearSink_)
+        enginePresentationClearSink_();
 }
 
 void TimelineEngineRouter::onNotification()

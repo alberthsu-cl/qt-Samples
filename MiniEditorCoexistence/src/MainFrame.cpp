@@ -297,6 +297,9 @@ int MainFrame::OnCreate(LPCREATESTRUCT createStructure)
         timelineEngineRouter_->setEnginePresentationActiveSink([this](bool active) {
             previewHost_.setEnginePresentationActive(active);
         });
+        timelineEngineRouter_->setEnginePresentationClearSink([this] {
+            previewHost_.clearEnginePresentation();
+        });
         // M5-04: the routed path's only write into EditorSession. It goes to
         // the painting cache ADR-002 allows, never to a playback mutator, and
         // it is never read back into the engine.

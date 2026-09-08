@@ -80,6 +80,12 @@ void QtPreviewHost::setEnginePresentationActive(bool active)
         panel_->setEnginePresentationActive(active);
 }
 
+void QtPreviewHost::clearEnginePresentation()
+{
+    if (panel_)
+        panel_->clearEnginePresentation();
+}
+
 void QtPreviewHost::setEngineFrameCommittedHandler(std::function<void()> handler)
 {
     if (panel_)
